@@ -1323,29 +1323,6 @@ body {
 }
 
 /* rider select */
-.rider-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 10px;
-  margin-top: 6px;
-}
-.rider-card {
-  text-align: left;
-  border-radius: 16px;
-  padding: 12px 14px;
-  border: 1px solid rgba(20, 20, 19, 0.1);
-  border-top: 5px solid var(--accent);
-  background: var(--cream);
-  color: var(--slate);
-  cursor: pointer;
-  font-family: var(--sans);
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.rider-card.on {
-  outline: 3px solid var(--accent);
-}
 .rider-title {
   font: 700 10px var(--sans);
   letter-spacing: 0.16em;
@@ -1371,6 +1348,10 @@ body {
   border-radius: 999px;
   padding: 3px 8px;
 }
+.chip {
+  background: rgba(20, 20, 19, 0.07);
+  color: #4a4842;
+}
 .chip.up {
   background: rgba(120, 140, 93, 0.2);
   color: #4c5d36;
@@ -1378,11 +1359,6 @@ body {
 .chip.down {
   background: rgba(192, 57, 43, 0.12);
   color: #a33a2c;
-}
-.rider-pick {
-  margin-top: 6px;
-  font: 700 12px var(--sans);
-  color: var(--accent);
 }
 
 /* options */
@@ -1520,4 +1496,249 @@ body {
   font: 600 11px var(--sans);
   color: #6b6860;
   margin-top: -2px;
+}
+
+/* skater picker */
+.roster {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+.roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.roster-row {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(20, 20, 19, 0.1);
+  border-left: 6px solid var(--accent);
+  background: var(--cream);
+  color: var(--slate);
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.roster-row.sel {
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--accent), 0 8px 22px rgba(20, 20, 19, 0.1);
+}
+.roster-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.roster-badge {
+  font: 700 10px var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ivory);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.roster-row .rider-desc {
+  margin-top: 2px;
+}
+.roster-actions {
+  margin-top: 12px;
+}
+.roster-actions .menu-btn {
+  flex: 1;
+}
+.roster-stage {
+  display: none;
+}
+
+/* ---------- desktop ---------- */
+@media (min-width: 1000px) and (min-height: 620px) {
+  .menu-card {
+    max-width: 580px;
+    padding: 30px 40px;
+    border-radius: 28px;
+  }
+  .menu-card.wide {
+    max-width: 1040px;
+  }
+  .menu-card.summary {
+    max-width: 640px;
+  }
+  .menu-title {
+    font-size: 54px;
+  }
+  .menu-title.small {
+    font-size: 38px;
+  }
+  .menu-h {
+    font-size: 30px;
+  }
+  .menu-back {
+    width: 40px;
+    height: 40px;
+  }
+  .menu-p {
+    font-size: 15.5px;
+  }
+  .menu-btn {
+    font-size: 16px;
+    padding: 13px 26px;
+    transition: transform 0.12s, box-shadow 0.12s, background 0.12s;
+  }
+  .menu-btns.row {
+    justify-content: center;
+  }
+  .tab {
+    font-size: 14.5px;
+    padding: 10px 20px;
+  }
+  .chapter-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+  }
+  .deck-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  .stats {
+    gap: 14px;
+  }
+  .stat-name {
+    font-size: 16px;
+  }
+  .pip {
+    width: 12px;
+    height: 20px;
+  }
+  .stat-btn {
+    width: 36px;
+    height: 36px;
+  }
+  .menu-btn:hover,
+  .chapter:hover,
+  .roster-row:hover,
+  .seg-btn:hover,
+  .tab:hover,
+  .deck:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(20, 20, 19, 0.14);
+  }
+
+  /* skater picker: turntable + roster */
+  .roster {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 28px;
+    align-items: stretch;
+    margin-top: 14px;
+  }
+  .roster-stage {
+    display: block;
+    position: relative;
+    height: min(62vh, 560px);
+    border-radius: 22px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 85%, rgba(217, 119, 87, 0.3), rgba(250, 249, 245, 0) 70%), var(--cream);
+  }
+  .roster-side {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .roster-list {
+    gap: 10px;
+  }
+  .roster-row {
+    padding: 14px 20px;
+  }
+  .rider-name {
+    font-size: 24px;
+  }
+  .rider-desc {
+    font-size: 14.5px;
+  }
+  .chip {
+    font-size: 12.5px;
+    padding: 4px 11px;
+  }
+  .roster-actions {
+    margin-top: 18px;
+  }
+
+  /* create-a-skater fills the screen */
+  .menu-card.creator-card {
+    max-width: min(1320px, 94vw);
+    height: min(90vh, 940px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 24px 36px 24px;
+  }
+  .creator-card .creator {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr);
+    gap: 32px;
+    margin-top: 8px;
+  }
+  .creator-card .creator-stage {
+    border-radius: 22px;
+  }
+  .creator-card .creator-panel {
+    padding-right: 4px;
+  }
+  .creator-card .creator-tabs {
+    margin-top: 0;
+  }
+  .creator-card .opt-label {
+    font-size: 12.5px;
+    margin: 18px 0 8px;
+  }
+  .creator-card .seg {
+    gap: 8px;
+  }
+  .creator-card .seg-btn {
+    font-size: 14.5px;
+    padding: 11px 12px;
+    flex: 1 1 110px;
+  }
+  .creator-card .swatches {
+    gap: 10px;
+  }
+  .creator-card .swatch {
+    width: 40px;
+    height: 40px;
+  }
+  .creator-card .creator-range {
+    height: 24px;
+  }
+  .creator-card .creator-ends {
+    font-size: 12.5px;
+  }
+  .creator-card .menu-btns {
+    position: static;
+    margin: 16px 0 0;
+    padding: 0;
+    background: none;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+  .creator-card .menu-btns .menu-btn {
+    min-width: 280px;
+  }
+}
+@media (min-width: 1000px) and (min-height: 620px) and (hover: none) {
+  .menu-btn:hover,
+  .chapter:hover,
+  .roster-row:hover,
+  .seg-btn:hover,
+  .tab:hover,
+  .deck:hover {
+    transform: none;
+    box-shadow: none;
+  }
 }

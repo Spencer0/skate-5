@@ -1,7 +1,8 @@
 import { LEVELS, Level, GoalDef } from './levels';
 import { Career, STATS, STAT_MAX, DECKS, SPECIALS, Medal } from './career';
 import { deckTexture } from './textures';
-import { RIDERS, RiderStyle } from './rider';
+import { RIDERS, RiderId, RiderStyle } from './rider';
+import { RiderStage } from './stage';
 import { CAMERAS } from './settings';
 import { Creator } from './creator';
 import { defaultLook } from './custom';
@@ -103,7 +104,12 @@ export class UI {
     });
   }
 
+  /** Tears down whatever the current screen owns (a 3D preview). */
+  private cleanup: (() => void) | null = null;
+
   private reset(cls = '') {
+    this.cleanup?.();
+    this.cleanup = null;
     this.open = true;
     this.root.classList.add('on');
     this.card.className = 'menu-card ' + cls;
@@ -112,6 +118,8 @@ export class UI {
   }
 
   hide() {
+    this.cleanup?.();
+    this.cleanup = null;
     this.open = false;
     this.root.classList.remove('on');
   }
@@ -385,27 +393,70 @@ export class UI {
     this.riderCards(this.card, then);
   }
 
+  /**
+   * The skater picker: a roster on the right, a turntable preview of the
+   * highlighted skater on the left (wide screens only). Picking a row only
+   * highlights it; the button underneath commits.
+   */
   private riderCards(parent: HTMLElement, onPick: () => void) {
-    const grid = el('div', 'rider-grid', parent);
-    const cur = this.career.data.rider;
     const statName: Record<string, string> = { speed: 'Speed', ollie: 'Ollie', spin: 'Spin', flip: 'Flip', balance: 'Balance' };
-    for (const r of RIDERS) {
-      const card = el('button', 'rider-card' + (cur === r.id ? ' on' : ''), grid) as HTMLButtonElement;
-      card.style.setProperty('--accent', r.color);
-      el('div', 'rider-title', card, r.title);
-      el('div', 'rider-name', card, r.name);
-      el('div', 'rider-desc', card, r.desc);
-      const chips = el('div', 'rider-chips', card);
-      for (const [k, v] of Object.entries(r.bias)) el('span', 'chip ' + (v! > 0 ? 'up' : 'down'), chips, `${statName[k]} ${v! > 0 ? '+' : ''}${v}`);
-      el('div', 'rider-pick', card, r.id === 'custom' ? (this.career.data.custom ? (cur === r.id ? 'Riding · Edit' : 'Edit') : 'Create') : cur === r.id ? 'Riding' : 'Pick');
-      card.addEventListener('click', () => {
-        if (r.id === 'custom') return this.showCreator(onPick);
-        this.career.data.rider = r.id;
-        this.career.save();
-        this.hooks.riderChanged();
-        onPick();
-      });
+    const cur = this.career.data.rider ?? 'brock';
+    let sel: RiderId = cur;
+    const wrap = el('div', 'roster', parent);
+    let stage: RiderStage | null = null;
+    if (window.matchMedia('(min-width: 760px) and (min-height: 480px)').matches) {
+      stage = new RiderStage(el('div', 'roster-stage', wrap));
+      this.cleanup = () => stage?.dispose();
     }
+    const side = el('div', 'roster-side', wrap);
+    const list = el('div', 'roster-list', side);
+    const actions = el('div', 'menu-btns row roster-actions', side);
+
+    const preview = () => {
+      if (!stage) return;
+      stage.show(sel, sel === 'custom' ? (this.career.customLook() ?? defaultLook()) : null);
+    };
+    const ride = (id: RiderId) => {
+      this.career.data.rider = id;
+      this.career.save();
+      this.hooks.riderChanged();
+      onPick();
+    };
+    const draw = () => {
+      list.replaceChildren();
+      actions.replaceChildren();
+      for (const r of RIDERS) {
+        const row = el('button', 'roster-row' + (sel === r.id ? ' sel' : '') + (cur === r.id ? ' riding' : ''), list) as HTMLButtonElement;
+        row.style.setProperty('--accent', r.color);
+        const top = el('div', 'roster-top', row);
+        el('div', 'rider-title', top, r.id === 'custom' && this.career.data.custom ? 'Custom' : r.title);
+        if (cur === r.id) el('div', 'roster-badge', top, 'Riding');
+        el('div', 'rider-name', row, r.id === 'custom' && this.career.data.custom ? 'Your skater' : r.name);
+        if (sel === r.id) {
+          el('div', 'rider-desc', row, r.desc);
+          const chips = el('div', 'rider-chips', row);
+          const bias = Object.entries(r.bias);
+          if (!bias.length) el('span', 'chip', chips, 'No strengths, no weaknesses');
+          for (const [k, v] of bias) el('span', 'chip ' + (v! > 0 ? 'up' : 'down'), chips, `${statName[k]} ${v! > 0 ? '+' : ''}${v}`);
+        }
+        row.addEventListener('click', () => {
+          if (sel === r.id) return;
+          sel = r.id;
+          preview();
+          draw();
+        });
+      }
+      const r = RIDERS.find((x) => x.id === sel)!;
+      if (sel === 'custom') {
+        const saved = !!this.career.data.custom;
+        this.button(actions, saved ? 'Edit' : 'Create your skater', () => this.showCreator(onPick), saved ? '' : 'primary');
+        if (saved) this.button(actions, cur === 'custom' ? 'Riding ✓' : 'Ride as this skater', () => ride('custom'), 'primary');
+      } else {
+        this.button(actions, cur === sel ? 'Riding ✓' : `Ride as ${r.name.replace(/^Dr\. /, '').split(' ')[0]}`, () => ride(sel), 'primary');
+      }
+    };
+    draw();
+    preview();
   }
 
   /** Build your own skater; Ride saves the look and makes it the active rider. */
