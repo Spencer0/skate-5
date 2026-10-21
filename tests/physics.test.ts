@@ -43,7 +43,7 @@ test('kickflip caught on time is a perfect landing', () => {
   const { sk, events, run } = rig(0, 40, 0, -5);
   run(0.1);
   sk.flick(spec(1, 0));
-  run(TUNE.beat);
+  run(TUNE.flickDelay + TUNE.beat);
   assert.ok(sk.catchBoard());
   run(1);
   const land = events.find((e) => e.type === 'land');
@@ -66,7 +66,7 @@ test('waiting longer makes a double kickflip off the jump box', () => {
   const { sk, events, run } = rig(-34, 36, 0, -7.5);
   run(1.1);
   sk.flick(spec(1, 0));
-  run(TUNE.beat * 2);
+  run(TUNE.flickDelay + TUNE.beat * 2);
   sk.catchBoard();
   run(1.5);
   const land = events.find((e) => e.type === 'land');

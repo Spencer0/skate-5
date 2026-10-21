@@ -251,8 +251,8 @@ export class HumanRider {
       const onGround = t > 0.08 && t < 0.46;
       out.yawR = onGround ? 1.35 : -0.15 + into * 1.2;
       out.pitchR = t > 0.3 && t < 0.46 ? 0.5 : 0; // toe-off at the end of the kick
-      out.hipDrop = 0.08 * Math.sin(Math.PI * seg(t, 0.05, 0.5));
-      out.hipX = 0.06 * into;
+      out.hipDrop = 0.15 * Math.sin(Math.PI * seg(t, 0.05, 0.5)); // standing knee bends deep
+      out.hipX = 0.13 * into; // weight over the front (standing) foot
       out.armSwing = Math.sin(Math.PI * seg(t, 0, 0.5)) * (t < 0.27 ? -1 : 1);
       this.lastR.copy(fR);
       return out;
@@ -265,17 +265,17 @@ export class HumanRider {
       const popFoot = a.nollie ? fL : fR;
       const slideFoot = a.nollie ? fR : fL;
       // pop: the popping foot snaps the tail down to the very end
-      const snap = seg(t, 0, 0.05) * (1 - seg(t, 0.12, 0.2));
+      const snap = seg(t, 0, 0.06) * (1 - seg(t, 0.16, 0.26));
       popFoot.x = -sx * (0.19 + 0.12 * snap);
-      popFoot.y = deck - 0.01 * snap + seg(t, 0.06, 0.16) * 0.18;
+      popFoot.y = deck - 0.01 * snap + seg(t, 0.08, 0.22) * 0.18;
       // the other foot drags up the grip toward the nose...
-      const drag = seg(t, 0.02, 0.12);
+      const drag = seg(t, 0.01, 0.1);
       slideFoot.x = sx * (0.19 + 0.13 * drag);
       slideFoot.y = deck + drag * 0.14;
       if (a.nollie) out.pitchR = 0.4 * drag;
       else out.pitchL = 0.4 * drag;
       // ...and flicks it off: kickflip off the heel side, heelflip off the toe side
-      const flick = seg(t, 0.08, 0.17) * (1 - seg(t, 0.22, 0.32));
+      const flick = seg(t, 0.04, 0.13) * (1 - seg(t, 0.26, 0.4)); // leads the board's flip (it starts at 0.07s)
       if (a.flip > 0) {
         slideFoot.z = -0.06 - 0.32 * flick;
         slideFoot.y += 0.05 * flick;
@@ -290,7 +290,7 @@ export class HumanRider {
       }
       // shove-its: the popping foot scoops the tail around
       if (a.shove !== 0) {
-        const scoop = seg(t, 0.03, 0.14) * (1 - seg(t, 0.2, 0.3));
+        const scoop = seg(t, 0.02, 0.12) * (1 - seg(t, 0.24, 0.36));
         popFoot.z = -0.06 + (a.shove < 0 ? -0.22 : 0.22) * scoop;
       }
       if (a.wrap !== 0) {
@@ -301,10 +301,10 @@ export class HumanRider {
       }
       const tricky = a.flip !== 0 || a.shove !== 0 || a.wrap !== 0;
       // knees up while the board spins underneath; stomp back down on the catch
-      const tuckIn = tricky ? seg(t, 0.12, 0.22) : seg(t, 0.12, 0.2) * 0.45;
+      const tuckIn = tricky ? seg(t, 0.16, 0.3) : seg(t, 0.14, 0.26) * 0.45;
       let tuck = tuckIn;
-      if (tricky && a.caught) tuck = a.catchT >= 0 ? tuckIn * (1 - seg(a.catchT, 0, 0.1)) : 0;
-      if (!tricky) tuck *= 1 - seg(t, 0.28, 0.42); // ollie: feet back on the board at the peak
+      if (tricky && a.caught) tuck = a.catchT >= 0 ? tuckIn * (1 - seg(a.catchT, 0, 0.15)) : 0;
+      if (!tricky) tuck *= 1 - seg(t, 0.32, 0.5); // ollie: feet back on the board at the peak
       const tuckPos = (x: number) => new THREE.Vector3(x, deck + (a.special ? 0.26 : 0.18), -0.04);
       fL.lerp(tuckPos(0.23), tuck);
       fR.lerp(tuckPos(-0.23), tuck);
@@ -328,8 +328,9 @@ export class HumanRider {
       out.arms = 0.6;
     }
     // ---- landing: knees absorb the impact
-    if (a.landT >= 0 && a.landT < 0.5) {
-      const k = Math.exp(-a.landT * 9) * Math.min(1, a.landT * 30);
+    if (a.landT >= 0 && a.landT < 1) {
+      // quick drop into the knees, slow rise back to stance
+      const k = Math.exp(-a.landT * 4.2) * seg(a.landT, 0, 0.09);
       out.hipDrop = 0.17 * k;
       out.armsUp = 0.25 * k;
       out.arms = Math.max(out.arms, 0.5 * k);
@@ -365,12 +366,14 @@ export class HumanRider {
     const toW = (v: THREE.Vector3) => v.applyMatrix4(this.group.matrixWorld);
 
     // intent (rider frame: +X nose, +Y up, +Z toe side; the rider faces +Z)
-    const twist = s.push * 0.8;
+    // pushing turns the whole body (hips first) to face down the board
+    const twist = s.push * 1.25;
     const bend = 0.06 + HUNCH[this.id] + s.crouch * 0.42 + s.push * 0.3 + s.lean * 0.8;
     const roll = s.grind * 0.25;
-    const hipQ = tq().setFromEuler(new THREE.Euler(bend * 0.35, twist * 0.35 + 0.15, -roll * 0.5, 'YXZ'));
-    const torsoQ = tq().setFromEuler(new THREE.Euler(bend, twist + 0.25, -roll, 'YXZ'));
-    const headQ = tq().setFromEuler(new THREE.Euler(-0.1 + s.crouch * 0.1 - s.air * 0.15, 1.05 - s.push * 0.6, 0, 'YXZ'));
+    const hipYaw = 0.15 + twist;
+    const hipQ = tq().setFromEuler(new THREE.Euler(bend * 0.35, hipYaw, -roll * 0.5, 'YXZ'));
+    const torsoQ = tq().setFromEuler(new THREE.Euler(bend, twist * 0.95 + 0.25, -roll, 'YXZ'));
+    const headQ = tq().setFromEuler(new THREE.Euler(-0.1 + s.crouch * 0.1 - s.air * 0.15, 1.05 + s.push * 0.3, 0, 'YXZ'));
 
     const c = this.choreo(st);
     const fL = c.fL;
@@ -394,7 +397,8 @@ export class HumanRider {
     this.setRiderQ(B.head, headQ.clone().multiply(this.restQ.get(B.head)!));
 
     // legs
-    const legPole = toW(new THREE.Vector3(0, 0.25, 1)).sub(toW(new THREE.Vector3()));
+    // knees bend the way the hips face
+    const legPole = toW(new THREE.Vector3(0, 0.25, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), hipYaw - 0.15)).sub(toW(new THREE.Vector3()));
     const leg = (thigh: THREE.Bone, calf: THREE.Bone, foot: THREE.Bone, target: THREE.Vector3, yaw: number) => {
       const root = thigh.getWorldPosition(tv());
       const a = root.distanceTo(calf.getWorldPosition(tv()));

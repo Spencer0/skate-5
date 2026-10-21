@@ -10,7 +10,8 @@ import { DECK } from './board';
 export const TUNE = {
   gravity: 11,
   popSpeed: 3.75, // m/s -> ~0.64m ollie
-  beat: 0.38, // seconds per flip revolution / shove half turn at speed 1
+  beat: 0.42, // seconds per flip revolution / shove half turn at speed 1
+  flickDelay: 0.07, // the board pops before the foot flicks it into rotation
   pushAccel: 7.5,
   pushTime: 0.24,
   pushCooldown: 0.5,
@@ -71,6 +72,7 @@ interface TrickState {
   active: boolean;
   caught: boolean;
   flipRate: number;
+  delay: number; // seconds until the flick starts the rotation
   shoveRate: number;
   wrapRate: number;
   flip: number;
@@ -594,6 +596,7 @@ export class Skater {
     tr.shoveRate = spec.shove * Math.PI * k;
     tr.wrapRate = spec.wrap * TAU * k;
     tr.spec = spec;
+    tr.delay = TUNE.flickDelay;
     tr.active = true;
     tr.caught = spec.flip === 0 && spec.shove === 0 && spec.wrap === 0;
     tr.target = [tr.flip, tr.shove, tr.wrap];
@@ -642,6 +645,10 @@ export class Skater {
     const tr = this.trick;
     if (!tr.active) return;
     if (!tr.caught) {
+      if (tr.delay > 0) {
+        tr.delay -= dt;
+        return;
+      }
       // tick each time the board comes back around: a timing cue for the catch
       const before = this.catchPhase();
       tr.flip += tr.flipRate * dt;
@@ -1148,6 +1155,7 @@ function freshTrick(): TrickState {
     active: false,
     caught: true,
     flipRate: 0,
+    delay: 0,
     shoveRate: 0,
     wrapRate: 0,
     flip: 0,
