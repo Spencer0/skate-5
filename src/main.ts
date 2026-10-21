@@ -2,10 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import { Terrain } from './terrain';
 import { buildMeshes, makeMaterials } from './park';
-import { LEVELS, LevelData, GapDef, inRect } from './levels';
-import { Progress, GoalTracker } from './story';
-import { Menu, PlayMode } from './menu';
-import { letterTexture } from './textures';
+import { LEVELS, LevelData, GapDef, GoalDef, inRect, V3 } from './levels';
 import { BoardModel, DECK } from './board';
 import { Skater, SkaterEvent, TrickRecord, Quality } from './skater';
 import { Input } from './input';
@@ -14,6 +11,10 @@ import { Hud } from './hud';
 import { Particles } from './fx';
 import { shadowTexture } from './textures';
 import { Minimap } from './minimap';
+import { Career, GoalTracker, applyStats, Medal } from './career';
+import { UI, RunMode, GAP_NAMES, Standing, bestTwo } from './ui';
+import { CutscenePlayer, previewScene } from './cutscene';
+import { Props } from './props';
 
 /* ------------------------------------------------------------------ */
 /* Setup                                                               */
@@ -30,14 +31,12 @@ renderer.toneMappingExposure = 1.05;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const SKY = new THREE.Color('#EFE7DA');
-scene.background = SKY;
-scene.fog = new THREE.Fog(SKY, 45, 150);
+scene.background = new THREE.Color('#EFE7DA');
+scene.fog = new THREE.Fog(0xefe7da, 45, 150);
 
 const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.05, 400);
 
-const hemi = new THREE.HemisphereLight(0xfff6ea, 0x8a7d6c, 1.35);
-scene.add(hemi);
+scene.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7d6c, 1.35));
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -58,8 +57,8 @@ const mats = makeMaterials();
 let terrain = new Terrain();
 let levelData: LevelData = LEVELS[0].build(terrain);
 let levelGroup: THREE.Group | null = null;
-let levelIndex = 0;
-let playMode: PlayMode = 'free';
+let levelIndex = -1;
+let props: Props | null = null;
 
 const board = new BoardModel();
 scene.add(board.root);
@@ -73,11 +72,10 @@ scene.add(blob);
 
 const sparks = new Particles(260, 0.05, true, 9, 1.5);
 const dust = new Particles(160, 0.22, true, -0.4, 3);
-scene.add(sparks.points, dust.points);
-
 const spray = new Particles(240, 0.08, true, 9.8, 0.4);
 const splash = new Particles(120, 0.14, true, 9.8, 1.2);
-scene.add(spray.points, splash.points);
+const glow = new Particles(160, 0.12, true, -0.5, 2);
+scene.add(sparks.points, dust.points, spray.points, splash.points, glow.points);
 
 const skater = new Skater(terrain);
 
@@ -88,19 +86,52 @@ const input = new Input(overlay);
 const audio = new Audio();
 const hud = new Hud(app);
 let minimap: Minimap | null = null;
-const progress = new Progress();
+const career = new Career();
+applyStats(career.data.stats);
+board.setDeck(career.data.deck);
 let tracker: GoalTracker | null = null;
-
-/* ------------------------------------------------------------------ */
-/* Start screen                                                        */
-/* ------------------------------------------------------------------ */
+const cut = new CutscenePlayer(app, camera);
 
 const fade = document.createElement('div');
 fade.className = 'fade';
 app.appendChild(fade);
 
+// gap checklist names for every level
+for (const L of LEVELS) {
+  const d = L.build(new Terrain());
+  GAP_NAMES[L.id] = d.gaps.map((g) => [g.id, g.name, g.points]);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sessions                                                            */
+/* ------------------------------------------------------------------ */
+
+interface Session {
+  mode: RunMode;
+  level: number;
+  time: number;
+  timeUp: boolean;
+  bestCombo: number;
+  goals: GoalDef[];
+  startTotal: number;
+  unlockedBefore: boolean;
+  heat: number;
+  heats: number[];
+  cpu: Standing[];
+}
+
+let session: Session | null = null;
 let started = false; // audio unlocked, first tap done
-let playing = false; // menus closed, physics running
+let playing = false; // physics + input live
+let special = 0;
+const runCounts = new Map<string, number>();
+
+const CPU = [
+  { name: 'Dex Tran', avg: 9000 },
+  { name: 'Rin Takeda', avg: 14000 },
+  { name: 'Sol Arquette', avg: 19500 },
+];
+
 function begin() {
   if (started) return;
   started = true;
@@ -116,60 +147,146 @@ function begin() {
   }
   if (tutorial.step < 0) tutorial.step = 0;
 }
-input.onFirstInput = () => {
-  audio.start();
-};
+input.onFirstInput = () => audio.start();
 
-const menu = new Menu(app, progress, {
-  onPlay(i, mode) {
-    loadLevel(i, mode);
-    resume();
+const ui = new UI(app, career, {
+  startRun,
+  resume,
+  restartRun() {
+    if (!session) return;
+    if (session.mode === 'free') {
+      respawnAtStart();
+      resume();
+    } else startRun(session.level, session.mode);
   },
-  onResume: resume,
-  onRestart() {
-    respawnAtStart();
-    resume();
+  endRun() {
+    finishRun(false);
   },
-  onQuit() {
+  quit() {
     playing = false;
-    menu.showTitle();
+    const s = session;
+    session = null;
+    hud.setTimer(null);
+    if (s && s.mode !== 'free') ui.showLevel(s.level);
+    else ui.showTitle();
   },
-  onToggleSound() {
+  playIntro(i, then) {
+    loadLevel(i);
+    playScene(LEVELS[i].intro, () => {
+      career.markSeen(LEVELS[i].intro.id);
+      then();
+    });
+  },
+  previewGoal(i, g, back) {
+    loadLevel(i);
+    const v = goalView(g);
+    if (!v) return back();
+    // show collectibles in the preview even though they're hidden between runs
+    props?.setPickupsVisible(true);
+    playScene(previewScene('preview', v.cam, v.look, g.text, g.hint ?? ''), () => {
+      props?.setPickupsVisible(false);
+      back();
+    });
+  },
+  toggleSound() {
     audio.start();
     audio.setMuted(!audio.muted);
     return audio.muted;
   },
-  onTricks() {
+  isMuted: () => audio.muted,
+  showTricks() {
     hud.guide.classList.add('on');
   },
-  onFirstTap: begin,
+  firstTap: begin,
+  deckChanged(id) {
+    board.setDeck(id);
+  },
+  statsChanged() {
+    applyStats(career.data.stats);
+  },
 });
 
 function resume() {
-  menu.hide();
+  ui.hide();
   playing = true;
   input.actions.length = 0;
 }
 function pause() {
-  if (!playing) return;
+  if (!playing || !session) return;
   playing = false;
-  menu.showPause(levelIndex, playMode, audio.muted);
+  ui.showPause(session.level, session.mode);
 }
 hud.menuBtn.addEventListener('click', pause);
 hud.goalsBtn.addEventListener('click', pause);
+hud.starBtn.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  fireSpecial();
+});
+
+function playScene(sc: Parameters<CutscenePlayer['play']>[0], then: () => void) {
+  playing = false;
+  ui.hide();
+  hud.root.classList.add('cine');
+  // cutscenes show the whole spot: push the fog back
+  const fog = scene.fog as THREE.Fog;
+  const near = fog.near;
+  const far = fog.far;
+  fog.near = near * 2;
+  fog.far = far * 1.8;
+  cut.play(sc, () => {
+    fog.near = near;
+    fog.far = far;
+    hud.root.classList.remove('cine');
+    cam.init = false;
+    then();
+  });
+}
+cut.onLine = () => audio.blip();
+
+/** Camera for a goal's "show me" preview. */
+function goalView(g: GoalDef): { cam: V3; look: V3 } | null {
+  if (g.view) return g.view;
+  const around = (x: number, y: number, z: number, d = 6): { cam: V3; look: V3 } => ({ cam: [x + d * 0.7, y + d * 0.55, z + d * 0.7], look: [x, y, z] });
+  if (g.kind === 'gap') {
+    const gp = levelData.gaps.find((x) => x.id === g.gap);
+    if (!gp) return null;
+    const fx = (gp.from.x0 + gp.from.x1) / 2;
+    const fz = (gp.from.z0 + gp.from.z1) / 2;
+    const tx = (gp.to.x0 + gp.to.x1) / 2;
+    const tz = (gp.to.z0 + gp.to.z1) / 2;
+    const mx = (fx + tx) / 2;
+    const mz = (fz + tz) / 2;
+    const h = terrain.height(mx, mz);
+    // look across the gap from the side
+    const dx = tx - fx;
+    const dz = tz - fz;
+    const l = Math.hypot(dx, dz) || 1;
+    const sx = -dz / l;
+    const sz = dx / l;
+    const d = Math.max(7, l * 1.1);
+    return { cam: [mx + sx * d, h + 4, mz + sz * d], look: [mx, h + 0.5, mz] };
+  }
+  if (g.kind === 'letters' && levelData.letters[0]) {
+    const p = levelData.letters[0];
+    return around(p.x, p.y, p.z);
+  }
+  if (g.kind === 'objects' && levelData.props[0]) {
+    const p = levelData.props[0].pos;
+    return around(p.x, terrain.height(p.x, p.z) + 0.6, p.z, 5);
+  }
+  if (g.kind === 'tape') {
+    const p = levelData.tape;
+    return around(p.x, p.y, p.z, 7);
+  }
+  return null;
+}
 
 /* ------------------------------------------------------------------ */
 /* Levels                                                              */
 /* ------------------------------------------------------------------ */
 
-interface LetterPickup {
-  idx: number;
-  sprite: THREE.Sprite;
-  base: THREE.Vector3;
-}
-let letters: LetterPickup[] = [];
 let fountains: THREE.Vector3[] = [];
-const LETTERS = 'CLAUDE';
 
 function disposeGroup(g: THREE.Group) {
   const shared = new Set<THREE.Material>(Object.values(mats));
@@ -179,18 +296,16 @@ function disposeGroup(g: THREE.Group) {
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
     for (const x of Array.isArray(mat) ? mat : mat ? [mat] : []) {
       if (shared.has(x)) continue;
-      // letter sprites own their textures
-      const sm = x as THREE.SpriteMaterial;
-      if (o instanceof THREE.Sprite) sm.map?.dispose();
+      if (o instanceof THREE.Sprite) (x as THREE.SpriteMaterial).map?.dispose();
       x.dispose();
     }
   });
 }
 
-function loadLevel(i: number, mode: PlayMode) {
+function loadLevel(i: number) {
+  if (i === levelIndex) return;
   const L = LEVELS[i];
   levelIndex = i;
-  playMode = mode;
   if (levelGroup) {
     scene.remove(levelGroup);
     disposeGroup(levelGroup);
@@ -199,6 +314,10 @@ function loadLevel(i: number, mode: PlayMode) {
   levelData = L.build(terrain);
   levelGroup = buildMeshes(terrain, levelData.vis, mats, { ground: L.ground });
   L.decorate(levelGroup, mats, terrain);
+  const hasTape = L.goals.some((g) => g.kind === 'tape');
+  props = new Props(terrain, levelData.props, levelData.letters, hasTape ? levelData.tape : null);
+  props.setPickupsVisible(false);
+  levelGroup.add(props.group);
   scene.add(levelGroup);
   const sky = new THREE.Color(L.sky);
   scene.background = sky;
@@ -208,21 +327,6 @@ function loadLevel(i: number, mode: PlayMode) {
   minimap?.destroy();
   minimap = new Minimap(hud.root, terrain);
   fountains = terrain.elements.filter((e) => e.kind === 'fountain').map((e) => new THREE.Vector3(e.cx, 1.1, e.cz));
-
-  letters = [];
-  if (mode === 'story') {
-    const have = progress.letters(L);
-    levelData.letters.forEach((pos, idx) => {
-      if (have.includes(idx)) return;
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: letterTexture(LETTERS[idx]), depthWrite: false }));
-      sprite.scale.set(0.9, 0.9, 0.9);
-      sprite.position.copy(pos);
-      levelGroup!.add(sprite);
-      letters.push({ idx, sprite, base: pos.clone() });
-    });
-    tracker = new GoalTracker(L, progress, onGoal);
-  } else tracker = null;
-  updateGoalChip();
   combo.reset();
   liveGrind = null;
   cam.init = false;
@@ -236,60 +340,137 @@ function respawnAtStart() {
   cam.init = false;
 }
 
-function updateGoalChip() {
-  const L = LEVELS[levelIndex];
-  hud.setGoals(progress.doneCount(L), playMode === 'story' ? L.goals.length : null);
+function startRun(i: number, mode: RunMode) {
+  loadLevel(i);
+  const L = LEVELS[i];
+  const prev = session;
+  const heat = mode === 'comp' && prev?.mode === 'comp' && prev.level === i && prev.heats.length < 3 ? prev.heats.length + 1 : 1;
+  session = {
+    mode,
+    level: i,
+    time: mode === 'free' ? Infinity : L.runTime,
+    timeUp: false,
+    bestCombo: 0,
+    goals: [],
+    startTotal: career.totalDone(),
+    unlockedBefore: i + 1 < LEVELS.length && career.isUnlocked(i + 1),
+    heat,
+    heats: heat > 1 && prev ? prev.heats : [],
+    cpu: heat > 1 && prev ? prev.cpu : CPU.map((c) => ({ name: c.name, heats: [] })),
+  };
+  respawnAtStart();
+  combo.total = 0;
+  runCounts.clear();
+  special = 0;
+  props?.reset();
+  props?.setPickupsVisible(mode === 'career');
+  tracker = mode === 'free' ? null : new GoalTracker(L, career, onGoal);
+  updateGoalChip();
+  resume();
+  if (mode === 'comp') hud.bigText(`HEAT ${heat}`);
+  else if (mode === 'career') hud.bigText('GO!');
+  audio.horn(false);
 }
 
-function onGoal(g: { text: string }) {
+function finishRun(timeUp: boolean) {
+  const s = session;
+  if (!s) return;
+  playing = false;
+  hud.setTimer(null);
+  combo.bank();
+  const L = LEVELS[s.level];
+  const score = combo.total;
+  if (s.mode === 'comp') {
+    s.heats.push(score);
+    // CPU heat scores: steady, with some variance
+    s.cpu.forEach((c, k) => {
+      const seed = Math.sin((s.heats.length + 1) * 12.9898 + k * 78.233) * 43758.5453;
+      const r = seed - Math.floor(seed);
+      c.heats.push(Math.round((CPU[k].avg * (0.85 + r * 0.3)) / 10) * 10);
+    });
+    const standings: Standing[] = [{ name: 'You', heats: s.heats, you: true }, ...s.cpu];
+    const final = s.heats.length >= 3;
+    let medal: Medal | null = null;
+    if (final) {
+      const order = [...standings].sort((a, b) => bestTwo(b.heats) - bestTwo(a.heats));
+      const place = order.findIndex((x) => x.you);
+      medal = place === 0 ? 'gold' : place === 1 ? 'silver' : place === 2 ? 'bronze' : null;
+      if (medal) {
+        career.awardMedal(medal);
+        tracker?.medal(medal);
+        audio.goal();
+      }
+    }
+    ui.showStandings(
+      final ? 'Final results' : `Heat ${s.heats.length} results`,
+      standings,
+      s.heats.length,
+      final,
+      () => {
+        if (!final) return startRun(s.level, 'comp');
+        session = null;
+        if (medal) {
+          const first = !career.seen(L.outro.id);
+          playScene(L.outro, () => {
+            career.markSeen(L.outro.id);
+            if (first || medal === 'gold') ui.showCredits(() => ui.showCareer());
+            else ui.showCareer();
+          });
+        } else ui.showLevel(s.level);
+      },
+      medal,
+    );
+    return;
+  }
+  if (s.mode === 'free') {
+    ui.showTitle();
+    session = null;
+    return;
+  }
+  const newBest = career.recordScore(L, score);
+  const unlockedNow = s.level + 1 < LEVELS.length && career.isUnlocked(s.level + 1);
+  const chapterUnlocked = unlockedNow && !s.unlockedBefore;
+  ui.showRunEnd(
+    {
+      levelIndex: s.level,
+      score,
+      bestCombo: s.bestCombo,
+      goals: s.goals,
+      unlocks: [...career.unlocksBetween(s.startTotal), ...(chapterUnlocked ? [`Chapter: ${LEVELS[s.level + 1].name}`] : [])],
+      newBest,
+      chapterUnlocked,
+      timeUp,
+    },
+    {
+      retry: () => startRun(s.level, 'career'),
+      level: () => ui.showLevel(s.level),
+      nextChapter: chapterUnlocked
+        ? () =>
+            playScene(L.outro, () => {
+              career.markSeen(L.outro.id);
+              const n = s.level + 1;
+              loadLevel(n);
+              playScene(LEVELS[n].intro, () => {
+                career.markSeen(LEVELS[n].intro.id);
+                ui.showLevel(n);
+              });
+            })
+        : null,
+    },
+  );
+}
+
+function updateGoalChip() {
   const L = LEVELS[levelIndex];
-  hud.toast('Goal complete', g.text);
+  hud.setGoals(career.doneCount(L), session && session.mode !== 'free' ? L.goals.length : null);
+}
+
+function onGoal(g: GoalDef) {
+  session?.goals.push(g);
+  hud.toast('Goal complete · +1 stat point', g.text);
   audio.goal();
   buzz([20, 40, 20, 40, 60]);
   updateGoalChip();
-  const done = progress.doneCount(L);
-  const last = levelIndex === LEVELS.length - 1;
-  if (!last && done === L.unlockAt) {
-    setTimeout(() => {
-      playing = false;
-      menu.showComplete(levelIndex, resume);
-    }, 2200);
-  } else if (last && done === L.goals.length) {
-    setTimeout(() => {
-      playing = false;
-      menu.showFinale(resume);
-    }, 2200);
-  } else if (done === L.goals.length) {
-    setTimeout(() => hud.toast(L.name, 'Every goal complete!'), 1600);
-  }
-}
-
-function collectLetters(dt: number, t: number) {
-  if (!letters.length) return;
-  const L = LEVELS[levelIndex];
-  const bx = skater.pos.x;
-  const by = skater.pos.y + 0.2;
-  const bz = skater.pos.z;
-  for (const l of letters) {
-    l.sprite.position.y = l.base.y + Math.sin(t * 2.2 + l.idx) * 0.12;
-    l.sprite.material.rotation = Math.sin(t * 1.4 + l.idx) * 0.15;
-    if (skater.mode === 'bail') continue;
-    const dx = bx - l.base.x;
-    const dz = bz - l.base.z;
-    if (dx * dx + dz * dz < 0.9 * 0.9 && Math.abs(by - l.base.y) < 0.6) {
-      progress.collect(L, l.idx);
-      l.sprite.removeFromParent();
-      l.sprite.material.map?.dispose();
-      l.sprite.material.dispose();
-      const n = progress.letters(L).length;
-      hud.toast(`Letter ${LETTERS[l.idx]}`, `${n}/6 · ${LETTERS.split('').map((c, i) => (progress.letters(L).includes(i) ? c : '·')).join(' ')}`, 'letter');
-      audio.letter();
-      buzz(12);
-      tracker?.letters(n);
-    }
-  }
-  letters = letters.filter((l) => l.sprite.parent);
-  void dt;
 }
 
 /** Gaps cleared by the air that just landed. */
@@ -308,16 +489,23 @@ function gapsCleared(): GapDef[] {
   return out;
 }
 
+function fireSpecial() {
+  const sp = career.equippedSpecial();
+  if (!playing || !sp || special < 1) return;
+  if (skater.flick({ flip: sp.flip, shove: sp.shove, wrap: sp.wrap, nollie: false, speed: 1.5, label: sp.name, special: sp.name })) {
+    audio.special();
+    hud.popup(sp.name, 'special!', 'perfect');
+    buzz([10, 20, 10]);
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Tutorial hints                                                      */
 /* ------------------------------------------------------------------ */
 
 const tutorial = {
   step: -1,
-  t: 0,
   pushes: 0,
-  pops: 0,
-  catches: 0,
   done: (() => {
     try {
       return localStorage.getItem('skate5.tut') === '1';
@@ -336,7 +524,7 @@ function tutorialHint(): string | null {
     case 2:
       return 'Flick up-left for a kickflip — then TAP to catch before you land';
     case 3:
-      return 'Nice! Ollie onto a rail to grind. Tricks menu ↗ has every flick';
+      return 'Nice! Ollie onto a rail to grind. Menu ↗ shows your goals';
   }
   return null;
 }
@@ -344,17 +532,14 @@ function tutorialAdvance(ev: 'push' | 'pop' | 'catch' | 'grind') {
   if (tutorial.done) return;
   if (tutorial.step === 0 && ev === 'push' && ++tutorial.pushes >= 2) tutorial.step = 1;
   else if (tutorial.step === 1 && ev === 'pop') tutorial.step = 2;
-  else if (tutorial.step === 2 && ev === 'catch') {
-    tutorial.step = 3;
-    tutorial.t = 0;
-  } else if (tutorial.step === 3 && ev === 'grind') finishTutorial();
-}
-function finishTutorial() {
-  tutorial.done = true;
-  try {
-    localStorage.setItem('skate5.tut', '1');
-  } catch {
-    /* ignore */
+  else if (tutorial.step === 2 && ev === 'catch') tutorial.step = 3;
+  else if (tutorial.step === 3 && ev === 'grind') {
+    tutorial.done = true;
+    try {
+      localStorage.setItem('skate5.tut', '1');
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -363,31 +548,28 @@ function finishTutorial() {
 /* ------------------------------------------------------------------ */
 
 const QUALITY_MULT: Record<Quality, number> = { perfect: 1.5, clean: 1, sketchy: 0.6 };
+const REPEAT = [1, 0.75, 0.5, 0.25, 0.1];
 
 class Combo {
   names: string[] = [];
   points = 0;
   count = 0;
   total = 0;
-  best = 0;
   groundT = 0;
   active = false;
-
-  constructor() {
-    try {
-      this.best = Number(localStorage.getItem('skate5.best') || 0);
-    } catch {
-      /* ignore */
-    }
-  }
 
   add(r: TrickRecord) {
     this.active = true;
     this.groundT = 0;
+    // THPS rule: the same trick scores less every time you repeat it in a run
+    const n = runCounts.get(r.name) ?? 0;
+    runCounts.set(r.name, n + 1);
     const q = r.quality ? QUALITY_MULT[r.quality] : 1;
-    this.points += Math.round(r.points * q);
+    const pts = Math.round(r.points * q * REPEAT[Math.min(n, REPEAT.length - 1)]);
+    this.points += pts;
     this.count += 1;
     this.names.push(r.name);
+    if (session) special = Math.min(1, special + pts / 2200);
   }
 
   get mult() {
@@ -398,19 +580,13 @@ class Combo {
     if (!this.active) return;
     const v = this.points * this.mult;
     this.total += v;
-    tracker?.comboBanked(v);
     if (this.count > 1 || v > 0) {
       hud.comboResult(`+${v.toLocaleString()}`, true);
       if (this.count > 2) audio.combo(this.count);
     }
-    if (v > this.best) {
-      this.best = v;
-      try {
-        localStorage.setItem('skate5.best', String(v));
-      } catch {
-        /* ignore */
-      }
-    }
+    if (session) session.bestCombo = Math.max(session.bestCombo, v);
+    tracker?.comboBanked(v, this.count);
+    tracker?.runScore(this.total);
     this.reset();
   }
 
@@ -442,6 +618,7 @@ const tmpV2 = new THREE.Vector3();
 const DUST = new THREE.Color(0.32, 0.29, 0.26);
 const SPARK = new THREE.Color(1.0, 0.62, 0.3);
 const WATER = new THREE.Color(0.75, 0.9, 1.0);
+const GLOW = new THREE.Color(1.0, 0.75, 0.35);
 
 function buzz(p: number | number[]) {
   try {
@@ -487,7 +664,11 @@ function handle(ev: SkaterEvent) {
       dustBurst(8 + Math.round(ev.impact * 2), 1.2);
       for (const r of ev.tricks) combo.add(r);
       const gaps = gapsCleared();
-      for (const g of gaps) combo.add({ name: g.name, points: g.points, kind: 'trick' });
+      const L = LEVELS[levelIndex];
+      for (const g of gaps) {
+        combo.add({ name: g.name, points: g.points, kind: 'trick' });
+        if (session && session.mode !== 'free' && career.foundGap(L, g.id)) hud.toast('New gap found', g.name, 'letter');
+      }
       if (ev.tricks.length || gaps.length) {
         const label = ev.quality === 'perfect' ? 'Perfect landing' : ev.quality === 'sketchy' ? 'Sketchy' : 'Clean';
         const last = ev.tricks.length ? ev.tricks[ev.tricks.length - 1].name : '';
@@ -507,6 +688,7 @@ function handle(ev: SkaterEvent) {
       shake.t = 0.35;
       shake.amp = 0.08;
       slowMo = 0.5;
+      special = 0;
       const why: Record<string, string> = {
         uncaught: 'tap to catch the board!',
         sloppy: 'caught it too late',
@@ -559,6 +741,34 @@ function handle(ev: SkaterEvent) {
   }
 }
 
+function handleProps(dt: number, t: number) {
+  if (!props) return;
+  const collect = !!session && session.mode === 'career' && playing;
+  const hits = props.update(dt, t, skater.pos, skater.vel, playing && skater.mode !== 'bail', collect);
+  const L = LEVELS[levelIndex];
+  for (const h of hits) {
+    if (h.kind === 'object') {
+      audio.knock(h.noun === 'ball');
+      buzz(10);
+      if (collect) {
+        hud.popup(`${h.idx}/5`, L.objectNoun, 'clean');
+        combo.add({ name: L.objectNoun, points: 150, kind: 'trick' });
+        tracker?.objects(props.objectsHit);
+      }
+    } else if (h.kind === 'letter') {
+      const got = props.lettersGot;
+      hud.toast(`Letter ${'CLAUDE'[h.idx]}`, `${got.size}/6 · ${'CLAUDE'.split('').map((c, i) => (got.has(i) ? c : '·')).join(' ')}`, 'letter');
+      audio.letter();
+      buzz(12);
+      tracker?.letters(got.size);
+    } else if (h.kind === 'tape') {
+      hud.toast('Secret tape!', 'You found the Spark team tape', 'goal');
+      audio.letter();
+      tracker?.tape();
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Camera                                                              */
 /* ------------------------------------------------------------------ */
@@ -575,7 +785,6 @@ const cam = {
 function updateCamera(dt: number) {
   const s = skater;
   const focus = s.mode === 'bail' ? tmpV.copy(s.bpos) : tmpV.copy(s.pos);
-  // follow direction of travel; fall back to board heading when slow
   const vh = Math.hypot(s.vel.x, s.vel.z);
   let targetYaw = cam.yaw;
   if (s.mode === 'grind' && s.grind) {
@@ -587,8 +796,7 @@ function updateCamera(dt: number) {
     const fh = Math.hypot(s.fwd.x, s.fwd.z);
     if (fh > 0.3) targetYaw = Math.atan2(s.fwd.z, s.fwd.x);
   }
-  if (!playing && menu.open) targetYaw = cam.yaw;
-  // in the air off a vert wall, don't whip around
+  if (!playing) targetYaw = cam.yaw;
   const vertical = s.mode === 'air' && vh < 2.5 && Math.abs(s.vel.y) > 2;
   let d = targetYaw - cam.yaw;
   while (d > Math.PI) d -= Math.PI * 2;
@@ -599,13 +807,13 @@ function updateCamera(dt: number) {
   const aspect = window.innerWidth / window.innerHeight;
   const portrait = aspect < 1;
   const sp = Math.min(12, s.speed);
-  const baseDist = portrait ? 2.3 : 1.8;
+  const menuPull = !playing && ui.open ? 1.8 : 1;
+  const baseDist = (portrait ? 2.3 : 1.8) * menuPull;
   const targetDist = baseDist + sp * 0.1;
   cam.dist += (targetDist - cam.dist) * Math.min(1, dt * 2);
   if (!cam.init) cam.dist = targetDist;
   const height = cam.dist * (portrait ? 1.3 : 1.12);
 
-  // vertical follow lags so airs feel big, but stays tight on the ground
   const groundH = terrain.height(focus.x, focus.z);
   const fy = s.mode === 'air' ? groundH + (focus.y - groundH) * 0.65 : focus.y;
   if (!cam.init) {
@@ -619,14 +827,13 @@ function updateCamera(dt: number) {
   const ahead = Math.min(1.3, 0.4 + sp * 0.09);
   const lookT = tmpV2.set(focus.x + fx * ahead, cam.y + 0.15, focus.z + fz * ahead);
   const posT = new THREE.Vector3(focus.x - fx * cam.dist, cam.y + height, focus.z - fz * cam.dist);
+  const camGround = terrain.height(posT.x, posT.z);
+  if (posT.y < camGround + 1.2) posT.y = camGround + 1.2;
   if (!cam.init) {
     cam.pos.copy(posT);
     cam.look.copy(lookT);
     cam.init = true;
   }
-  // keep the camera above whatever terrain it's over (bowls, ramps)
-  const camGround = terrain.height(posT.x, posT.z);
-  if (posT.y < camGround + 1.2) posT.y = camGround + 1.2;
   cam.pos.lerp(posT, Math.min(1, dt * 10));
   cam.look.lerp(lookT, Math.min(1, dt * 12));
   camera.position.copy(cam.pos);
@@ -655,10 +862,9 @@ const q = new THREE.Quaternion();
 const p = new THREE.Vector3();
 let lastDist = 0;
 let sparkAcc = 0;
-const joint = { x: Infinity, z: Infinity };
 let sprayAcc = 0;
+const joint = { x: Infinity, z: Infinity };
 
-// adaptive resolution: drop pixel ratio if the device can't hold ~50fps
 const perf = { t: 0, frames: 0, ratio: Math.min(window.devicePixelRatio || 1, 2) };
 function adaptResolution(dt: number) {
   perf.t += dt;
@@ -671,6 +877,58 @@ function adaptResolution(dt: number) {
     perf.ratio = Math.max(1, perf.ratio - 0.25);
     renderer.setPixelRatio(perf.ratio);
   }
+}
+
+function runClock(dt: number) {
+  const s = session;
+  if (!s || s.mode === 'free') {
+    hud.setTimer(null);
+    return;
+  }
+  if (!playing) return;
+  if (!s.timeUp) {
+    const before = s.time;
+    s.time -= dt;
+    if (Math.ceil(s.time) !== Math.ceil(before) && s.time <= 5 && s.time > 0) audio.tick();
+    if (s.time <= 0) {
+      s.time = 0;
+      s.timeUp = true;
+      hud.bigText('TIME!');
+      audio.horn(true);
+    }
+  }
+  hud.setTimer(s.time);
+  // THPS rule: the clock runs out but your current line gets to finish
+  if (s.timeUp && skater.mode !== 'air' && skater.mode !== 'grind' && !combo.active) finishRun(true);
+}
+
+function updateTracker() {
+  const s = session;
+  if (!s || s.mode === 'free' || !tracker) {
+    hud.setTracker([], null);
+    return;
+  }
+  const L = LEVELS[s.level];
+  const rows: { label: string; value: string }[] = [];
+  if (s.mode === 'comp') {
+    rows.push({ label: `Heat ${s.heat}/3`, value: (combo.total + (combo.active ? combo.points * combo.mult : 0)).toLocaleString('en-US') });
+  } else {
+    const run = {
+      score: combo.total,
+      letters: props?.lettersGot.size ?? 0,
+      objects: props?.objectsHit ?? 0,
+      grind: skater.grind ? { tag: skater.grind.rail.tag, dist: skater.grind.dist } : null,
+    };
+    const open = L.goals.filter((g) => !career.isDone(L, g.id));
+    const nextScore = open.find((g) => g.kind === 'score');
+    if (nextScore) rows.push({ label: nextScore.text.split(':')[0], value: tracker.progressText(nextScore, run) });
+    const obj = open.find((g) => g.kind === 'objects');
+    if (obj && run.objects > 0) rows.push({ label: L.objectNoun, value: tracker.progressText(obj, run) });
+    const grind = open.find((g) => g.kind === 'grind' && run.grind?.tag === g.tag);
+    if (grind) rows.push({ label: 'Grind', value: tracker.progressText(grind, run) });
+  }
+  const showLetters = s.mode === 'career' && L.goals.some((g) => g.kind === 'letters' && !career.isDone(L, g.id));
+  hud.setTracker(rows, showLetters ? [0, 1, 2, 3, 4, 5].map((i) => props?.lettersGot.has(i) ?? false) : null);
 }
 
 function frame(now: number) {
@@ -689,13 +947,10 @@ function frame(now: number) {
         const sp = a.spec;
         audio.flipWhoosh(Math.abs(sp.flip) + Math.abs(sp.shove) * 0.5 + Math.abs(sp.wrap));
       }
-    } else if (a.type === 'respawn') {
-      respawnAtStart();
-    }
+    } else if (a.type === 'respawn') respawnAtStart();
   }
   input.actions.length = 0;
 
-  // juice: brief hit-stop on perfect catches, slow-mo on bails
   if (hitStop > 0) {
     hitStop -= dt;
     dt *= 0.15;
@@ -725,18 +980,29 @@ function frame(now: number) {
 
   if (skater.mode === 'bail' && skater.bailT > 1.45) fade.classList.add('on');
 
-  // combo banks after a beat on the ground
   if (skater.mode === 'ground' && combo.active) {
     combo.groundT += dt;
     if (combo.groundT > 0.75) combo.bank();
   }
+
+  // special meter
+  const hasSpecial = !!session && !!career.equippedSpecial();
+  if (playing && !combo.active) special = Math.max(0, special - dt * 0.02);
+  skater.boost = special >= 1 ? 0.8 : 0;
+  const ready = hasSpecial && special >= 1 && playing && skater.mode !== 'bail' && !(skater.trick.active && !skater.trick.caught);
+  hud.setSpecial(session ? special : null, ready);
+  if (special >= 1 && playing && Math.random() < 0.5) {
+    tmpV.set((Math.random() - 0.5) * 0.4, 0.3, (Math.random() - 0.5) * 0.4);
+    glow.emit(board.root.position, tmpV, 0.3, GLOW, 0.5);
+  }
+
+  runClock(dt);
 
   // board visuals
   skater.visualQuat(q);
   skater.visualPos(p);
   board.root.position.copy(p);
   board.root.quaternion.copy(q);
-  // crouch: board sinks a touch while the tail is loaded
   const crouch = input.crouch && skater.mode === 'ground' ? -0.012 : 0;
   board.pivot.position.y = DECK.deckY + crouch;
   const dist = skater.distance - lastDist;
@@ -755,8 +1021,7 @@ function frame(now: number) {
   blob.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
   const sc = 0.95 + hgt * 0.25;
   blob.scale.set(sc, sc * 0.55 + 0.25, 1);
-  const yaw = Math.atan2(skater.fwd.z, skater.fwd.x);
-  blob.rotateZ(-yaw);
+  blob.rotateZ(-Math.atan2(skater.fwd.z, skater.fwd.x));
   (blob.material as THREE.MeshBasicMaterial).opacity = Math.max(0.15, 1 - hgt * 0.35);
 
   // sparks while grinding
@@ -770,12 +1035,10 @@ function frame(now: number) {
       sparks.emit(skater.pos, tmpV, 2.2, SPARK, 0.35);
     }
   }
-  // powerslide dust
   if (skater.mode === 'ground' && skater.braking && skater.speed > 2 && Math.random() < 0.6) {
     tmpV.copy(skater.vel).multiplyScalar(0.2);
     dust.emit(skater.pos, tmpV, 0.8, DUST, 0.4);
   }
-  // fountain spray
   for (const f of fountains) {
     sprayAcc += dt * 45;
     while (sprayAcc > 1) {
@@ -789,14 +1052,14 @@ function frame(now: number) {
     wmap.offset.x += dt * 0.012;
     wmap.offset.y += dt * 0.007;
   }
-  if (skater.grind) tracker?.grinding(skater.grind.rail.tag, skater.grind.dist, skater.grind.name);
-  if (playing) collectLetters(dt, now / 1000);
-  else for (const l of letters) l.sprite.position.y = l.base.y + Math.sin((now / 1000) * 2.2 + l.idx) * 0.12;
+  if (skater.grind && playing) tracker?.grinding(skater.grind.rail.tag, skater.grind.dist, skater.grind.name);
+  handleProps(dt, now / 1000);
 
   sparks.update(dt);
   dust.update(dt);
   spray.update(dt);
   splash.update(dt);
+  glow.update(dt);
 
   // expansion joints click under the wheels on the plaza concrete
   if (skater.mode === 'ground' && Math.abs(skater.pos.y) < 0.001 && skater.groundN.y > 0.999) {
@@ -807,30 +1070,27 @@ function frame(now: number) {
     joint.z = jz;
   } else joint.x = joint.z = Infinity;
 
-  // audio
   const grindKind = skater.mode === 'grind' && skater.grind ? (skater.grind.family === 'slide' ? 'slide' : 'grind') : 'none';
-  audio.update(skater.mode === 'ground' ? skater.speed : 0, grindKind, skater.grind ? Math.abs(skater.grind.spd) : 0, skater.braking && skater.speed > 1.5);
+  audio.update(playing && skater.mode === 'ground' ? skater.speed : 0, playing ? grindKind : 'none', skater.grind ? Math.abs(skater.grind.spd) : 0, skater.braking && skater.speed > 1.5);
 
   // HUD
-  hud.setScore(combo.total, combo.best);
+  hud.setScore(combo.total, session ? session.bestCombo : 0);
   hud.showCombo(combo.names, combo.points + (skater.grind ? skater.grind.points : 0), combo.mult + (liveGrind ? 1 : 0), liveGrind);
   hud.balance(skater.mode === 'grind' && skater.grind ? skater.grind.balance : null);
   hud.setSpeed(skater.speed * 3.6);
   const uncaught = skater.mode === 'air' && skater.trick.active && !skater.trick.caught;
   hud.setHint(playing ? (uncaught && !tutorial.done ? 'TAP to catch it!' : tutorialHint()) : null);
-  minimap?.draw(
-    skater.mode === 'bail' ? skater.bpos.x : skater.pos.x,
-    skater.mode === 'bail' ? skater.bpos.z : skater.pos.z,
-    cam.yaw,
-    letters.map((l) => ({ x: l.base.x, z: l.base.z })),
-  );
+  updateTracker();
+  minimap?.draw(bx, bz, cam.yaw, props?.letterDots ?? []);
   hud.root.classList.toggle('dim', !playing);
 
-  // attract mode: slowly orbit the board behind the menus
-  if (!playing && menu.open) cam.yaw += dt * 0.12;
-  if (!debug.freeCam) updateCamera(dt);
-  sun.position.copy(skater.pos).add(SUN_OFFSET);
-  sun.target.position.copy(skater.pos);
+  if (cut.active) cut.update(dt);
+  else if (!debug.freeCam) {
+    if (!playing && ui.open) cam.yaw += dt * 0.12;
+    updateCamera(dt);
+  }
+  sun.position.copy(cut.active ? camera.position : skater.pos).add(SUN_OFFSET);
+  sun.target.position.copy(cut.active ? camera.position : skater.pos);
   input.draw();
   renderer.render(scene, camera);
 }
@@ -840,8 +1100,12 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pause();
+});
 
-loadLevel(0, 'free');
+loadLevel(0);
+ui.showTitle();
 requestAnimationFrame(frame);
 
 // debug/test hook
@@ -850,13 +1114,24 @@ requestAnimationFrame(frame);
   get terrain() {
     return terrain;
   },
+  get session() {
+    return session;
+  },
+  get special() {
+    return special;
+  },
+  set special(v: number) {
+    special = v;
+  },
   input,
   combo,
   camera,
+  career,
+  ui,
+  cut,
   begin,
   debug,
+  startRun,
+  finishRun,
   loadLevel,
-  resume,
-  progress,
-  menu,
 };

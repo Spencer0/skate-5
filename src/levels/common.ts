@@ -20,35 +20,102 @@ export interface GapDef {
   to: Rect;
 }
 
-export type GoalDef =
-  | { id: string; kind: 'gap'; text: string; gap: string; trick?: string }
-  | { id: string; kind: 'trick'; text: string; trick: string }
-  | { id: string; kind: 'grind'; text: string; tag: string; dist: number; trick?: string }
-  | { id: string; kind: 'combo'; text: string; points: number }
-  | { id: string; kind: 'air'; text: string; height: number }
-  | { id: string; kind: 'letters'; text: string };
+export type V3 = [number, number, number];
+export type CharId = 'mara' | 'dex' | 'kai' | 'pete' | 'announcer' | 'you';
+
+export interface Line {
+  who: CharId;
+  text: string;
+}
+
+/** One camera move in a cutscene; dialogue lines play while it runs. */
+export interface Shot {
+  cam: V3;
+  cam2?: V3;
+  look: V3;
+  look2?: V3;
+  dur: number;
+  title?: string;
+  subtitle?: string;
+  lines?: Line[];
+}
+
+export interface Cutscene {
+  id: string;
+  shots: Shot[];
+}
+
+interface GoalBase {
+  id: string;
+  text: string;
+  /** one-line tip shown in the goal list / preview */
+  hint?: string;
+  /** camera for the "show me" preview */
+  view?: { cam: V3; look: V3 };
+}
+
+export type GoalDef = GoalBase &
+  (
+    | { kind: 'score'; points: number }
+    | { kind: 'combo'; points: number }
+    | { kind: 'comboCount'; count: number }
+    | { kind: 'letters' }
+    | { kind: 'tape' }
+    | { kind: 'objects'; count: number }
+    | { kind: 'gap'; gap: string; trick?: string }
+    | { kind: 'grind'; tag: string; dist: number; trick?: string }
+    | { kind: 'air'; height: number }
+    | { kind: 'trick'; trick: string }
+    | { kind: 'medal'; medal: 'bronze' | 'silver' | 'gold' }
+  );
+
+export type PropKind = 'sign' | 'cone' | 'ball';
+export interface PropDef {
+  kind: PropKind;
+  pos: THREE.Vector3;
+}
 
 export interface LevelData {
   vis: ParkVisuals;
   spawn: { x: number; z: number; heading: number };
   gaps: GapDef[];
   letters: THREE.Vector3[]; // C, L, A, U, D, E
+  tape: THREE.Vector3;
+  props: PropDef[];
 }
 
 export interface Level {
   id: string;
   name: string;
+  chapter: number;
   tagline: string;
-  story: string;
-  outro: string;
+  blurb: string;
   sky: string;
   fog: [number, number];
   ground: boolean;
+  kind: 'street' | 'comp';
+  /** seconds per run */
+  runTime: number;
   /** goals needed here to unlock the next chapter */
   unlockAt: number;
+  /** what the object goal is about, e.g. "No Skating signs" */
+  objectNoun: string;
   goals: GoalDef[];
+  intro: Cutscene;
+  /** plays when this chapter's goals unlock the next one */
+  outro: Cutscene;
   build(t: Terrain): LevelData;
   decorate(group: THREE.Group, mats: ParkMaterials, t: Terrain): void;
+}
+
+/** Standard score goals, THPS style. */
+export function scoreGoals(high: number, pro: number, sick: number): GoalDef[] {
+  const f = (n: number) => n.toLocaleString('en-US');
+  return [
+    { id: 'high', kind: 'score', points: high, text: `High Score: ${f(high)}`, hint: 'Score in a single run. Chain tricks with grinds for bigger multipliers.' },
+    { id: 'pro', kind: 'score', points: pro, text: `Pro Score: ${f(pro)}`, hint: 'Mix it up: repeating the same trick scores less each time.' },
+    { id: 'sick', kind: 'score', points: sick, text: `Sick Score: ${f(sick)}`, hint: 'Long combos, gaps and specials. Fill your special meter!' },
+  ];
 }
 
 export const N = -Math.PI / 2; // rising toward -z

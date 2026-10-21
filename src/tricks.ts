@@ -19,6 +19,7 @@ export interface TrickSpec {
   nollie: boolean;
   speed: number; // flick speed multiplier 0.85..1.2
   label: string; // the gesture's "intended" trick (for the trick guide/debug)
+  special?: string; // special trick name (from the special button)
 }
 
 export interface StickSample {
@@ -177,11 +178,16 @@ export interface TrickResult {
   body: number; // signed half turns of body spin (+FS)
   nollie: boolean;
   fakie: boolean;
+  special?: string;
 }
 
 const MULT = ['', '', 'Double ', 'Triple ', 'Quad ', 'Quint '];
 
 export function trickName(r: TrickResult): string {
+  if (r.special) {
+    const spin = r.body !== 0 ? `${r.body > 0 ? 'FS' : 'BS'} ${Math.abs(r.body) * 180} ` : '';
+    return spin + r.special;
+  }
   const f = Math.abs(r.flips);
   const kick = r.flips > 0;
   const sh = r.shoves;
@@ -232,7 +238,7 @@ export function trickName(r: TrickResult): string {
 }
 
 export function trickPoints(r: TrickResult): number {
-  let p = 100;
+  let p = r.special ? 2500 : 100;
   p += Math.abs(r.flips) * 220;
   p += Math.abs(r.shoves) * 140;
   p += Math.abs(r.wraps) * 400;

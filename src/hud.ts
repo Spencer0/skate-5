@@ -23,7 +23,13 @@ export class Hud {
   guide: HTMLElement;
   goalsBtn: HTMLButtonElement;
   menuBtn: HTMLButtonElement;
+  starBtn: HTMLButtonElement;
   private toasts: HTMLElement;
+  private timer: HTMLElement;
+  private tracker: HTMLElement;
+  private special: HTMLElement;
+  private specialFill: HTMLElement;
+  private lastTracker = '';
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'hud', parent);
@@ -41,6 +47,12 @@ export class Hud {
     this.comboPts = el('div', 'combo-pts', this.combo);
     this.popups = el('div', 'popups', this.root);
     this.toasts = el('div', 'toasts', this.root);
+    this.timer = el('div', 'timer', this.root);
+    this.tracker = el('div', 'tracker', this.root);
+    this.special = el('div', 'special', this.root);
+    this.specialFill = el('div', 'special-fill', this.special);
+    this.starBtn = el('button', 'star-btn', this.root, '★') as HTMLButtonElement;
+    this.starBtn.setAttribute('aria-label', 'Special trick');
 
     this.balanceWrap = el('div', 'balance', this.root);
     el('div', 'balance-bar', this.balanceWrap);
@@ -61,6 +73,51 @@ export class Hud {
   setGoals(done: number, total: number | null) {
     this.goalsBtn.style.display = total === null ? 'none' : '';
     if (total !== null) this.goalsBtn.textContent = `Goals ${done}/${total}`;
+  }
+
+  /** Run clock; null hides it. */
+  setTimer(sec: number | null) {
+    if (sec === null) {
+      this.timer.classList.remove('on');
+      return;
+    }
+    const s = Math.max(0, Math.ceil(sec));
+    this.timer.classList.add('on');
+    this.timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    this.timer.classList.toggle('low', sec <= 10);
+  }
+
+  bigText(text: string) {
+    const t = el('div', 'timer-big', this.root, text);
+    setTimeout(() => t.remove(), 1700);
+  }
+
+  /** Pinned goal + letters strip (rebuilt only when it changes). */
+  setTracker(rows: { label: string; value: string }[], letters: boolean[] | null) {
+    const key = JSON.stringify([rows, letters]);
+    if (key === this.lastTracker) return;
+    this.lastTracker = key;
+    this.tracker.replaceChildren();
+    for (const r of rows) {
+      const d = el('div', 'track', this.tracker);
+      el('span', '', d, r.label);
+      if (r.value) el('b', '', d, r.value);
+    }
+    if (letters) {
+      const strip = el('div', 'track letters-strip', this.tracker);
+      'CLAUDE'.split('').forEach((c, i) => el('span', letters[i] ? 'on' : '', strip, c));
+    }
+  }
+
+  setSpecial(v: number | null, ready: boolean) {
+    this.special.classList.toggle('on', v !== null);
+    if (v === null) {
+      this.starBtn.classList.remove('on');
+      return;
+    }
+    this.specialFill.style.width = `${Math.round(v * 100)}%`;
+    this.special.classList.toggle('full', v >= 1);
+    this.starBtn.classList.toggle('on', ready);
   }
 
   /** Big banner for goal completions and letters. */

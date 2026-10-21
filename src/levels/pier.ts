@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ParkVisuals, box, kicker, bank, ledge, stairs, quarterPipe, funbox } from '../park';
-import { Level, N, S, rect, polyRail, lamps } from './common';
+import { Level, N, S, rect, polyRail, lamps, scoreGoals } from './common';
 
 const SEA = -0.9;
 
@@ -26,24 +26,90 @@ const PIER_RAIL: [number, number][] = [
 export const pierLevel: Level = {
   id: 'pier',
   name: 'The Pier',
+  chapter: 3,
   tagline: 'Chapter 3 · Saturday at the beach',
-  story:
-    'The pier rail wraps all the way around the pier head and back — legend says nobody has ridden it end to end. ' +
-    'There is a gap where the planks rotted out, and the water is cold. Make the pro proud.',
-  outro: 'You rode the whole pier. The crew is calling it the line of the summer. You are officially on the team.',
+  blurb: 'Kai Moreno wants to see someone ride the 250m pier rail. The water is cold.',
   sky: '#DCE8EC',
   fog: [50, 170],
   ground: false,
-  unlockAt: 99,
+  kind: 'street',
+  runTime: 120,
+  unlockAt: 6,
+  objectNoun: 'beach balls',
   goals: [
-    { id: 'pg', kind: 'gap', text: 'Ollie the Pier Gap', gap: 'piergap' },
-    { id: 'pghf', kind: 'gap', text: 'Hardflip the Pier Gap', gap: 'piergap', trick: 'Hardflip' },
-    { id: 'rail', kind: 'grind', text: 'Grind 100m of the pier rail in one go', tag: 'pierrail', dist: 100 },
-    { id: 'stairs', kind: 'gap', text: 'Heelflip the promenade stairs', gap: 'promstairs', trick: 'Heelflip' },
-    { id: 'air', kind: 'air', text: 'Get 2m of air on the pier head quarter pipe', height: 2 },
-    { id: 'let', kind: 'letters', text: 'Collect C-L-A-U-D-E' },
-    { id: 'combo', kind: 'combo', text: 'Land a 15,000 point combo', points: 15000 },
+    ...scoreGoals(15000, 45000, 100000),
+    { id: 'let', kind: 'letters', text: 'Collect C-L-A-U-D-E', hint: 'All six in one run. Two of them are on the pier rail.' },
+    { id: 'tape', kind: 'tape', text: 'Find the secret tape', hint: 'On the deck of the pier-head quarter pipe. Hold up at the lip.', view: { cam: [14, 5, -82], look: [8, 2, -92.9] } },
+    { id: 'balls', kind: 'objects', count: 5, text: 'Pop 5 beach balls', hint: 'The tourists left them everywhere. Promenade, boardwalk, pier head.' },
+    { id: 'pg', kind: 'gap', gap: 'piergap', text: 'Ollie the Pier Gap', hint: 'Kickers on both sides of the rotten planks. Pop at the lip.' },
+    { id: 'pghf', kind: 'gap', gap: 'piergap', trick: 'Hardflip', text: 'Hardflip the Pier Gap', hint: 'Roll the trick stick right, past the top. Catch it over the hole.' },
+    { id: 'rail', kind: 'grind', tag: 'pierrail', dist: 100, text: 'Grind 100m of the pier rail in one go', hint: 'Get on at the boardwalk with speed and keep balancing.', view: { cam: [9, 3, 14], look: [4.6, 0.5, 0] } },
+    { id: 'stairs', kind: 'gap', gap: 'promstairs', trick: 'Heelflip', text: 'Heelflip the promenade stairs', hint: 'From the promenade down to the boardwalk.' },
+    { id: 'air', kind: 'air', height: 2, text: 'Get 2m of air on the pier head quarter pipe', hint: 'Pop at the lip.', view: { cam: [8, 4, -78], look: [0, 1.5, -91] } },
+    { id: 'combo', kind: 'combo', points: 15000, text: 'Land a 15,000 point combo', hint: 'The pier rail is one long combo waiting to happen.' },
   ],
+  intro: {
+    id: 'pier-intro',
+    shots: [
+      {
+        cam: [34, 22, 44],
+        cam2: [16, 14, 18],
+        look: [0, 0, -30],
+        dur: 4.5,
+        title: 'The Pier',
+        subtitle: 'Chapter 3 · Saturday at the beach',
+        lines: [
+          { who: 'kai', text: 'You came. Good. See that rail?' },
+          { who: 'kai', text: 'Two hundred and fifty meters. Up the pier, all the way round the head, and back.' },
+        ],
+      },
+      {
+        cam: [8, 3, -19],
+        cam2: [6, 2.4, -23],
+        look: [0, 0, -28],
+        dur: 4,
+        lines: [
+          { who: 'kai', text: 'Planks rotted out last winter. Kickers both sides. Try not to look down.' },
+          { who: 'mara', text: 'If you fall in, I am not fishing you out.' },
+        ],
+      },
+      {
+        cam: [12, 6, -68],
+        cam2: [6, 5, -74],
+        look: [0, 1, -88],
+        dur: 4,
+        lines: [
+          { who: 'dex', text: "Thought I'd come watch. Heard the Spark team only has one spot." },
+          { who: 'kai', text: 'It does.' },
+        ],
+      },
+      {
+        cam: [-6, 5, 34],
+        cam2: [-12, 4, 30],
+        look: [-30, 1, 24],
+        dur: 3.5,
+        lines: [{ who: 'mara', text: 'Also: five beach balls. Tourists. You know the drill.' }],
+      },
+    ],
+  },
+  outro: {
+    id: 'pier-outro',
+    shots: [
+      {
+        cam: [10, 6, -58],
+        cam2: [4, 4, -70],
+        look: [0, 0.5, -84],
+        dur: 4.5,
+        title: 'Chapter 3 complete',
+        lines: [
+          { who: 'kai', text: 'Alright. I have seen enough.' },
+          { who: 'kai', text: 'One spot on the team. One contest: the Claude Classic.' },
+          { who: 'kai', text: 'You, Dex, and the best riders on the coast. Medal and you are on Spark.' },
+          { who: 'dex', text: 'See you there, rookie.' },
+        ],
+      },
+    ],
+  },
   build(t) {
     const vis: ParkVisuals = { copings: [], railPosts: [] };
     t.floor = -3;
@@ -109,6 +175,14 @@ export const pierLevel: Level = {
         { id: 'piergap', name: 'Pier Gap', points: 600, from: rect(-5, -36, 5, -30), to: rect(-5, -26, 5, -10) },
         { id: 'promstairs', name: 'Promenade Stairs', points: 450, from: rect(-10.5, 30, -1.5, 34), to: rect(-11, 18.5, -1, 27.2) },
         { id: 'promdrop', name: 'Promenade Drop', points: 250, from: rect(-60, 30, 60, 34), to: rect(-60, 18.5, 60, 29.9) },
+      ],
+      tape: new THREE.Vector3(8, 2.1, -92.9),
+      props: [
+        { kind: 'ball', pos: new THREE.Vector3(20, 0, 25) },
+        { kind: 'ball', pos: new THREE.Vector3(-40, 0, 50) },
+        { kind: 'ball', pos: new THREE.Vector3(0, 0, -60) },
+        { kind: 'ball', pos: new THREE.Vector3(-12, 0, -88) },
+        { kind: 'ball', pos: new THREE.Vector3(12, 0, -75) },
       ],
       letters: [
         new THREE.Vector3(0, 2.2, -28), // C: over the pier gap

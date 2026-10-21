@@ -237,6 +237,35 @@ export class Audio {
     this.burst({ dur: 0.3, freq: 180, q: 1, gain: 1.2, type: 'lowpass' });
   }
 
+  /** Run start (false) / time up (true) air horn. */
+  horn(end: boolean) {
+    const f = end ? 233 : 349;
+    for (const m of [1, 1.26, 1.5]) this.tone(f * m, end ? 0.9 : 0.45, 0.06, 'sawtooth', end ? 0.92 : 1);
+  }
+
+  tick() {
+    this.tone(1760, 0.06, 0.08, 'square', 1);
+  }
+
+  /** Dialogue line appears. */
+  blip() {
+    this.tone(880, 0.05, 0.04, 'triangle', 1.2);
+  }
+
+  knock(bouncy: boolean) {
+    if (bouncy) this.tone(320, 0.25, 0.25, 'sine', 2.2);
+    else {
+      this.burst({ dur: 0.15, freq: 1200, q: 5, gain: 0.7 });
+      this.tone(520, 0.3, 0.08, 'triangle', 0.8);
+    }
+  }
+
+  special() {
+    const notes = [392, 523, 659, 784, 1047];
+    notes.forEach((f, i) => this.tone(f, 0.18, 0.08, 'sawtooth', 1, i * 0.04));
+    this.burst({ dur: 0.5, freq: 3000, q: 0.7, gain: 0.25, attack: 0.1 });
+  }
+
   combo(mult: number) {
     const base = 520;
     this.tone(base, 0.12, 0.09, 'sine', 1);

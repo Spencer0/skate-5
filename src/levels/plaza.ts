@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Terrain } from '../terrain';
 import { ParkVisuals, box, kicker, bank, ledge, stairs, hubba, quarterPipe } from '../park';
-import { Level, N, S, W, rect, ringRail, polyRail, buildings, lamps, scatterTrees } from './common';
+import { Level, N, S, W, rect, ringRail, polyRail, buildings, lamps, scatterTrees, scoreGoals } from './common';
 
 const FOUNTAIN = { r: 2.2, inner: 1.8, rim: 0.5, ped: 0.35, pedH: 1.1, water: 0.3 };
 
@@ -53,25 +53,94 @@ function fountain(t: Terrain, cx: number, cz: number) {
 export const plazaLevel: Level = {
   id: 'plaza',
   name: 'Fountain Plaza',
+  chapter: 2,
   tagline: 'Chapter 2 · Downtown',
-  story:
-    'Downtown, the security guard is on lunch. The city crew says nobody has ever flipped over the fountain — ' +
-    'launch off the kicker and pop at the lip, then catch it before you hit the landing. The big 7-stair is waiting too.',
-  outro: 'Your fountain clip is everywhere. A pro at the beach DMs you: "Pier. Saturday. Bring your board."',
+  blurb: 'A legendary fountain gap, a 7-stair Dex claims as his, and a security guard on a long lunch.',
   sky: '#E9E4DA',
   fog: [40, 130],
   ground: true,
-  unlockAt: 4,
+  kind: 'street',
+  runTime: 120,
+  unlockAt: 6,
+  objectNoun: 'traffic cones',
   goals: [
-    { id: 'fg', kind: 'gap', text: 'Gap over the fountain', gap: 'fountain' },
-    { id: 'fgkf', kind: 'gap', text: 'Kickflip over the fountain', gap: 'fountain', trick: 'Kickflip' },
-    { id: 'rim', kind: 'grind', text: 'Grind a full lap of the fountain rim', tag: 'fountain', dist: 12 },
-    { id: 'rail', kind: 'grind', text: 'Slide the 7-stair handrail', tag: 'bigrail', dist: 2.5, trick: 'slide' },
-    { id: 'tre', kind: 'gap', text: '360 Flip down the 7-stair', gap: 'sevenstair', trick: '360 Flip' },
-    { id: 'plant', kind: 'gap', text: 'Clear the Planter Gap', gap: 'planter' },
-    { id: 'let', kind: 'letters', text: 'Collect C-L-A-U-D-E' },
-    { id: 'combo', kind: 'combo', text: 'Land an 8,000 point combo', points: 8000 },
+    ...scoreGoals(10000, 30000, 70000),
+    { id: 'let', kind: 'letters', text: 'Collect C-L-A-U-D-E', hint: 'All six in one run. One of them is floating over the fountain.' },
+    { id: 'tape', kind: 'tape', text: 'Find the secret tape', hint: 'Ride up the big west bank and pop off the very top.', view: { cam: [-38, 4, 8], look: [-49.3, 2.4, 0] } },
+    { id: 'cones', kind: 'objects', count: 5, text: "Knock over Pete's 5 traffic cones", hint: 'Five cones scattered around the plaza. One is up on the terrace.' },
+    { id: 'fg', kind: 'gap', gap: 'fountain', text: 'Gap over the fountain', hint: 'Push hard, ride up the kicker and pop right at the lip.' },
+    { id: 'fgkf', kind: 'gap', gap: 'fountain', trick: 'Kickflip', text: 'Kickflip over the fountain', hint: 'Same line — flick up-left at the lip and catch it over the water.' },
+    { id: 'rim', kind: 'grind', tag: 'fountain', dist: 12, text: 'Grind a full lap of the fountain rim', hint: 'Ollie onto the rim at a shallow angle and keep your balance.', view: { cam: [5, 3, 5], look: [0, 0.5, 0] } },
+    { id: 'rail', kind: 'grind', tag: 'bigrail', dist: 2.5, trick: 'slide', text: 'Slide the 7-stair handrail', hint: 'Spin the board sideways in the air before you land on the rail.', view: { cam: [8, 3.5, -22], look: [2.6, 1.2, -29] } },
+    { id: 'tre', kind: 'gap', gap: 'sevenstair', trick: '360 Flip', text: '360 Flip down the 7-stair', hint: 'From the terrace, pop at the top step. Dex says it can\'t be done.' },
+    { id: 'plant', kind: 'gap', gap: 'planter', text: 'Clear the Planter Gap', hint: 'Up the little bank onto the first planter, then ollie to the second.' },
+    { id: 'combo', kind: 'combo', points: 8000, text: 'Land an 8,000 point combo', hint: 'Grinds link tricks together. Don\'t touch the ground between them.' },
   ],
+  intro: {
+    id: 'plaza-intro',
+    shots: [
+      {
+        cam: [24, 26, 44],
+        cam2: [12, 16, 26],
+        look: [0, 0, -4],
+        dur: 4,
+        title: 'Fountain Plaza',
+        subtitle: 'Chapter 2 · Downtown',
+        lines: [
+          { who: 'pete', text: 'Hey! HEY! This is a public plaza, not a skatepark!' },
+          { who: 'mara', text: "That's Officer Pete. Give it ten minutes, he'll go get a sandwich." },
+        ],
+      },
+      {
+        cam: [7, 3.2, 11],
+        cam2: [4.5, 2.4, 8],
+        look: [0, 0.6, 0],
+        dur: 4,
+        lines: [
+          { who: 'mara', text: "There it is. The fountain gap. Kicker on this side, landing on the other." },
+          { who: 'mara', text: 'Pop right at the lip and catch it over the water. Come up short and you go swimming.' },
+        ],
+      },
+      {
+        cam: [9, 4.5, -19],
+        cam2: [6, 3.6, -23],
+        look: [0, 1, -30],
+        dur: 4,
+        lines: [
+          { who: 'dex', text: 'The seven-stair is mine. Only person with a clip on it.' },
+          { who: 'mara', text: 'Then go take it from him.' },
+        ],
+      },
+      {
+        cam: [-6, 6, 26],
+        cam2: [-10, 5, 20],
+        look: [-20, 0, 10],
+        dur: 3.5,
+        lines: [
+          { who: 'pete', text: 'And stop knocking over my traffic cones!' },
+          { who: 'mara', text: '...there are exactly five of them. Just saying.' },
+        ],
+      },
+    ],
+  },
+  outro: {
+    id: 'plaza-outro',
+    shots: [
+      {
+        cam: [6, 5, 18],
+        cam2: [3, 3.6, 12],
+        look: [0, 1, 0],
+        dur: 4,
+        title: 'Chapter 2 complete',
+        lines: [
+          { who: 'kai', text: 'Saw the fountain clip. That catch was clean.' },
+          { who: 'mara', text: "That's Kai Moreno. Spark team manager. Do not freak out." },
+          { who: 'kai', text: "There's a rail at the pier I want to see someone ride end to end. Saturday." },
+          { who: 'dex', text: "Wait — he didn't invite me?" },
+        ],
+      },
+    ],
+  },
   build(t) {
     const vis: ParkVisuals = { copings: [], railPosts: [] };
     const B = 56;
@@ -143,6 +212,14 @@ export const plazaLevel: Level = {
         { id: 'sevenstair', name: '7-Stair', points: 700, from: rect(-5.2, -33, 5.2, -29.9), to: rect(-6, -26.8, 6, -14) },
         { id: 'planter', name: 'Planter Gap', points: 450, from: rect(23.4, 10.4, 26.6, 13.6), to: rect(23.4, -0.5, 26.6, 6.1) },
         { id: 'terracedrop', name: 'Terrace Drop', points: 250, from: rect(-20, -50, 20, -30.1), to: rect(-22, -30, 22, -18) },
+      ],
+      tape: new THREE.Vector3(-49.3, 2.5, 0),
+      props: [
+        { kind: 'cone', pos: new THREE.Vector3(-10, 0, 18) },
+        { kind: 'cone', pos: new THREE.Vector3(16, 0, -10) },
+        { kind: 'cone', pos: new THREE.Vector3(-28, 0, -20) },
+        { kind: 'cone', pos: new THREE.Vector3(32, 0, 26) },
+        { kind: 'cone', pos: new THREE.Vector3(6, 0, -45) },
       ],
       letters: [
         new THREE.Vector3(0, 3.0, -0.4), // C: over the fountain

@@ -496,3 +496,97 @@ export function letterTexture(ch: string) {
   const t = tex(c, false);
   return t;
 }
+
+/** Unlockable deck bottoms. Canvas x = tail -> nose, y = width. */
+export function deckTexture(id: string): THREE.CanvasTexture {
+  if (id === 'claude') return boardBottomTexture();
+  const W = 1024;
+  const H = 256;
+  const { c, g } = canvas(W, H);
+  const serif = (size: number) => `bold ${size}px Georgia, "Times New Roman", serif`;
+  const word = (t: string, x: number, y: number, size: number, col: string, align: CanvasTextAlign = 'center') => {
+    g.fillStyle = col;
+    g.font = serif(size);
+    g.textAlign = align;
+    g.textBaseline = 'middle';
+    g.fillText(t, x, y);
+  };
+  if (id === 'haiku') {
+    g.fillStyle = '#e9ede1';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#788C5D';
+    g.fillRect(0, H * 0.82, W, H * 0.18);
+    // ensō brush circle
+    g.strokeStyle = '#2f3a24';
+    g.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      g.lineWidth = 16 - i * 4;
+      g.beginPath();
+      g.arc(W * 0.5, H * 0.45, H * 0.3 + i * 2, 0.3 + i * 0.05, Math.PI * 1.85);
+      g.stroke();
+    }
+    word('Haiku', W * 0.82, H * 0.45, 56, '#2f3a24');
+    g.font = 'italic 22px Georgia, serif';
+    g.fillStyle = '#2f3a24';
+    g.textAlign = 'center';
+    g.fillText('small and quick · lands clean', W * 0.17, H * 0.45);
+  } else if (id === 'sonnet') {
+    g.fillStyle = '#1f2a44';
+    g.fillRect(0, 0, W, H);
+    g.strokeStyle = 'rgba(240,238,230,0.25)';
+    g.lineWidth = 2;
+    for (let i = 1; i < 14; i++) {
+      g.beginPath();
+      g.moveTo(W * 0.08, (H * i) / 14);
+      g.lineTo(W * 0.92, (H * i) / 14);
+      g.stroke();
+    }
+    word('Sonnet', W * 0.5, H * 0.5, 96, '#F0EEE6');
+    drawSpark(g, W * 0.18, H * 0.5, 50, '#6A9BCC', 3);
+    drawSpark(g, W * 0.82, H * 0.5, 50, '#6A9BCC', 4);
+  } else if (id === 'opus') {
+    const grd = g.createLinearGradient(0, 0, W, H);
+    grd.addColorStop(0, '#121110');
+    grd.addColorStop(1, '#2b2722');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#c9a45c';
+    g.lineWidth = 4;
+    g.strokeRect(W * 0.06, H * 0.12, W * 0.88, H * 0.76);
+    g.lineWidth = 1.5;
+    g.strokeRect(W * 0.07, H * 0.16, W * 0.86, H * 0.68);
+    word('OPUS', W * 0.5, H * 0.52, 110, '#c9a45c');
+    drawSpark(g, W * 0.16, H * 0.5, 44, '#c9a45c', 5);
+    drawSpark(g, W * 0.84, H * 0.5, 44, '#c9a45c', 6);
+  } else if (id === 'spark') {
+    g.fillStyle = PALETTE.clay;
+    g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 9; i++) drawSpark(g, (W * (i + 0.5)) / 9, H * (i % 2 ? 0.3 : 0.7), 70, i % 3 === 0 ? PALETTE.ivory : 'rgba(250,249,245,0.35)', 20 + i, i);
+    word('SPARK', W * 0.5, H * 0.52, 100, PALETTE.slate);
+  } else if (id === 'constitution') {
+    g.fillStyle = '#efe4c8';
+    g.fillRect(0, 0, W, H);
+    blotches(g, W, H, 30, 'rgba(140,110,60,0.08)', 90, 99);
+    g.fillStyle = 'rgba(60,45,25,0.55)';
+    g.font = 'italic 15px Georgia, serif';
+    g.textAlign = 'left';
+    const words = 'be helpful be honest be harmless land your tricks catch the board respect the locals share the spot '.repeat(6);
+    for (let row = 0; row < 11; row++) g.fillText(words.slice(row * 31, row * 31 + 150), W * 0.05, 26 + row * 20);
+    g.fillStyle = 'rgba(239,228,200,0.85)';
+    g.fillRect(W * 0.3, H * 0.28, W * 0.4, H * 0.44);
+    word('Constitution', W * 0.5, H * 0.5, 54, '#5a3d1e');
+  } else if (id === 'gold') {
+    const grd = g.createLinearGradient(0, 0, W, 0);
+    grd.addColorStop(0, '#a37b2c');
+    grd.addColorStop(0.5, '#f3d27a');
+    grd.addColorStop(1, '#a37b2c');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, W, H);
+    drawSpark(g, W * 0.5, H * 0.5, H * 0.42, 'rgba(255,255,255,0.7)', 7, 0.2);
+    word('CLASSIC', W * 0.2, H * 0.52, 60, '#4a3510');
+    word('CHAMPION', W * 0.8, H * 0.52, 52, '#4a3510');
+  }
+  const t = tex(c, false);
+  t.anisotropy = 16;
+  return t;
+}

@@ -117,15 +117,41 @@ test('pier rail: 100m in one grind is possible', () => {
   assert.ok(r.grindDist() > 100, `ground ${r.grindDist().toFixed(1)}m`);
 });
 
-test('every level has six letters and a spawn on solid ground', () => {
+test('every level has its collectibles and a spawn on solid ground', () => {
   for (const L of LEVELS) {
     const t = new Terrain();
     const d = L.build(t);
-    assert.equal(d.letters.length, 6, L.id);
+    if (L.kind === 'street') {
+      assert.equal(d.letters.length, 6, L.id);
+      assert.equal(d.props.length, 5, L.id);
+      const w = t.waterAt(d.tape.x, d.tape.z);
+      assert.ok(w === null || t.height(d.tape.x, d.tape.z) > w, `${L.id} tape over water`);
+    }
     assert.equal(t.waterAt(d.spawn.x, d.spawn.z), null, L.id);
-    const n = t.normal(d.spawn.x, d.spawn.z, new (d.letters[0].constructor as any)());
+    const n = t.normal(d.spawn.x, d.spawn.z, d.tape.clone());
     assert.ok(n.y > 0.999, `${L.id} spawn not flat`);
     for (const g of L.goals) if (g.kind === 'gap') assert.ok(d.gaps.some((x) => x.id === g.gap), `${L.id}: missing gap ${g.gap}`);
     for (const g of L.goals) if (g.kind === 'grind') assert.ok(t.rails.some((r) => r.tag === g.tag), `${L.id}: missing rail ${g.tag}`);
+  }
+});
+
+test('the Big Gap at the Classic is clearable with a pop', () => {
+  const { t } = level('arena');
+  const r = rig(t, -40 + 3, 14, 8, 0);
+  assert.ok(popAtLip(r, spec(0, 0)));
+  r.run(2.5);
+  const desc = r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(',') + ` x=${r.sk.pos.x.toFixed(1)}`;
+  assert.ok(r.events.some((e) => e.type === 'land'), desc);
+  assert.ok(!r.events.some((e) => e.type === 'bail'), desc);
+  assert.ok(r.sk.pos.x > -19.3, desc);
+});
+
+test('secret tapes sit somewhere reachable (on or just above a surface)', () => {
+  for (const L of LEVELS) {
+    if (!L.goals.some((g) => g.kind === 'tape')) continue;
+    const t = new Terrain();
+    const d = L.build(t);
+    const h = t.height(d.tape.x, d.tape.z);
+    assert.ok(d.tape.y - h < 1.4 || L.id === 'plaza', `${L.id}: tape ${d.tape.y} over ${h}`);
   }
 });

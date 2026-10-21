@@ -27,6 +27,7 @@ export const TUNE = {
   stepMax: 0.1, // taller than this is a wall while rolling
   coyote: 0.12,
   catchSettle: 26,
+  balance: 1, // grind instability multiplier (Rail Balance stat lowers it)
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -143,6 +144,7 @@ export class Skater {
   wobble = 0;
   lean = 0;
   yawOffset = 0; // visual-only: eases out landing / lock snaps
+  boost = 0; // extra top speed while the special meter is full
   posOffset = new THREE.Vector3(); // visual-only: eases the magnet snap onto rails
   carry = false; // holding forward: carry over lips instead of vert assist
 
@@ -274,7 +276,7 @@ export class Skater {
       this.pushT -= dt;
       const dir = vf < -0.3 ? -1 : 1;
       const s = this.vel.length();
-      const f = Math.max(0, 1 - s / TUNE.pushMaxSpeed);
+      const f = Math.max(0, 1 - s / (TUNE.pushMaxSpeed + this.boost));
       // the push ramps in and out for a smooth kick
       const ph = 1 - this.pushT / TUNE.pushTime;
       const env = Math.sin(Math.PI * Math.min(1, Math.max(0, ph)));
@@ -629,6 +631,7 @@ export class Skater {
       body: 0,
       nollie: this.airTricks.length === 0 && this.nollieAtPop,
       fakie: this.airTricks.length === 0 && this.fakieAtPop,
+      special: tr.spec?.special,
     };
     this.airTricks.push(r);
     this.airQualities.push(q);
@@ -885,8 +888,8 @@ export class Skater {
     // balance: unstable equilibrium nudged by drift; steer to correct
     g.drift += (Math.random() - 0.5) * 5 * dt;
     g.drift = Math.max(-0.9, Math.min(0.9, g.drift * (1 - 0.4 * dt)));
-    const k = Math.min(1.5, 0.5 + g.time * 0.2);
-    g.balance += (g.balance * k + g.drift * 0.5 + inp.steer * 2.6) * dt;
+    const k = Math.min(1.5, 0.5 + g.time * 0.2) * TUNE.balance;
+    g.balance += (g.balance * k + g.drift * 0.5 * TUNE.balance + inp.steer * 2.6) * dt;
     if (Math.abs(g.balance) > 1) {
       // lost it: slip off the side you were leaning to
       const side = Math.sign(g.balance);

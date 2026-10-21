@@ -25,6 +25,17 @@ export class BoardModel {
   wheels: THREE.Mesh[] = [];
   hangers: THREE.Group[] = [];
   private wheelSpin = 0;
+  private graphic!: THREE.MeshStandardMaterial;
+  deck = 'claude';
+
+  /** Swap the bottom graphic for an unlocked deck. */
+  setDeck(id: string) {
+    if (id === this.deck) return;
+    this.deck = id;
+    this.graphic.map?.dispose();
+    this.graphic.map = T.deckTexture(id);
+    this.graphic.needsUpdate = true;
+  }
 
   constructor() {
     this.root.add(this.pivot);
@@ -133,6 +144,7 @@ export class BoardModel {
 
     const grip = new THREE.MeshStandardMaterial({ map: T.boardTopTexture(), roughness: 0.95 });
     const graphic = new THREE.MeshStandardMaterial({ map: T.boardBottomTexture(), roughness: 0.42, metalness: 0.0 });
+    this.graphic = graphic;
     const wood = new THREE.MeshStandardMaterial({ map: T.woodTexture(), roughness: 0.7, side: THREE.DoubleSide });
     const deck = new THREE.Group();
     deck.add(new THREE.Mesh(top, grip));
