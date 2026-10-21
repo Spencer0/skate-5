@@ -345,6 +345,12 @@ function handle(ev: SkaterEvent) {
       shake.t = 0.12;
       shake.amp = 0.02;
       break;
+    case 'spinTick':
+      audio.spinTick();
+      break;
+    case 'fallOff':
+      hud.popup('Slipped off', undefined, 'sketchy');
+      break;
     case 'respawn':
       break;
   }
@@ -389,9 +395,10 @@ function updateCamera(dt: number) {
   const aspect = window.innerWidth / window.innerHeight;
   const portrait = aspect < 1;
   const sp = Math.min(12, s.speed);
-  const baseDist = portrait ? 2.7 : 2.2;
+  const baseDist = portrait ? 2.3 : 1.8;
   const targetDist = baseDist + sp * 0.1;
   cam.dist += (targetDist - cam.dist) * Math.min(1, dt * 2);
+  if (!cam.init) cam.dist = targetDist;
   const height = cam.dist * (portrait ? 1.3 : 1.12);
 
   // vertical follow lags so airs feel big, but stays tight on the ground
@@ -405,7 +412,7 @@ function updateCamera(dt: number) {
 
   const fx = Math.cos(cam.yaw);
   const fz = Math.sin(cam.yaw);
-  const ahead = Math.min(1.6, 0.6 + sp * 0.1);
+  const ahead = Math.min(1.3, 0.4 + sp * 0.09);
   const lookT = tmpV2.set(focus.x + fx * ahead, cam.y + 0.15, focus.z + fz * ahead);
   const posT = new THREE.Vector3(focus.x - fx * cam.dist, cam.y + height, focus.z - fz * cam.dist);
   if (!cam.init) {

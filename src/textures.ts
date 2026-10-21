@@ -191,7 +191,7 @@ export function boardBottomTexture() {
   const W = 1024;
   const H = 256;
   const { c, g } = canvas(W, H);
-  // base clay
+  // base clay with a soft sheen toward the middle
   const grd = g.createLinearGradient(0, 0, W, 0);
   grd.addColorStop(0, PALETTE.clayDark);
   grd.addColorStop(0.5, PALETTE.clay);
@@ -199,40 +199,45 @@ export function boardBottomTexture() {
   g.fillStyle = grd;
   g.fillRect(0, 0, W, H);
 
-  // cream band through the middle
+  // cream band between the trucks
+  const b0 = W * 0.285;
+  const b1 = W * 0.715;
   g.fillStyle = PALETTE.cream;
-  g.fillRect(W * 0.3, 0, W * 0.4, H);
-
-  // thin slate pinstripes framing the band
+  g.fillRect(b0, 0, b1 - b0, H);
   g.fillStyle = PALETTE.slate;
-  g.fillRect(W * 0.3 - 10, 0, 4, H);
-  g.fillRect(W * 0.7 + 6, 0, 4, H);
+  g.fillRect(b0 - 9, 0, 4, H);
+  g.fillRect(b1 + 5, 0, 4, H);
 
-  // big spark centered in the band
-  drawSpark(g, W * 0.5, H * 0.5, H * 0.42, PALETTE.clay, 7, 0.2);
-
-  // nose: wordmark (reads along the board)
-  g.save();
-  g.fillStyle = PALETTE.cream;
-  g.font = 'bold 92px Georgia, "Times New Roman", serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText('Claude', W * 0.855, H * 0.52);
-  g.restore();
-
-  // tail: small caps lettering
+  // spark + wordmark, reading tail -> nose
+  drawSpark(g, W * 0.36, H * 0.5, H * 0.3, PALETTE.clay, 7, 0.2);
   g.save();
   g.fillStyle = PALETTE.slate;
-  g.font = '600 34px "Helvetica Neue", Arial, sans-serif';
-  g.textAlign = 'center';
+  g.font = 'bold 78px Georgia, "Times New Roman", serif';
+  g.textAlign = 'left';
   g.textBaseline = 'middle';
-  const text = 'A N T H R O P I C';
-  g.fillText(text, W * 0.15, H * 0.5);
+  g.fillText('Claude', W * 0.43, H * 0.53);
   g.restore();
 
-  // little sparks near tail/nose tips
-  drawSpark(g, W * 0.035, H * 0.5, 22, PALETTE.cream, 9);
-  drawSpark(g, W * 0.965, H * 0.5, 22, PALETTE.cream, 10);
+  // nose: a big faded spark bleeding off the edge
+  g.save();
+  g.beginPath();
+  g.rect(b1 + 9, 0, W - b1, H);
+  g.clip();
+  drawSpark(g, W * 0.9, H * 0.5, H * 0.55, 'rgba(250,249,245,0.22)', 3, 0.5);
+  drawSpark(g, W * 0.86, H * 0.5, 30, PALETTE.cream, 10);
+  g.restore();
+
+  // tail: lettering clear of the truck
+  g.save();
+  g.fillStyle = PALETTE.ivory;
+  g.font = '700 25px "Helvetica Neue", Arial, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const text = 'ANTHROPIC';
+  const spaced = text.split('').join(String.fromCharCode(8202));
+  g.fillText(spaced, W * 0.125, H * 0.5);
+  g.restore();
+  drawSpark(g, W * 0.035, H * 0.5, 16, PALETTE.cream, 9);
 
   // subtle wear scratches
   const r = rng(77);

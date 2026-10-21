@@ -52,6 +52,8 @@ export type SkaterEvent =
   | { type: 'grindChange'; name: string }
   | { type: 'grindEnd'; record: TrickRecord; popped: boolean }
   | { type: 'push' }
+  | { type: 'spinTick' }
+  | { type: 'fallOff' }
   | { type: 'wall'; impact: number }
   | { type: 'respawn' };
 
@@ -386,14 +388,19 @@ export class Skater {
         const ux = hx / hl;
         const uz = hz / hl;
         const into = -(this.vel.x * ux + this.vel.z * uz);
-        if (into > 0) {
+        // no deck behind the lip (spine): let momentum carry you over
+        const behind = this.terrain.height(this.pos.x - ux * 0.6, this.pos.z - uz * 0.6);
+        const spine = behind < this.pos.y - 0.35;
+        if (into > 0 && !spine) {
           this.vel.x += ux * into;
           this.vel.z += uz * into;
         }
-        this.vel.x += ux * 0.22;
-        this.vel.z += uz * 0.22;
-        this.pos.x += ux * 0.05;
-        this.pos.z += uz * 0.05;
+        if (!spine) {
+          this.vel.x += ux * 0.22;
+          this.vel.z += uz * 0.22;
+          this.pos.x += ux * 0.05;
+          this.pos.z += uz * 0.05;
+        }
       }
       this.followPitch = true;
     }
@@ -416,7 +423,7 @@ export class Skater {
     }
     // spins need a deliberate push on the stick so carving into a pop doesn't spin you
     const sv = Math.abs(inp.steer);
-    if (sv > 0.4) {
+    if (sv > 0.4 && !this.alignTarget) {
       const a = -Math.sign(inp.steer) * ((sv - 0.4) / 0.6) ** 0.8 * TUNE.spinRate * dt;
       this.fwd.applyAxisAngle(this.up, a);
       this.bodySpin += a;
@@ -602,9 +609,12 @@ export class Skater {
     const tr = this.trick;
     if (!tr.active) return;
     if (!tr.caught) {
+      // tick each time the board comes back around: a timing cue for the catch
+      const before = this.catchPhase();
       tr.flip += tr.flipRate * dt;
       tr.shove += tr.shoveRate * dt;
       tr.wrap += tr.wrapRate * dt;
+      if (Math.floor(this.catchPhase()) > Math.floor(before)) this.events.push({ type: 'spinTick' });
       return;
     }
     const k = 1 - Math.exp(-dt * TUNE.catchSettle);
@@ -616,6 +626,17 @@ export class Skater {
       tr.flip = tr.shove = tr.wrap = 0;
       tr.target = [0, 0, 0];
     }
+  }
+
+  /** Turns completed on the dominant rotation axis (for the catch tick). */
+  private catchPhase() {
+    const tr = this.trick;
+    const f = Math.abs((tr.flip - tr.start[0]) / TAU);
+    const s = Math.abs((tr.shove - tr.start[1]) / Math.PI);
+    const w = Math.abs((tr.wrap - tr.start[2]) / TAU);
+    if (tr.flipRate !== 0) return f + 0.06;
+    if (tr.wrapRate !== 0) return w + 0.06;
+    return s + 0.06;
   }
 
   /** Remaining rotation error in radians (max axis). */
@@ -716,7 +737,7 @@ export class Skater {
   /* ------------------------------ grinds --------------------------- */
 
   private tryGrind(prev: THREE.Vector3, next: THREE.Vector3): boolean {
-    if (this.vel.y > 1.2) return false;
+    if (this.vel.y > 0.6) return false;
     // rolling off an edge isn't a grind; you have to pop onto it
     if (!this.popped && this.airTime < 0.25 && this.time - this.lastGrindExit > 0.5) return false;
     for (const r of this.terrain.rails) {
@@ -828,10 +849,23 @@ export class Skater {
     // balance: unstable equilibrium nudged by drift; steer to correct
     g.drift += (Math.random() - 0.5) * 5 * dt;
     g.drift = Math.max(-0.9, Math.min(0.9, g.drift * (1 - 0.4 * dt)));
-    const k = 0.7 + g.time * 0.28;
-    g.balance += (g.balance * k + g.drift * 0.55 + inp.steer * 2.4) * dt;
+    const k = 0.5 + g.time * 0.2;
+    g.balance += (g.balance * k + g.drift * 0.5 + inp.steer * 2.6) * dt;
     if (Math.abs(g.balance) > 1) {
-      this.bail('balance', 1);
+      // lost it: slip off the side you were leaning to
+      const side = Math.sign(g.balance);
+      const right = tmp.crossVectors(this.fwd, this.up);
+      right.y = 0;
+      right.normalize();
+      this.pos.copy(r.a).addScaledVector(r.dir, g.t);
+      this.vel.copy(r.dir).multiplyScalar(g.spd);
+      this.vel.addScaledVector(right, side * 1.3);
+      this.exitGrind(false);
+      const vh = new THREE.Vector3(this.vel.x, 0, this.vel.z).normalize();
+      this.alignTarget = vh.multiplyScalar(this.fwd.dot(vh) >= 0 ? 1 : -1);
+      this.lastGrindExit = this.time + 0.4;
+      this.wobble = 1;
+      this.events.push({ type: 'fallOff' });
       return;
     }
 

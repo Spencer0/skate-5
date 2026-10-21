@@ -300,5 +300,5 @@ export const GUIDE: GuideEntry[] = [
   { name: '360 Flip', path: [C, ...arcPts(-90, -360, 18)], note: 'roll left ¾ to the right' },
   { name: 'Laser Flip', path: [C, ...arcPts(-90, 180, 18)], note: 'roll right ¾ to the left' },
   { name: 'Impossible', path: [C, ...arcPts(-90, -440, 24)], note: 'full circle' },
-  { name: 'Nollie ___', path: [C, [0, 1], [0, -1]], note: 'load UP instead, flick down' },
+  { name: 'Nollie ___', path: [C, [0, 1], [0, -1]], note: 'load UP, flick down (mirrored)' },
 ];

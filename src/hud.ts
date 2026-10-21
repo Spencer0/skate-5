@@ -151,7 +151,12 @@ function gestureSvg(path: [number, number][]) {
   const c = S / 2;
   const r = 22;
   const pts = path.map(([x, y]) => [c + x * r, c - y * r]);
-  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  // first segment = loading the tail (dashed), the rest = the flick
+  const load = `M${pts[0][0]} ${pts[0][1]} L${pts[1][0].toFixed(1)} ${pts[1][1].toFixed(1)}`;
+  const d = pts
+    .slice(1)
+    .map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1))
+    .join(' ');
   const last = pts[pts.length - 1];
   const prev = pts[pts.length - 2] ?? pts[0];
   const ang = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
@@ -160,6 +165,8 @@ function gestureSvg(path: [number, number][]) {
   const a2 = [last[0] - Math.cos(ang + 0.5) * ah, last[1] - Math.sin(ang + 0.5) * ah];
   return `<svg viewBox="0 0 ${S} ${S}" width="${S}" height="${S}" aria-hidden="true">
     <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2"/>
+    <path d="${load}" fill="none" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.5" stroke-dasharray="3 4" stroke-linecap="round"/>
+    <circle cx="${pts[1][0].toFixed(1)}" cy="${pts[1][1].toFixed(1)}" r="3.5" fill="currentColor" fill-opacity="0.6"/>
     <path d="${d}" fill="none" stroke="#D97757" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M${a1[0].toFixed(1)} ${a1[1].toFixed(1)} L${last[0].toFixed(1)} ${last[1].toFixed(1)} L${a2[0].toFixed(1)} ${a2[1].toFixed(1)}" fill="none" stroke="#D97757" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
     <circle cx="${c}" cy="${c}" r="3" fill="currentColor"/>

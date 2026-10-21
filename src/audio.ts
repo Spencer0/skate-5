@@ -161,6 +161,10 @@ export class Audio {
     this.burst({ dur: 0.25, freq: 900, q: 0.8, gain: 0.12 * strength, attack: 0.08 });
   }
 
+  spinTick() {
+    this.burst({ dur: 0.05, freq: 1500, q: 3, gain: 0.18 });
+  }
+
   catchClick(perfect: boolean) {
     this.burst({ dur: 0.04, freq: 3200, q: 2, gain: 0.5 });
     if (perfect) this.tone(1320, 0.12, 0.08, 'sine', 1.0);

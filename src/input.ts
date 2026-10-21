@@ -82,6 +82,8 @@ export class Input {
     if (isLeft) {
       if (this.left) return;
       this.left = s;
+      // tapping anywhere catches; the left thumb is often the free one
+      this.actions.push({ type: 'catch' });
     } else {
       if (this.right) return;
       this.right = s;
