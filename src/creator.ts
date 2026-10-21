@@ -13,6 +13,8 @@ import {
   SHOES,
   SKIN_TONES,
   TOPS,
+  defaultLook,
+  forBody,
   heightOf,
 } from './custom';
 
@@ -96,7 +98,7 @@ export class Creator {
     const L = this.look;
     switch (this.tab) {
       case 'body':
-        this.seg(body, 'Build', [{ id: 'm', label: 'Masculine' }, { id: 'f', label: 'Feminine' }], L.body, (id) => this.set({ body: id as CustomLook['body'] }));
+        this.seg(body, 'Build', [{ id: 'm', label: 'Masculine' }, { id: 'f', label: 'Feminine' }], L.body, (id) => this.set(this.switchBody(id as CustomLook['body'])));
         this.slider(body, 'Height', L.height, `${Math.round(heightOf(L) * 100)} cm`, (v) => this.quiet({ height: v }), true);
         for (const d of SHAPES) {
           this.slider(body, d.label, L.shape[d.id] ?? 0.5, '', (v) => this.shape(d.id, v), false, [d.lo, d.hi]);
@@ -108,23 +110,39 @@ export class Creator {
         this.swatches(body, 'Hair colour', HAIR_COLORS, L.hairColor, (c) => this.quiet({ hairColor: c }), true);
         break;
       case 'hat':
-        this.seg(body, 'Hat', [{ id: '', label: 'None' }, ...HATS], L.hat ?? '', (id) => this.set({ hat: id || null }));
+        this.themed(body, 'Hat', HATS, L.hat ?? '', (id) => ({ hat: id || null }), 'hatColor', { id: '', label: 'None' });
         if (L.hat) this.swatches(body, 'Hat colour', CLOTH_COLORS, L.hatColor, (c) => this.quiet({ hatColor: c }), true);
         break;
       case 'top':
-        this.seg(body, 'Top', TOPS, L.top, (id) => this.set({ top: id }));
-        this.swatches(body, 'Colour', CLOTH_COLORS, L.topColor, (c) => this.quiet({ topColor: c }), true);
+        this.themed(body, 'Top', TOPS, L.top, (id) => ({ top: id }), 'topColor');
+        if (L.top !== 'none') this.swatches(body, 'Colour', CLOTH_COLORS, L.topColor, (c) => this.quiet({ topColor: c }), true);
         break;
       case 'bottom':
-        this.seg(body, 'Bottoms', BOTTOMS, L.bottom, (id) => this.set({ bottom: id }));
+        this.themed(body, 'Bottoms', BOTTOMS, L.bottom, (id) => ({ bottom: id }), 'bottomColor');
         this.swatches(body, 'Colour', CLOTH_COLORS, L.bottomColor, (c) => this.quiet({ bottomColor: c }), true);
         break;
       case 'shoes':
-        this.seg(body, 'Shoes', SHOES, L.shoes, (id) => this.set({ shoes: id }));
+        this.themed(body, 'Shoes', SHOES, L.shoes, (id) => ({ shoes: id }), 'shoesColor');
         this.swatches(body, 'Colour', CLOTH_COLORS, L.shoesColor, (c) => this.quiet({ shoesColor: c }), true);
         break;
     }
     this.panel.scrollTop = keep;
+  }
+
+  /** Changing body can leave an option the other body can't wear (shirtless). */
+  private switchBody(body: CustomLook['body']): Partial<CustomLook> {
+    const ok = (items: Option[], id: string) => forBody(items, body).some((o) => o.id === id);
+    return { body, ...(ok(TOPS, this.look.top) ? {} : { top: defaultLook().top }) };
+  }
+
+  /** An option list: the everyday ones first, then one labelled group per theme (beach, party, cowboy).
+   *  Picking a themed item also switches the colour to the one it looks right in. */
+  private themed(parent: HTMLElement, label: string, items: Option[], cur: string, patch: (id: string) => Partial<CustomLook>, colorKey: keyof CustomLook, none?: Option) {
+    const list = forBody(items, this.look.body);
+    const pick = (id: string) => this.set({ ...patch(id), ...(list.find((o) => o.id === id)?.color ? { [colorKey]: list.find((o) => o.id === id)!.color } : {}) });
+    this.seg(parent, label, [...(none ? [none] : []), ...list.filter((o) => !o.theme)], cur, pick);
+    const themes = [...new Set(list.map((o) => o.theme).filter((t): t is string => !!t))];
+    for (const t of themes) this.seg(parent, t[0].toUpperCase() + t.slice(1), list.filter((o) => o.theme === t), cur, pick);
   }
 
   private seg(parent: HTMLElement, label: string, items: Option[], cur: string, pick: (id: string) => void) {

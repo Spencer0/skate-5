@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Rider, RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
-import { CustomLook, defaultLook, heightOf, partColors, shapeInfluences } from './custom';
+import { CustomLook, defaultLook, extraParts, heightOf, partColors, shapeInfluences } from './custom';
 import { TUNE } from './skater';
 import { Ragdoll, RAG, Ground } from './ragdoll';
 
@@ -113,9 +113,21 @@ export class HumanRider {
     this.look = id === 'custom' ? (look ?? defaultLook()) : null;
     this.fallback = new Rider(id);
     this.group.add(this.fallback.group);
-    loadModel(this.look ? `custom_${this.look.body}` : id).then(
-      (scene) => {
-        if (!this.disposed) this.attach(scene.clone(true));
+    // themed parts (beach, party, cowboy) live in a second model, fetched only when worn
+    const extras = this.look && extraParts(this.look).length ? loadModel(`extras_${this.look.body}`).catch(() => null) : Promise.resolve(null);
+    Promise.all([loadModel(this.look ? `custom_${this.look.body}` : id), extras]).then(
+      ([scene, ex]) => {
+        if (this.disposed) return;
+        const root = scene.clone(true);
+        if (ex && this.look) {
+          // same skeleton bone names: the rebind in attach() hooks these meshes to this rider's bones
+          const spare = ex.clone(true);
+          for (const name of extraParts(this.look)) {
+            const m = spare.getObjectByName(name);
+            if (m) root.add(m);
+          }
+        }
+        this.attach(root);
       },
       (e) => console.warn('rider model failed to load, keeping the simple rider', e),
     );

@@ -24,6 +24,13 @@ ObjectService = dyn('mpfb.services.objectservice', 'ObjectService')
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OPT = json.load(open(os.path.join(HERE, '../../src/data/skater-options.json')))
+# PACK=extras builds the themed add-on parts (OPT['extras']) as extras_<m|f>.glb: just their
+# meshes on the same skeleton, loaded on demand by the game
+PACK = os.environ.get('PACK', 'base')
+SRC = OPT if PACK == 'base' else OPT['extras']
+HAIR, HATS, TOPS, BOTTOMS, SHOES = (SRC.get(k, []) for k in ('hair', 'hats', 'tops', 'bottoms', 'shoes'))
+FILE = 'custom' if PACK == 'base' else 'extras'
+srcname = lambda it: it.get('src', it['id'])
 OUT = sys.argv[-1] if sys.argv[-1].endswith('/') else MH + 'out/'
 os.makedirs(OUT, exist_ok=True)
 
@@ -95,6 +102,84 @@ def split_suit(obj, zmin, height):
     return out
 
 
+def push_out(o):
+    """Nudge a whole garment out along its normals (see CLOTH_OFFSET)."""
+    b = bmesh.new()
+    b.from_mesh(o.data)
+    b.normal_update()
+    for v in b.verts:
+        v.co += v.normal * CLOTH_OFFSET
+    b.to_mesh(o.data)
+    b.free()
+
+
+def make_hat(kind, body, arm):
+    """A hat MakeHuman doesn't ship, revolved around the head and skinned to the head bone.
+    Sized from this body's own skull, so it sits right on both bodies."""
+    import math
+    hz = (arm.matrix_world @ arm.data.bones['head'].head_local).z
+    head = [p for p in (body.matrix_world @ v.co for v in body.data.vertices) if p.z > hz]
+    xs, ys, zs = [p.x for p in head], [p.y for p in head], [p.z for p in head]
+    cx, cy, top = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2 - 0.012, max(zs)  # a touch forward of the skull's middle
+    rx, ry = (max(xs) - min(xs)) / 2, (max(ys) - min(ys)) / 2
+    N = 48
+    prof = []  # (radius relative to the crown, height above the hat's base, ring kind)
+    if kind == 'party':
+        base, H = top - 0.05, 0.24
+        sx, sy = 0.62 * rx, 0.62 * ry
+        prof = [(1 - i / 10, H * i / 10) for i in range(11)]
+        def place(r, z, a):
+            t = z / H
+            return cx + r * math.cos(a) * sx, cy + r * math.sin(a) * sy + 0.04 * t * t, base + z
+    else:  # cowboy
+        base, H = top - 0.085, 0.135
+        sx, sy = 1.12 * rx, 1.12 * ry
+        prof += [(2.25 - i / 8 * 1.25, 0.0) for i in range(9)]  # brim, outside in
+        prof += [(1.0 - 0.2 * i / 8, H * i / 8) for i in range(1, 9)]  # crown wall, tapering up
+        prof += [(0.8 * (1 - i / 5), H) for i in range(1, 6)]  # top, to the centre
+        def place(r, z, a):
+            x, y = r * math.cos(a), r * math.sin(a)
+            if z == 0.0 and r > 1.0:  # brim: curled up at the sides, dipping front and back
+                t = r - 1.0
+                z += 0.07 * t * t * math.cos(a) ** 2 - 0.012 * t * t * math.sin(a) ** 2
+            # the crease along the top, front to back
+            z -= 0.045 * math.exp(-(x / 0.3) ** 2) * (z / H) ** 2 if z > 0 else 0
+            return cx + x * sx, cy + y * sy, base + z
+    verts = [place(r, z, 2 * math.pi * k / N) for (r, z) in prof for k in range(N)]
+    faces = []
+    for i in range(len(prof) - 1):
+        for k in range(N):
+            a, b = i * N + k, i * N + (k + 1) % N
+            faces.append((a, b, b + N, a + N))
+    inv = body.matrix_world.inverted()
+    mesh = bpy.data.meshes.new('hat_' + kind)
+    mesh.from_pydata([tuple(inv @ __import__('mathutils').Vector(v)) for v in verts], [], faces)
+    mesh.update()
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bm.to_mesh(mesh)
+    bm.free()
+    for f in mesh.polygons:
+        f.use_smooth = True
+    o = bpy.data.objects.new('hat_' + kind, mesh)
+    bpy.context.scene.collection.objects.link(o)
+    o.parent = arm
+    o.matrix_parent_inverse = body.matrix_parent_inverse.copy()
+    o.matrix_basis = body.matrix_basis.copy()
+    o.modifiers.new('Armature', 'ARMATURE').object = arm
+    o.vertex_groups.new(name='head').add(list(range(len(mesh.vertices))), 1.0, 'REPLACE')
+    mat = bpy.data.materials.new('hat')
+    mat.use_nodes = True
+    mat.use_backface_culling = False
+    bsdf = mat.node_tree.nodes['Principled BSDF']
+    bsdf.inputs['Base Color'].default_value = (1, 1, 1, 1)
+    bsdf.inputs['Roughness'].default_value = 0.85
+    mesh.materials.append(mat)
+    return o
+
+
 TargetService = dyn('mpfb.services.targetservice', 'TargetService')
 
 
@@ -118,16 +203,16 @@ def build(gid, spec, macro=None, details=(), export=True, morphs=None):
         TargetService.load_target(basemesh, TargetService.target_full_path(t), weight=1.0)
     HumanService.set_character_skin(AssetService.find_asset_absolute_path(spec['skin'], asset_subdir='skins'), basemesh, skin_type='GAMEENGINE')
     HumanService.add_builtin_rig(basemesh, 'game_engine')
-    asset('eyes', 'low-poly', 'Eyes', basemesh)
-    asset('eyebrows', 'eyebrow001', 'Eyebrows', basemesh)
-    asset('eyelashes', 'eyelashes01', 'Eyelashes', basemesh)
-    for h in OPT['hair']:
+    if PACK == 'base':
+        asset('eyes', 'low-poly', 'Eyes', basemesh)
+        asset('eyebrows', 'eyebrow001', 'Eyebrows', basemesh)
+        asset('eyelashes', 'eyelashes01', 'Eyelashes', basemesh)
+    for h in HAIR:
         asset('hair', h['id'], 'Hair', basemesh)
-    for h in OPT['hats']:
-        asset('clothes', h['id'], 'Clothes', basemesh)
-    for s in OPT['shoes']:
-        asset('clothes', s['id'], 'Clothes', basemesh)
-    srcs = sorted({o['src'] for o in OPT['tops'] + OPT['bottoms']})
+    for h in HATS + SHOES + [o for o in TOPS + BOTTOMS if o.get('single')]:
+        if 'proc' not in h:
+            asset('clothes', srcname(h), 'Clothes', basemesh)
+    srcs = sorted({o['src'] for o in TOPS + BOTTOMS if not o.get('single')})
     for s in srcs:
         asset('clothes', s, 'Clothes', basemesh)
 
@@ -164,25 +249,32 @@ def build(gid, spec, macro=None, details=(), export=True, morphs=None):
             slot.material.name = name
 
     rename(body, 'body')
-    rename(meshes.pop('low-poly'), 'eyes')
-    rename(meshes.pop('eyebrow001'), 'brows')
-    rename(meshes.pop('eyelashes01'), 'lashes')
-    for h in OPT['hair']:
+    if PACK == 'base':
+        rename(meshes.pop('low-poly'), 'eyes')
+        rename(meshes.pop('eyebrow001'), 'brows')
+        rename(meshes.pop('eyelashes01'), 'lashes')
+    for h in HAIR:
         rename(meshes.pop(h['id']), 'hair_' + h['id'])
-    for h in OPT['hats']:
-        rename(meshes.pop(h['id']), 'hat_' + h['id'])
-    for s in OPT['shoes']:
-        rename(meshes.pop(s['id']), 'shoes_' + s['id'])
+    arm = body.parent
+    for h in HATS:
+        rename(make_hat(h['proc'], body, arm) if 'proc' in h else meshes.pop(srcname(h)), 'hat_' + h['id'])
+    for s in SHOES:
+        rename(meshes.pop(srcname(s)), 'shoes_' + s['id'])
     parts = {s: split_suit(meshes[s], zmin, height) for s in srcs}
-    for kind, items in (('top', OPT['tops']), ('bottom', OPT['bottoms'])):
+    for kind, items in (('top', TOPS), ('bottom', BOTTOMS)):
         for it in items:
+            if it.get('single'):
+                o = meshes.pop(it['src'])
+                push_out(o)
+                rename(o, f"{kind}_{it['id']}")
+                continue
             o = parts[it['src']].get(kind)
             if o is None:
                 raise SystemExit(f"{it['src']} has no {kind}")
             # a source used twice (e.g. top + bottom of one suit) needs separate objects
             rename(o, f"{kind}_{it['id']}")
     # drop the whole suits and any split part nobody asked for
-    wanted = {f"top_{i['id']}" for i in OPT['tops']} | {f"bottom_{i['id']}" for i in OPT['bottoms']}
+    wanted = {f"top_{i['id']}" for i in TOPS} | {f"bottom_{i['id']}" for i in BOTTOMS}
     for s in srcs:
         bpy.data.objects.remove(meshes[s], do_unlink=True)
     for p in parts.values():
@@ -230,7 +322,13 @@ def build(gid, spec, macro=None, details=(), export=True, morphs=None):
             print('  mesh', o.name, len(o.data.loop_triangles))
     print(gid, 'tris', tris)
     bpy.ops.object.select_all(action='SELECT')
-    path = OUT + f'custom_{gid}.glb'
+    if PACK != 'base':
+        # the body only existed to fit the garments; the game already has it
+        for o in list(bpy.data.objects):
+            if o.type == 'MESH' and not o.name.startswith(('top_', 'bottom_', 'shoes_', 'hat_')):
+                bpy.data.objects.remove(o, do_unlink=True)
+    bpy.ops.object.select_all(action='SELECT')
+    path = OUT + f'{FILE}_{gid}.glb'
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_image_format='AUTO',
                               export_jpeg_quality=80, export_morph=True, export_morph_normal=False, export_animations=False, export_skins=True,
                               export_apply=False, export_yup=True)
@@ -242,7 +340,7 @@ for gid, spec in BODIES.items():
     if only and gid != only:
         continue
     morphs = {}
-    for key, macro, details in variants():
+    for key, macro, details in ([] if os.environ.get('QUICK') else variants()):
         morphs[key] = build(gid, spec, macro, details, export=False)
         print('variant', gid, key, flush=True)
     build(gid, spec, morphs=morphs)

@@ -5,7 +5,7 @@ import { RIDERS, RiderId, RiderStyle } from './rider';
 import { RiderStage } from './stage';
 import { CAMERAS } from './settings';
 import { Creator } from './creator';
-import { defaultLook } from './custom';
+import { EXTRA_AUTHORS, defaultLook } from './custom';
 
 export type RunMode = 'career' | 'free' | 'comp';
 
@@ -632,6 +632,7 @@ export class UI {
       ['Spots', 'Claude Park · Fountain Plaza · The Pier · Spark Arena'],
       ['Physics, tricks & feel', 'Built with Claude'],
       ['Characters', 'MakeHuman · MPFB (CC0)'],
+      ['Outfits', `${EXTRA_AUTHORS.join(' · ')} (CC BY)`],
       ['Rendering', 'three.js'],
       ['Sound', 'Procedural WebAudio — no samples were harmed'],
       ['Special thanks', 'Everyone who ever got kicked out of a plaza'],

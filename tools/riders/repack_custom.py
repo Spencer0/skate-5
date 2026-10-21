@@ -124,6 +124,8 @@ def repack(src, dst):
         f.write(struct.pack('<II', len(binary), 0x004E4942) + binary)
 
 
+# args: m f (the base models) and/or extras_m extras_f (the themed add-on parts)
 for gid in sys.argv[1:]:
-    repack(MH + f'out/custom_{gid}.glb', os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../public/riders', f'custom_{gid}.glb'))
-    print(gid, 'ok')
+    name = gid if '_' in gid else f'custom_{gid}'
+    repack(MH + f'out/{name}.glb', os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../public/riders', f'{name}.glb'))
+    print(name, 'ok')

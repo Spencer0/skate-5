@@ -29,6 +29,12 @@ export interface CustomLook {
 export interface Option {
   id: string;
   label: string;
+  /** themed add-on part (beach, party, cowboy): lives in extras_<m|f>.glb, loaded on demand */
+  theme?: string;
+  /** the colour it starts in when picked (themed items look odd in the generic grey) */
+  color?: string;
+  /** only offered for this body */
+  only?: Body;
 }
 
 export interface ShapeDef extends Option {
@@ -38,11 +44,28 @@ export interface ShapeDef extends Option {
 
 export const SHAPES: ShapeDef[] = OPT.shape;
 
+const themed = (items: { id: string; label: string; theme: string; color: string }[]): Option[] => items.map(({ id, label, theme, color }) => ({ id, label, theme, color }));
+
 export const HAIR: Option[] = OPT.hair;
-export const HATS: Option[] = OPT.hats;
-export const TOPS: Option[] = OPT.tops;
-export const BOTTOMS: Option[] = OPT.bottoms;
-export const SHOES: Option[] = OPT.shoes;
+export const HATS: Option[] = [...OPT.hats, ...themed(OPT.extras.hats)];
+// no shirt at all is not a garment, so it isn't in the JSON
+export const TOPS: Option[] = [...OPT.tops, { id: 'none', label: 'Shirtless', only: 'm' }, ...themed(OPT.extras.tops)];
+export const BOTTOMS: Option[] = [...OPT.bottoms, ...themed(OPT.extras.bottoms)];
+export const SHOES: Option[] = [...OPT.shoes, ...themed(OPT.extras.shoes)];
+
+/** options this body can wear */
+export const forBody = (items: Option[], body: Body) => items.filter((o) => !o.only || o.only === body);
+
+/** the node names a look wears that live in the on-demand extras model */
+export function extraParts(look: CustomLook): string[] {
+  const has = (list: Option[], id: string | null) => !!id && list.some((o) => o.id === id && o.theme);
+  return [
+    has(HATS, look.hat) ? 'hat_' + look.hat : '',
+    has(TOPS, look.top) ? 'top_' + look.top : '',
+    has(BOTTOMS, look.bottom) ? 'bottom_' + look.bottom : '',
+    has(SHOES, look.shoes) ? 'shoes_' + look.shoes : '',
+  ].filter(Boolean);
+}
 
 export const SKIN_TONES = ['#f6dcc7', '#ecc19c', '#d49c72', '#b87a50', '#8d5a3b', '#62402b', '#3f2a1d'];
 export const HAIR_COLORS = ['#17120f', '#3a2619', '#6b4226', '#a5683a', '#d7b25f', '#ecdcae', '#b23a2a', '#8f6fb5', '#3f8fbd', '#e8e6e1', '#8b8b8b', '#e0709a'];
@@ -92,10 +115,11 @@ export function sanitizeLook(raw: unknown): CustomLook {
   if (!raw || typeof raw !== 'object') return d;
   const r = raw as Record<string, unknown>;
   const color = (k: keyof CustomLook) => (typeof r[k] === 'string' && HEX.test(r[k] as string) ? (r[k] as string) : (d[k] as string));
-  const pick = (k: keyof CustomLook, list: Option[]) => (typeof r[k] === 'string' && list.some((o) => o.id === r[k]) ? (r[k] as string) : (d[k] as string));
+  const body: Body = r.body === 'f' ? 'f' : 'm';
+  const pick = (k: keyof CustomLook, list: Option[]) => (typeof r[k] === 'string' && forBody(list, body).some((o) => o.id === r[k]) ? (r[k] as string) : (d[k] as string));
   const optional = (k: 'hair' | 'hat', list: Option[]) => (r[k] === null ? null : typeof r[k] === 'string' && list.some((o) => o.id === r[k]) ? (r[k] as string) : d[k]);
   return {
-    body: r.body === 'f' ? 'f' : 'm',
+    body,
     height: unit(r.height, d.height),
     shape: Object.fromEntries(SHAPES.map((def) => [def.id, unit((r.shape as Record<string, unknown> | undefined)?.[def.id], 0.5)])),
     skin: color('skin'),
@@ -119,11 +143,18 @@ export function partColors(look: CustomLook): Record<string, string> {
     eyes: '',
     lashes: '',
     brows: look.hairColor,
-    ['top_' + look.top]: look.topColor,
     ['bottom_' + look.bottom]: look.bottomColor,
     ['shoes_' + look.shoes]: look.shoesColor,
   };
+  if (look.top !== 'none') out['top_' + look.top] = look.topColor;
   if (look.hair) out['hair_' + look.hair] = look.hairColor;
   if (look.hat) out['hat_' + look.hat] = look.hatColor;
   return out;
 }
+
+/** CC BY authors of the themed add-on parts, for the credits */
+export const EXTRA_AUTHORS: string[] = [
+  ...new Set(
+    [...OPT.extras.hats, ...OPT.extras.tops, ...OPT.extras.bottoms, ...OPT.extras.shoes].map((i) => (i as { author?: string }).author).filter((a): a is string => !!a),
+  ),
+];

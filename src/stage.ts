@@ -127,9 +127,9 @@ export class RiderStage {
     // fit the whole skater (and the board under their feet) in the frame, tall or narrow
     const half = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const aspect = this.camera.aspect || 1;
-    const dist = Math.max((h + 0.3) / 2 / half, 0.9 / aspect / half);
-    this.camera.position.set(Math.sin(this.yaw) * dist, h * 0.5 + 0.15, Math.cos(this.yaw) * dist);
-    this.camera.lookAt(0, h * 0.5 - 0.02, 0);
+    const dist = Math.max((h + 0.45) / 2 / half, 0.9 / aspect / half);
+    this.camera.position.set(Math.sin(this.yaw) * dist, h * 0.5 + 0.2, Math.cos(this.yaw) * dist);
+    this.camera.lookAt(0, h * 0.5 + 0.04, 0);
     this.rider?.update(dt, { crouch: 0.1, tuck: 0, lean: 0, push: -1, grind: null, air: false, time: this.t });
     this.renderer.render(this.scene, this.camera);
   };

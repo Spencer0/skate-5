@@ -223,5 +223,97 @@
         ]
       }
     }
-  ]
+  ],
+  "extras": {
+    "hats": [
+      {
+        "id": "santa",
+        "src": "elvs_santa_hat",
+        "label": "Santa hat",
+        "theme": "party",
+        "author": "Elvaerwyn",
+        "color": "#c8402d"
+      },
+      {
+        "id": "tophat",
+        "src": "elvs_tophat1",
+        "label": "Top hat",
+        "theme": "party",
+        "author": "Elvaerwyn",
+        "color": "#1f1f1f"
+      },
+      {
+        "id": "party",
+        "proc": "party",
+        "label": "Party hat",
+        "theme": "party",
+        "color": "#d9779a"
+      },
+      {
+        "id": "cowboy",
+        "proc": "cowboy",
+        "label": "Cowboy hat",
+        "theme": "cowboy",
+        "color": "#8a5a3a"
+      }
+    ],
+    "tops": [
+      {
+        "id": "bikini",
+        "src": "punkduck_bandeau_bikini_bra",
+        "single": true,
+        "label": "Bikini top",
+        "theme": "beach",
+        "author": "punkduck",
+        "color": "#e3a83a"
+      },
+      {
+        "id": "western",
+        "src": "elvs_male_shirt_untucked_bd1",
+        "single": true,
+        "label": "Western shirt",
+        "theme": "cowboy",
+        "author": "Elvaerwyn",
+        "color": "#c8402d"
+      }
+    ],
+    "bottoms": [
+      {
+        "id": "trunks",
+        "src": "mindfront_male_swimming_trunks_01",
+        "single": true,
+        "label": "Swim trunks",
+        "theme": "beach",
+        "author": "Mindfront",
+        "color": "#3fa7a0"
+      },
+      {
+        "id": "bikinibottom",
+        "src": "punkduck_bandeau_bikini_slip",
+        "single": true,
+        "label": "Bikini bottom",
+        "theme": "beach",
+        "author": "punkduck",
+        "color": "#e3a83a"
+      }
+    ],
+    "shoes": [
+      {
+        "id": "flipflops",
+        "src": "elvs_male_flip_flop_sandals1",
+        "label": "Flip-flops",
+        "theme": "beach",
+        "author": "Elvaerwyn",
+        "color": "#3a6fb0"
+      },
+      {
+        "id": "bikerboots",
+        "src": "mindfront_shoes_biker_boots_male",
+        "label": "Work boots",
+        "theme": "cowboy",
+        "author": "Mindfront",
+        "color": "#8a5a3a"
+      }
+    ]
+  }
 }

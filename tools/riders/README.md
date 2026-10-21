@@ -66,3 +66,24 @@ within what the bones can follow. A full run takes about 6 minutes per body.
 
 Nodes are named `body`, `eyes`, `brows`, `lashes`, `hair_*`, `hat_*`,
 `top_*`, `bottom_*` and `shoes_*`; each has its own material named the same.
+
+### Themed add-on parts (beach, party, cowboy)
+
+Themed items live under `extras` in `src/data/skater-options.json` and are
+built separately into `public/riders/extras_m.glb` / `extras_f.glb`: just their
+meshes (with the same body-shape morph targets) on the same skeleton. The game
+only downloads the extras model when a look wears one of them, and grafts the
+meshes onto the base model's bones by bone name (`src/humanrider.ts`).
+
+```sh
+# the community packs are CC BY: download the ones you need and unzip into $MH_WORK/sysassets
+#   https://static.makehumancommunity.org/assets/assetpacks.html  (hats03, shoes03, pants03, underwear02, shirts02, shoes02)
+PACK=extras $MH_WORK/venv/bin/python generate_custom.py     # ONLY=m / QUICK=1 (skip body-shape morphs) for fast iteration
+$MH_WORK/venv/bin/python repack_custom.py extras_m extras_f
+```
+
+An item with `"single": true` is a stand-alone garment (not a suit to split);
+`"proc"` builds a hat MakeHuman doesn't have (party, cowboy) from the body's own
+head measurements and skins it to the head bone; `"color"` is the colour it
+starts in. `"author"` feeds the credits (all CC BY). "Shirtless" needs no asset:
+it is simply no top, offered for the masculine body only.

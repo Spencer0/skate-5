@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOTTOMS, HAIR, HATS, SHAPES, SHOES, TOPS, defaultLook, heightOf, partColors, sanitizeLook, shapeInfluences, HEIGHT_MAX, HEIGHT_MIN } from '../src/custom';
+import { EXTRA_AUTHORS, BOTTOMS, extraParts, forBody, HAIR, HATS, SHAPES, SHOES, TOPS, defaultLook, heightOf, partColors, sanitizeLook, shapeInfluences, HEIGHT_MAX, HEIGHT_MIN } from '../src/custom';
 
 test('garbage from storage falls back to the default look', () => {
   for (const raw of [null, undefined, 5, 'x', [], {}]) assert.deepEqual(sanitizeLook(raw), defaultLook());
@@ -13,7 +13,7 @@ test('a valid look survives untouched, including bald and no hat', () => {
 
 test('unknown ids, bad colours and out-of-range heights are repaired', () => {
   const d = defaultLook();
-  const out = sanitizeLook({ ...d, top: 'nope', bottom: 3, hair: 'mullet', hat: 'tophat', shoes: '', skin: 'red', topColor: '#12', height: 7, body: 'x' });
+  const out = sanitizeLook({ ...d, top: 'nope', bottom: 3, hair: 'mullet', hat: 'sombrero', shoes: '', skin: 'red', topColor: '#12', height: 7, body: 'x' });
   assert.equal(out.top, d.top);
   assert.equal(out.bottom, d.bottom);
   assert.equal(out.hair, d.hair);
@@ -60,4 +60,21 @@ test('shape sliders blend the lo / hi morph targets around the average', () => {
   assert.deepEqual([at(0)[id + '-lo'], at(0)[id + '-hi']], [1, 0]);
   assert.deepEqual([at(1)[id + '-lo'], at(1)[id + '-hi']], [0, 1]);
   assert.equal(at(0.75)[id + '-hi'], 0.5);
+});
+
+test('shirtless is a masculine-body option and repairs to a shirt on the feminine body', () => {
+  assert.ok(forBody(TOPS, 'm').some((o) => o.id === 'none'));
+  assert.ok(!forBody(TOPS, 'f').some((o) => o.id === 'none'));
+  assert.equal(sanitizeLook({ top: 'none' }).top, 'none');
+  assert.equal(sanitizeLook({ top: 'none', body: 'f' }).top, defaultLook().top);
+  assert.ok(!('top_none' in partColors({ ...defaultLook(), top: 'none' })));
+});
+
+test('themed parts are flagged for the on-demand model', () => {
+  assert.deepEqual(extraParts(defaultLook()), []);
+  const look = { ...defaultLook(), hat: 'cowboy', top: 'western', bottom: 'trunks', shoes: 'flipflops' };
+  assert.deepEqual(extraParts(look).sort(), ['bottom_trunks', 'hat_cowboy', 'shoes_flipflops', 'top_western']);
+  assert.deepEqual(sanitizeLook(look).hat, 'cowboy');
+  for (const list of [HATS, TOPS, BOTTOMS, SHOES]) for (const o of list.filter((x) => x.theme)) assert.match(o.color ?? '', /^#[0-9a-f]{6}$/i);
+  assert.ok(EXTRA_AUTHORS.length > 0);
 });
