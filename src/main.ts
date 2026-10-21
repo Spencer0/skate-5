@@ -796,7 +796,7 @@ function handle(ev: SkaterEvent) {
 /** Timeline of the last pop / catch / landing / push, for the rider's choreography. */
 const act = { popAt: -1, catchAt: -1, landAt: -10, pushStart: -10, nollie: false };
 const now = () => skater.time;
-const PUSH_CYCLE = 0.52;
+const PUSH_CYCLE = 0.66;
 const riderQ = new THREE.Quaternion();
 const yawQ = new THREE.Quaternion();
 const AX_Y = new THREE.Vector3(0, 1, 0);

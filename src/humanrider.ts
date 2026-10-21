@@ -195,6 +195,8 @@ export class HumanRider {
   /** where the back foot was when the current push started */
   private pushFrom = new THREE.Vector3(-0.19, 0, -0.06);
   private lastPushT = -1;
+  /** this push started before the last one finished (held push): stay turned down the board */
+  private chained = false;
 
   /**
    * Foot choreography in the board's frame. Stance: front (left) foot over the
@@ -226,11 +228,14 @@ export class HumanRider {
     const { fL, fR } = out;
 
     // ---- pushing: step off, plant by the front truck, kick back, step back on
-    if (a.pushT < 0 || a.pushT < this.lastPushT) this.pushFrom.copy(this.lastR);
+    if (a.pushT < 0 || a.pushT < this.lastPushT) {
+      this.chained = a.pushT >= 0 && this.lastPushT >= 0;
+      this.pushFrom.copy(this.lastR);
+    }
     this.lastPushT = a.pushT;
     if (a.pushT >= 0) {
       const t = a.pushT;
-      const into = seg(t, 0, 0.08) * (1 - seg(t, 0.44, 0.52));
+      const into = (this.chained ? 1 : seg(t, 0, 0.08)) * (1 - seg(t, 0.56, 0.66));
       // front foot turns to point down the board and shifts to the middle
       fL.set(0.13, deck, -0.03);
       out.yawL = 0.35 + into * 1.15;
@@ -250,22 +255,24 @@ export class HumanRider {
         // toe-off: the heel peels up at the end of the kick
         p.y += seg(t, 0.3, 0.36) * 0.03;
       } else {
-        // recovery: knee bends, the foot swings up and forward onto the tail
-        const k = seg(t, 0.36, 0.52);
+        // recovery: the knee lifts and swings the foot forward over the tail,
+        // then it sets down onto the deck from above
+        const k = Math.min(1, (t - 0.36) / 0.28);
         const from = plant.clone();
         from.x -= reach(0.23);
         from.y += 0.03;
-        p = from.lerp(tail, k);
-        p.y += Math.sin(Math.min(1, k * 1.15) * Math.PI) * 0.2;
+        p = from.lerp(tail, sm(Math.min(1, k * 1.25)));
+        p.y = from.y + (tail.y - from.y) * sm(k) + Math.sin(sm(Math.min(1, k * 1.1)) * Math.PI) * 0.22;
         p.z += Math.sin(k * Math.PI) * 0.04;
       }
       fR.copy(p);
-      const onGround = t > 0.08 && t < 0.42;
-      out.yawR = onGround ? 1.35 : -0.15 + into * 1.2;
-      out.pitchR = 0.55 * seg(t, 0.28, 0.36) * (1 - seg(t, 0.42, 0.5)); // toe-off at the end of the kick
-      out.hipDrop = 0.15 * Math.sin(Math.PI * seg(t, 0.05, 0.5)); // standing knee bends deep
+      // pushing foot turns along the board while it's down, back across the deck as it returns
+      const down = seg(t, 0.05, 0.12) * (1 - seg(t, 0.4, 0.58));
+      out.yawR = -0.15 + into * 1.2 + (1.35 - (-0.15 + into * 1.2)) * down;
+      out.pitchR = 0.55 * seg(t, 0.28, 0.36) * (1 - seg(t, 0.42, 0.56)); // toe-off at the end of the kick
+      out.hipDrop = 0.15 * Math.sin(Math.PI * seg(t, 0.05, 0.62)); // standing knee bends deep
       out.hipX = 0.13 * into; // weight over the front (standing) foot
-      out.armSwing = Math.sin(Math.PI * seg(t, 0, 0.5)) * (t < 0.27 ? -1 : 1);
+      out.armSwing = -Math.sin(2 * Math.PI * Math.min(1, t / 0.62)); // against the kick, then back
       this.lastR.copy(fR);
       return out;
     }
