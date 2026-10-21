@@ -15,7 +15,7 @@ import { Career, GoalTracker, applyStats, Medal } from './career';
 import { UI, RunMode, GAP_NAMES, Standing, bestTwo } from './ui';
 import { CutscenePlayer, previewScene } from './cutscene';
 import { Props } from './props';
-import { Rider } from './rider';
+import { HumanRider } from './humanrider';
 import { CAMERAS, loadOptions, saveOptions } from './settings';
 
 /* ------------------------------------------------------------------ */
@@ -92,13 +92,13 @@ const career = new Career();
 applyStats(career.effectiveStats());
 board.setDeck(career.data.deck);
 const options = loadOptions();
-let rider = new Rider(career.data.rider ?? 'brock');
+let rider = new HumanRider(career.data.rider ?? 'brock');
 rider.setStyle(options.rider);
 scene.add(rider.group);
 function swapRider() {
   scene.remove(rider.group);
   rider.dispose();
-  rider = new Rider(career.data.rider ?? 'brock');
+  rider = new HumanRider(career.data.rider ?? 'brock');
   rider.setStyle(options.rider);
   scene.add(rider.group);
 }
@@ -1213,6 +1213,9 @@ requestAnimationFrame(frame);
 
 // debug/test hook
 (window as unknown as { __skate: unknown }).__skate = {
+  get rider() {
+    return rider;
+  },
   skater,
   get terrain() {
     return terrain;

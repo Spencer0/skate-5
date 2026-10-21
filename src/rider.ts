@@ -127,13 +127,13 @@ export interface RiderState {
   time: number;
 }
 
-const DECK_TOP = 0.088;
+export const DECK_TOP = 0.088;
 const Y = new THREE.Vector3(0, 1, 0);
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 
 /** Two-bone IK: writes the middle joint and the (reach-clamped) end. */
-function ik(root: THREE.Vector3, target: THREE.Vector3, a: number, b: number, pole: THREE.Vector3, mid: THREE.Vector3, end: THREE.Vector3) {
+export function ik(root: THREE.Vector3, target: THREE.Vector3, a: number, b: number, pole: THREE.Vector3, mid: THREE.Vector3, end: THREE.Vector3) {
   const d = tmpA.copy(target).sub(root);
   let L = d.length();
   const dir = L > 1e-5 ? d.divideScalar(L) : d.set(0, -1, 0);

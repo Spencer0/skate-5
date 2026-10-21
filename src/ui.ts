@@ -540,6 +540,7 @@ export class UI {
       ['', 'Mara · Dex · Kai Moreno · Officer Pete'],
       ['Spots', 'Claude Park · Fountain Plaza · The Pier · Spark Arena'],
       ['Physics, tricks & feel', 'Built with Claude'],
+      ['Characters', 'MakeHuman · MPFB (CC0)'],
       ['Rendering', 'three.js'],
       ['Sound', 'Procedural WebAudio — no samples were harmed'],
       ['Special thanks', 'Everyone who ever got kicked out of a plaza'],

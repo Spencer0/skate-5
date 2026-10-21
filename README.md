@@ -38,7 +38,7 @@ Moreno (Spark Skateboards team manager) and Officer Pete (plaza security).
 - **Three skaters**, picked when you start a career (switch any time under Skater):
   Brock Steele (the muscle: Ollie/Speed up, Spin/Flip down), Coral Reyes
   (beach local: Balance/Spin up), Dr. Elmer Voss (retired physicist: Flip +2,
-  Balance up, Ollie/Speed down). The rider is procedurally animated with IK —
+  Balance up, Ollie/Speed down). They are MakeHuman characters (CC0) generated in Blender, animated with IK —
   feet stay on the bolts through pushes, pops, flips and grinds.
 - **Ghost / Solid / Board only:** the rider defaults to a see-through ghost so
   the board is always readable.
@@ -108,7 +108,8 @@ Code map:
 - `src/career.ts` – save data, stats, unlocks, goal tracking
 - `src/ui.ts`, `src/cutscene.ts`, `src/cast.ts` – menus, cutscene player, characters
 - `src/props.ts` – letters, tapes and knockable objects
-- `src/rider.ts`, `src/settings.ts` – the three skaters (IK rig) and saved options
+- `src/rider.ts`, `src/humanrider.ts`, `src/settings.ts` – skater IK, the MakeHuman riders and saved options
+- `tools/riders/` – Blender + MPFB pipeline that generates `public/riders/*.glb`
 - `src/main.ts` – loop, level loading, camera, combo scoring, effects
 
 ## Deploying to GitHub Pages
