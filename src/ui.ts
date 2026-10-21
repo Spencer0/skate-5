@@ -1,6 +1,8 @@
 import { LEVELS, Level, GoalDef } from './levels';
 import { Career, STATS, STAT_MAX, DECKS, SPECIALS, Medal } from './career';
 import { deckTexture } from './textures';
+import { RIDERS, RiderStyle } from './rider';
+import { CAMERAS } from './settings';
 
 export type RunMode = 'career' | 'free' | 'comp';
 
@@ -18,6 +20,11 @@ export interface UIHooks {
   firstTap(): void;
   deckChanged(id: string): void;
   statsChanged(): void;
+  riderChanged(): void;
+  getCamera(): number;
+  setCamera(i: number): void;
+  getRiderStyle(): RiderStyle;
+  setRiderStyle(s: RiderStyle): void;
 }
 
 export interface RunReport {
@@ -131,17 +138,19 @@ export class UI {
     const btns = el('div', 'menu-btns', this.card);
     this.button(btns, 'Career', () => this.showCareer(), 'primary');
     this.button(btns, 'Free Skate', () => this.showFree());
-    this.button(btns, 'Skater', () => this.showSkater('stats', () => this.showTitle()));
+    this.button(btns, 'Skater', () => this.showSkater('rider', () => this.showTitle()));
+    this.button(btns, 'Options', () => this.showOptions(() => this.showTitle()));
     this.button(btns, 'How to play', () => this.hooks.showTricks());
     const done = this.career.totalDone();
     el('div', 'menu-foot', this.card, done ? `Career: ${done}/${this.career.totalGoals()} goals` : 'Best in landscape · headphones on');
   }
 
   showCareer() {
+    if (!this.career.data.rider) return this.showRiderPick(() => this.showCareer());
     this.reset('wide');
     const pts = this.career.statPointsFree();
     const chip = el('button', 'menu-chip' + (pts ? ' hot' : ''), document.createElement('div'), pts ? `Skater · ${pts} pts` : 'Skater') as HTMLButtonElement;
-    chip.addEventListener('click', () => this.showSkater('stats', () => this.showCareer()));
+    chip.addEventListener('click', () => this.showSkater(pts ? 'stats' : 'rider', () => this.showCareer()));
     this.header('Career', () => this.showTitle(), chip);
     const total = this.career.totalDone();
     const sum = el('div', 'career-sum', this.card);
@@ -256,11 +265,12 @@ export class UI {
 
   /* -------------------------------------------------------------- */
 
-  showSkater(tab: 'stats' | 'decks' | 'specials', back: () => void) {
+  showSkater(tab: 'rider' | 'stats' | 'decks' | 'specials', back: () => void) {
     this.reset('wide');
     this.header('Skater', back);
     const tabs = el('div', 'tabs', this.card);
     for (const [id, label] of [
+      ['rider', 'Rider'],
       ['stats', 'Stats'],
       ['decks', 'Decks'],
       ['specials', 'Specials'],
@@ -268,7 +278,8 @@ export class UI {
       const b = el('button', 'tab' + (tab === id ? ' on' : ''), tabs, label);
       b.addEventListener('click', () => this.showSkater(id, back));
     }
-    if (tab === 'stats') this.statsTab(back);
+    if (tab === 'rider') this.riderCards(this.card, () => this.showSkater('rider', back));
+    else if (tab === 'stats') this.statsTab(back);
     else if (tab === 'decks') this.decksTab(back);
     else this.specialsTab(back);
   }
@@ -362,6 +373,83 @@ export class UI {
 
   /* -------------------------------------------------------------- */
 
+  /** First time into the career: pick who you are. */
+  showRiderPick(then: () => void) {
+    this.reset('wide');
+    this.header('Choose your skater', () => this.showTitle());
+    el('p', 'menu-p', this.card, 'Each rider has their own strengths. You can switch any time from the Skater menu.');
+    this.riderCards(this.card, then);
+  }
+
+  private riderCards(parent: HTMLElement, onPick: () => void) {
+    const grid = el('div', 'rider-grid', parent);
+    const cur = this.career.data.rider;
+    const statName: Record<string, string> = { speed: 'Speed', ollie: 'Ollie', spin: 'Spin', flip: 'Flip', balance: 'Balance' };
+    for (const r of RIDERS) {
+      const card = el('button', 'rider-card' + (cur === r.id ? ' on' : ''), grid) as HTMLButtonElement;
+      card.style.setProperty('--accent', r.color);
+      el('div', 'rider-title', card, r.title);
+      el('div', 'rider-name', card, r.name);
+      el('div', 'rider-desc', card, r.desc);
+      const chips = el('div', 'rider-chips', card);
+      for (const [k, v] of Object.entries(r.bias)) el('span', 'chip ' + (v! > 0 ? 'up' : 'down'), chips, `${statName[k]} ${v! > 0 ? '+' : ''}${v}`);
+      el('div', 'rider-pick', card, cur === r.id ? 'Riding' : 'Pick');
+      card.addEventListener('click', () => {
+        this.career.data.rider = r.id;
+        this.career.save();
+        this.hooks.riderChanged();
+        onPick();
+      });
+    }
+  }
+
+  showOptions(back: () => void) {
+    this.reset();
+    this.header('Options', back);
+    const seg = (label: string, items: { id: string; name: string }[], cur: string, set: (id: string) => void) => {
+      el('div', 'opt-label', this.card, label);
+      const row = el('div', 'seg', this.card);
+      for (const it of items) {
+        const b = el('button', 'seg-btn' + (it.id === cur ? ' on' : ''), row, it.name);
+        b.addEventListener('click', () => {
+          set(it.id);
+          this.showOptions(back);
+        });
+      }
+    };
+    seg(
+      'Camera',
+      CAMERAS.map((c, i) => ({ id: String(i), name: c.name })),
+      String(this.hooks.getCamera()),
+      (id) => this.hooks.setCamera(Number(id)),
+    );
+    el('p', 'menu-p small', this.card, 'Tip: the camera button in the corner cycles views while you skate.');
+    seg(
+      'Skater on the board',
+      [
+        { id: 'ghost', name: 'Ghost' },
+        { id: 'solid', name: 'Solid' },
+        { id: 'off', name: 'Board only' },
+      ],
+      this.hooks.getRiderStyle(),
+      (id) => this.hooks.setRiderStyle(id as RiderStyle),
+    );
+    el('p', 'menu-p small', this.card, 'Ghost keeps the rider see-through so you can always read the board.');
+    seg(
+      'Sound',
+      [
+        { id: 'on', name: 'On' },
+        { id: 'off', name: 'Off' },
+      ],
+      this.hooks.isMuted() ? 'off' : 'on',
+      (id) => {
+        if ((id === 'off') !== this.hooks.isMuted()) this.hooks.toggleSound();
+      },
+    );
+    const btns = el('div', 'menu-btns', this.card);
+    this.button(btns, 'Done', back, 'primary');
+  }
+
   showPause(i: number, mode: RunMode) {
     const L = LEVELS[i];
     this.reset();
@@ -373,9 +461,7 @@ export class UI {
     if (mode === 'career') this.button(btns, 'End run', () => this.hooks.endRun());
     if (mode === 'free') this.button(btns, 'Back to start', () => this.hooks.restartRun());
     this.button(btns, 'Trick list', () => this.hooks.showTricks());
-    const snd = this.button(btns, this.hooks.isMuted() ? 'Sound: off' : 'Sound: on', () => {
-      snd.textContent = this.hooks.toggleSound() ? 'Sound: off' : 'Sound: on';
-    });
+    this.button(btns, 'Options', () => this.showOptions(() => this.showPause(i, mode)));
     this.button(btns, mode === 'comp' ? 'Withdraw from contest' : 'Quit to menu', () => this.hooks.quit());
   }
 

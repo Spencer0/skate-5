@@ -4,7 +4,7 @@ import { Terrain } from './terrain';
 import { buildMeshes, makeMaterials } from './park';
 import { LEVELS, LevelData, GapDef, GoalDef, inRect, V3 } from './levels';
 import { BoardModel, DECK } from './board';
-import { Skater, SkaterEvent, TrickRecord, Quality } from './skater';
+import { Skater, SkaterEvent, TrickRecord, Quality, TUNE } from './skater';
 import { Input } from './input';
 import { Audio } from './audio';
 import { Hud } from './hud';
@@ -15,6 +15,8 @@ import { Career, GoalTracker, applyStats, Medal } from './career';
 import { UI, RunMode, GAP_NAMES, Standing, bestTwo } from './ui';
 import { CutscenePlayer, previewScene } from './cutscene';
 import { Props } from './props';
+import { Rider } from './rider';
+import { CAMERAS, loadOptions, saveOptions } from './settings';
 
 /* ------------------------------------------------------------------ */
 /* Setup                                                               */
@@ -87,8 +89,21 @@ const audio = new Audio();
 const hud = new Hud(app);
 let minimap: Minimap | null = null;
 const career = new Career();
-applyStats(career.data.stats);
+applyStats(career.effectiveStats());
 board.setDeck(career.data.deck);
+const options = loadOptions();
+let rider = new Rider(career.data.rider ?? 'brock');
+rider.setStyle(options.rider);
+scene.add(rider.group);
+function swapRider() {
+  scene.remove(rider.group);
+  rider.dispose();
+  rider = new Rider(career.data.rider ?? 'brock');
+  rider.setStyle(options.rider);
+  scene.add(rider.group);
+}
+// rider fall when bailing
+const fall = { on: false, t: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), q: new THREE.Quaternion(), side: 1 };
 let tracker: GoalTracker | null = null;
 const cut = new CutscenePlayer(app, camera);
 
@@ -201,8 +216,24 @@ const ui = new UI(app, career, {
   deckChanged(id) {
     board.setDeck(id);
   },
+  riderChanged() {
+    swapRider();
+    applyStats(career.effectiveStats());
+  },
+  getCamera: () => options.camera,
+  setCamera(i) {
+    options.camera = i;
+    saveOptions(options);
+    cam.init = false;
+  },
+  getRiderStyle: () => options.rider,
+  setRiderStyle(st) {
+    options.rider = st;
+    saveOptions(options);
+    rider.setStyle(st);
+  },
   statsChanged() {
-    applyStats(career.data.stats);
+    applyStats(career.effectiveStats());
   },
 });
 
@@ -217,6 +248,11 @@ function pause() {
   ui.showPause(session.level, session.mode);
 }
 hud.menuBtn.addEventListener('click', pause);
+hud.camBtn.addEventListener('click', () => {
+  options.camera = (options.camera + 1) % CAMERAS.length;
+  saveOptions(options);
+  hud.toast('Camera', CAMERAS[options.camera].name, 'letter');
+});
 hud.goalsBtn.addEventListener('click', pause);
 hud.starBtn.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
@@ -683,6 +719,12 @@ function handle(ev: SkaterEvent) {
       audio.touchdown(ev.impact);
       break;
     case 'bail': {
+      fall.on = true;
+      fall.t = 0;
+      fall.pos.copy(rider.group.position);
+      fall.q.copy(rider.group.quaternion);
+      fall.vel.copy(skater.vel).multiplyScalar(0.6);
+      fall.side = Math.random() < 0.5 ? 1 : -1;
       audio.bail();
       buzz([40, 50, 40]);
       shake.t = 0.35;
@@ -736,9 +778,60 @@ function handle(ev: SkaterEvent) {
       hud.popup('Slipped off', undefined, 'sketchy');
       break;
     case 'respawn':
+      fall.on = false;
       fade.classList.remove('on');
       break;
   }
+}
+
+const riderQ = new THREE.Quaternion();
+const yawQ = new THREE.Quaternion();
+const AX_Y = new THREE.Vector3(0, 1, 0);
+const AX_X = new THREE.Vector3(1, 0, 0);
+
+/** Pose the skater from the board's state (feet stay planted via IK). */
+function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
+  if (!rider.group.visible) return;
+  if (fall.on && skater.mode === 'bail') {
+    // tip over and slide to a stop next to the board
+    fall.t += dt;
+    fall.vel.multiplyScalar(Math.exp(-dt * 2.5));
+    fall.pos.addScaledVector(fall.vel, dt);
+    fall.pos.y = terrain.height(fall.pos.x, fall.pos.z);
+    const w = terrain.waterAt(fall.pos.x, fall.pos.z);
+    if (w !== null && fall.pos.y < w) fall.pos.y = w - 0.6;
+    rider.group.position.copy(fall.pos);
+    yawQ.setFromAxisAngle(AX_X, fall.side * Math.min(1.45, fall.t * 5));
+    rider.group.quaternion.copy(fall.q).multiply(yawQ);
+    rider.update(dt, { crouch: 0.7, tuck: 0, lean: 0, push: -1, grind: null, air: false, time: t });
+    return;
+  }
+  skater.baseQuat(riderQ);
+  yawQ.setFromAxisAngle(AX_Y, skater.slideYaw * 0.6 + skater.yawOffset);
+  riderQ.multiply(yawQ);
+  rider.group.position.copy(boardPos);
+  rider.group.quaternion.copy(riderQ);
+  const tr = skater.trick;
+  const air = skater.mode === 'air';
+  const grinding = skater.mode === 'grind' && skater.grind;
+  let tuck = 0;
+  if (tr.active && !tr.caught) tuck = 1;
+  else if (tr.active) tuck = Math.min(1, skater.residual() * 2.5);
+  if (air) tuck = Math.max(tuck, skater.popped ? 0.3 : 0.1);
+  let crouch = 0.04 + Math.min(1, skater.speed / 8) * 0.1;
+  if (input.crouch && skater.mode === 'ground') crouch += 0.6;
+  crouch += Math.max(0, -skater.squash * 8);
+  if (grinding) crouch += 0.3;
+  if (skater.braking) crouch += 0.25;
+  rider.update(dt, {
+    crouch: Math.min(1, crouch),
+    tuck,
+    lean: skater.mode === 'ground' ? skater.steerS * Math.min(1, skater.speed / 4) * 0.28 : 0,
+    push: skater.pushT > 0 ? 1 - skater.pushT / TUNE.pushTime : -1,
+    grind: grinding ? skater.grind!.balance : null,
+    air,
+    time: t,
+  });
 }
 
 function handleProps(dt: number, t: number) {
@@ -808,11 +901,19 @@ function updateCamera(dt: number) {
   const portrait = aspect < 1;
   const sp = Math.min(12, s.speed);
   const menuPull = !playing && ui.open ? 1.8 : 1;
-  const baseDist = (portrait ? 2.3 : 1.8) * menuPull;
-  const targetDist = baseDist + sp * 0.1;
+  // the four views: chase (top-down-ish), classic (behind, sees ahead), overhead, filmer (low + wide)
+  const view = playing ? CAMERAS[options.camera].id : 'chase';
+  const V = {
+    chase: { dist: portrait ? 2.3 : 1.8, hr: portrait ? 1.3 : 1.12, abs: 0, ahead: 1, lookY: 0.15, fov: portrait ? 62 : 52, minH: 1.2, side: 0 },
+    classic: { dist: portrait ? 4.3 : 3.5, hr: 0, abs: 1.9, ahead: 2.6, lookY: 0.7, fov: portrait ? 72 : 62, minH: 0.8, side: 0 },
+    overhead: { dist: 0.7, hr: 0, abs: portrait ? 9 : 7, ahead: 0.6, lookY: 0, fov: portrait ? 60 : 50, minH: 3, side: 0 },
+    filmer: { dist: portrait ? 2.6 : 2.2, hr: 0, abs: 0.35, ahead: 0.6, lookY: 0.5, fov: portrait ? 80 : 70, minH: 0.25, side: 2.2 },
+  }[view];
+  const baseDist = V.dist * menuPull;
+  const targetDist = baseDist + sp * (view === 'overhead' ? 0 : 0.1);
   cam.dist += (targetDist - cam.dist) * Math.min(1, dt * 2);
   if (!cam.init) cam.dist = targetDist;
-  const height = cam.dist * (portrait ? 1.3 : 1.12);
+  const height = V.abs ? V.abs * (view === 'overhead' ? 1 : menuPull) + (view === 'overhead' ? sp * 0.2 : 0) : cam.dist * V.hr;
 
   const groundH = terrain.height(focus.x, focus.z);
   const fy = s.mode === 'air' ? groundH + (focus.y - groundH) * 0.65 : focus.y;
@@ -824,11 +925,12 @@ function updateCamera(dt: number) {
 
   const fx = Math.cos(cam.yaw);
   const fz = Math.sin(cam.yaw);
-  const ahead = Math.min(1.3, 0.4 + sp * 0.09);
-  const lookT = tmpV2.set(focus.x + fx * ahead, cam.y + 0.15, focus.z + fz * ahead);
-  const posT = new THREE.Vector3(focus.x - fx * cam.dist, cam.y + height, focus.z - fz * cam.dist);
+  const ahead = Math.min(1.3, 0.4 + sp * 0.09) * V.ahead;
+  const lookT = tmpV2.set(focus.x + fx * ahead, cam.y + V.lookY, focus.z + fz * ahead);
+  // filmer runs alongside on the right, slightly behind
+  const posT = new THREE.Vector3(focus.x - fx * cam.dist - fz * V.side, cam.y + height, focus.z - fz * cam.dist + fx * V.side);
   const camGround = terrain.height(posT.x, posT.z);
-  if (posT.y < camGround + 1.2) posT.y = camGround + 1.2;
+  if (posT.y < camGround + V.minH) posT.y = camGround + V.minH;
   if (!cam.init) {
     cam.pos.copy(posT);
     cam.look.copy(lookT);
@@ -845,7 +947,7 @@ function updateCamera(dt: number) {
     camera.position.z += (Math.random() - 0.5) * a;
   }
   camera.lookAt(cam.look);
-  const fovT = (portrait ? 62 : 52) + sp * 0.6;
+  const fovT = V.fov + sp * 0.6;
   camera.fov += (fovT - camera.fov) * Math.min(1, dt * 2);
   camera.updateProjectionMatrix();
 }
@@ -1009,6 +1111,7 @@ function frame(now: number) {
   lastDist = skater.distance;
   const fsgn = skater.fwdSpeed < 0 ? -1 : 1;
   board.animate(dist * fsgn, skater.mode === 'ground' ? skater.steerS : 0);
+  updateRider(dt, now / 1000, p);
 
   // contact shadow
   const bx = skater.mode === 'bail' ? skater.bpos.x : skater.pos.x;

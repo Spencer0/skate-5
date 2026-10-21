@@ -33,6 +33,18 @@ Moreno (Spark Skateboards team manager) and Officer Pete (plaza security).
 
 **Free Skate** rides any unlocked spot with no clock.
 
+## Skaters, camera and options
+
+- **Three skaters**, picked when you start a career (switch any time under Skater):
+  Brock Steele (the muscle: Ollie/Speed up, Spin/Flip down), Coral Reyes
+  (beach local: Balance/Spin up), Dr. Elmer Voss (retired physicist: Flip +2,
+  Balance up, Ollie/Speed down). The rider is procedurally animated with IK —
+  feet stay on the bolts through pushes, pops, flips and grinds.
+- **Ghost / Solid / Board only:** the rider defaults to a see-through ghost so
+  the board is always readable.
+- **Camera button** (top right) cycles Chase, Classic, Overhead and Filmer views;
+  also in Options.
+
 ## Controls
 
 **Touch (two floating thumb sticks)**
@@ -96,6 +108,7 @@ Code map:
 - `src/career.ts` – save data, stats, unlocks, goal tracking
 - `src/ui.ts`, `src/cutscene.ts`, `src/cast.ts` – menus, cutscene player, characters
 - `src/props.ts` – letters, tapes and knockable objects
+- `src/rider.ts`, `src/settings.ts` – the three skaters (IK rig) and saved options
 - `src/main.ts` – loop, level loading, camera, combo scoring, effects
 
 ## Deploying to GitHub Pages

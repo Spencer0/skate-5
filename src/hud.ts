@@ -23,6 +23,7 @@ export class Hud {
   guide: HTMLElement;
   goalsBtn: HTMLButtonElement;
   menuBtn: HTMLButtonElement;
+  camBtn: HTMLButtonElement;
   starBtn: HTMLButtonElement;
   private toasts: HTMLElement;
   private timer: HTMLElement;
@@ -39,8 +40,12 @@ export class Hud {
     this.best = el('div', 'best', scoreBox, 'best combo 0');
     const btns = el('div', 'hud-btns', top);
     this.goalsBtn = el('button', 'hud-btn goals-chip', btns, 'Goals') as HTMLButtonElement;
+    this.camBtn = el('button', 'hud-btn cam-btn', btns) as HTMLButtonElement;
+    this.camBtn.setAttribute('aria-label', 'Change camera');
+    this.camBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
     this.menuBtn = el('button', 'hud-btn', btns, 'Menu') as HTMLButtonElement;
-    for (const b of [this.goalsBtn, this.menuBtn]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    for (const b of [this.goalsBtn, this.camBtn, this.menuBtn]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
 
     this.combo = el('div', 'combo', this.root);
     this.comboNames = el('div', 'combo-names', this.combo);

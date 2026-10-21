@@ -1,6 +1,7 @@
 import { LEVELS, Level, GoalDef, GapDef } from './levels';
 import { TUNE } from './skater';
 import type { TrickRecord } from './skater';
+import { RIDERS, RiderId } from './rider';
 
 /* ------------------------------------------------------------------ */
 /* Stats                                                               */
@@ -88,6 +89,7 @@ interface SaveData {
   seen: string[];
   medal: Medal | null;
   best: Record<string, number>;
+  rider: RiderId | null;
 }
 
 function fresh(): SaveData {
@@ -100,6 +102,7 @@ function fresh(): SaveData {
     seen: [],
     medal: null,
     best: {},
+    rider: null,
   };
 }
 
@@ -184,6 +187,14 @@ export class Career {
     this.save();
     applyStats(this.data.stats);
     return true;
+  }
+
+  /** Career stats plus the chosen rider's strengths and weaknesses. */
+  effectiveStats(): Record<StatId, number> {
+    const r = RIDERS.find((x) => x.id === (this.data.rider ?? 'brock'))!;
+    const out = { ...this.data.stats };
+    for (const k of Object.keys(out) as StatId[]) out[k] = Math.max(1, Math.min(STAT_MAX + 2, out[k] + (r.bias[k] ?? 0)));
+    return out;
   }
 
   /* unlockables */

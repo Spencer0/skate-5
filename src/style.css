@@ -1321,3 +1321,97 @@ body {
 .hud.cine > * {
   opacity: 0 !important;
 }
+
+/* rider select */
+.rider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+.rider-card {
+  text-align: left;
+  border-radius: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(20, 20, 19, 0.1);
+  border-top: 5px solid var(--accent);
+  background: var(--cream);
+  color: var(--slate);
+  cursor: pointer;
+  font-family: var(--sans);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rider-card.on {
+  outline: 3px solid var(--accent);
+}
+.rider-title {
+  font: 700 10px var(--sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.rider-name {
+  font: 700 19px var(--serif);
+}
+.rider-desc {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #4a4842;
+}
+.rider-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.chip {
+  font: 700 11px var(--sans);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.chip.up {
+  background: rgba(120, 140, 93, 0.2);
+  color: #4c5d36;
+}
+.chip.down {
+  background: rgba(192, 57, 43, 0.12);
+  color: #a33a2c;
+}
+.rider-pick {
+  margin-top: 6px;
+  font: 700 12px var(--sans);
+  color: var(--accent);
+}
+
+/* options */
+.opt-label {
+  font: 700 11px var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--clay-dark);
+  margin: 14px 0 6px;
+}
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.seg-btn {
+  flex: 1 1 80px;
+  font: 700 13px var(--sans);
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 20, 19, 0.12);
+  background: var(--cream);
+  color: var(--slate);
+  cursor: pointer;
+}
+.seg-btn.on {
+  background: var(--slate);
+  color: var(--ivory);
+}
+.cam-btn {
+  min-width: 44px;
+}
