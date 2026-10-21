@@ -2,6 +2,7 @@ import { LEVELS, Level, GoalDef, GapDef } from './levels';
 import { TUNE } from './skater';
 import type { TrickRecord } from './skater';
 import { RIDERS, RiderId } from './rider';
+import { CustomLook, sanitizeLook } from './custom';
 
 /* ------------------------------------------------------------------ */
 /* Stats                                                               */
@@ -90,6 +91,7 @@ interface SaveData {
   medal: Medal | null;
   best: Record<string, number>;
   rider: RiderId | null;
+  custom: CustomLook | null;
 }
 
 function fresh(): SaveData {
@@ -103,6 +105,7 @@ function fresh(): SaveData {
     medal: null,
     best: {},
     rider: null,
+    custom: null,
   };
 }
 
@@ -116,6 +119,11 @@ export class Career {
     } catch {
       /* private mode: progress lives for this session */
     }
+  }
+
+  /** The create-a-skater look, always safe to dress a model with. */
+  customLook(): CustomLook | null {
+    return this.data.custom ? sanitizeLook(this.data.custom) : null;
   }
 
   save() {

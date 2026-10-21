@@ -1415,3 +1415,102 @@ body {
 .cam-btn {
   min-width: 44px;
 }
+
+/* create-a-skater */
+.menu-card.creator-card {
+  max-width: 900px;
+}
+.creator {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 14px;
+  height: min(60vh, 460px);
+}
+.creator-stage {
+  position: relative;
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 50% 85%, rgba(217, 119, 87, 0.28), rgba(250, 249, 245, 0) 70%), var(--cream);
+  overflow: hidden;
+  min-height: 0;
+}
+.creator-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+.creator-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.creator-body {
+  overflow-y: auto;
+  padding-bottom: 6px;
+  min-height: 0;
+}
+.creator-tabs {
+  flex-wrap: wrap;
+}
+.creator-range {
+  width: 100%;
+  accent-color: var(--clay);
+}
+.creator-val {
+  color: var(--slate);
+  letter-spacing: 0;
+}
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(20, 20, 19, 0.15);
+  cursor: pointer;
+  padding: 0;
+}
+.swatch.on {
+  outline: 3px solid var(--slate);
+  outline-offset: 2px;
+}
+.swatch.picker {
+  position: relative;
+  display: grid;
+  place-items: center;
+  font: 700 18px var(--sans);
+  color: var(--slate);
+  background: conic-gradient(#e0709a, #e3a83a, #788c5d, #3fa7a0, #3a6fb0, #7a56a8, #e0709a);
+  overflow: hidden;
+}
+.swatch.picker input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+@media (max-width: 700px), (max-height: 520px) and (orientation: portrait) {
+  .creator {
+    grid-template-columns: 1fr;
+    grid-template-rows: 38vh auto;
+    height: auto;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .creator {
+    height: calc(100vh - 150px);
+  }
+}
+.creator-card .menu-btns {
+  position: sticky;
+  bottom: -18px;
+  margin: 10px -22px -18px;
+  padding: 10px 22px 18px;
+  background: linear-gradient(to bottom, rgba(250, 249, 245, 0), rgba(250, 249, 245, 0.96) 30%);
+}

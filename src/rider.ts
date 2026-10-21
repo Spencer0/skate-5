@@ -9,7 +9,7 @@ import type { StatId } from './career';
  * +X nose, +Y up, +Z toe side (the rider faces +Z, regular stance).
  */
 
-export type RiderId = 'brock' | 'coral' | 'voss';
+export type RiderId = 'brock' | 'coral' | 'voss' | 'custom';
 export type RiderStyle = 'ghost' | 'solid' | 'off';
 
 export interface RiderDef {
@@ -45,6 +45,14 @@ export const RIDERS: RiderDef[] = [
     desc: 'Has calculated the optimal flip rate. Knees disagree about ollie height.',
     bias: { flip: 2, balance: 1, ollie: -1, speed: -1 },
     color: '#6A9BCC',
+  },
+  {
+    id: 'custom',
+    name: 'Your skater',
+    title: 'Create',
+    desc: 'Pick the body, skin, hair, clothes and kicks. No strengths, no weaknesses, all yours.',
+    bias: {},
+    color: '#788C5D',
   },
 ];
 
@@ -114,6 +122,22 @@ const LOOKS: Record<RiderId, Look> = {
     legR: 0.055,
     height: 0.98,
     hunch: 0.22,
+  },
+  custom: {
+    skin: 0xd49c72,
+    top: 0xd97757,
+    belly: 0xd97757,
+    legsTop: 0x4d6c9b,
+    legsLow: 0x4d6c9b,
+    shoe: 0xf4f1ea,
+    hair: 0x3a2619,
+    shoulder: 0.2,
+    hip: 0.095,
+    torsoR: 0.13,
+    armR: 0.05,
+    legR: 0.06,
+    height: 1,
+    hunch: 0,
   },
 };
 

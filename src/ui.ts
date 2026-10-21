@@ -3,6 +3,8 @@ import { Career, STATS, STAT_MAX, DECKS, SPECIALS, Medal } from './career';
 import { deckTexture } from './textures';
 import { RIDERS, RiderStyle } from './rider';
 import { CAMERAS } from './settings';
+import { Creator } from './creator';
+import { defaultLook } from './custom';
 
 export type RunMode = 'career' | 'free' | 'comp';
 
@@ -395,14 +397,40 @@ export class UI {
       el('div', 'rider-desc', card, r.desc);
       const chips = el('div', 'rider-chips', card);
       for (const [k, v] of Object.entries(r.bias)) el('span', 'chip ' + (v! > 0 ? 'up' : 'down'), chips, `${statName[k]} ${v! > 0 ? '+' : ''}${v}`);
-      el('div', 'rider-pick', card, cur === r.id ? 'Riding' : 'Pick');
+      el('div', 'rider-pick', card, r.id === 'custom' ? (this.career.data.custom ? (cur === r.id ? 'Riding · Edit' : 'Edit') : 'Create') : cur === r.id ? 'Riding' : 'Pick');
       card.addEventListener('click', () => {
+        if (r.id === 'custom') return this.showCreator(onPick);
         this.career.data.rider = r.id;
         this.career.save();
         this.hooks.riderChanged();
         onPick();
       });
     }
+  }
+
+  /** Build your own skater; Ride saves the look and makes it the active rider. */
+  showCreator(back: () => void) {
+    this.reset('creator-card');
+    let look = this.career.customLook() ?? defaultLook();
+    this.header('Create your skater', () => {
+      creator.dispose();
+      back();
+    });
+    const creator = new Creator(this.card, look, (l) => (look = l));
+    const done = el('div', 'menu-btns row', this.card);
+    this.button(
+      done,
+      'Ride as this skater',
+      () => {
+        creator.dispose();
+        this.career.data.custom = look;
+        this.career.data.rider = 'custom';
+        this.career.save();
+        this.hooks.riderChanged();
+        back();
+      },
+      'primary',
+    );
   }
 
   showOptions(back: () => void) {
