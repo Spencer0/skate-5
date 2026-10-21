@@ -15,7 +15,7 @@ export interface Options {
 const KEY = 'skate5.options';
 
 export function loadOptions(): Options {
-  const def: Options = { camera: 0, rider: 'ghost' };
+  const def: Options = { camera: 0, rider: 'solid' };
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return { ...def, ...(JSON.parse(raw) as Partial<Options>) };

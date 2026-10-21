@@ -68,7 +68,7 @@ export class HumanRider {
   /** rest rotation of each bone relative to the rider frame (group local) */
   private restQ = new Map<THREE.Bone, THREE.Quaternion>();
   private mats: THREE.MeshStandardMaterial[] = [];
-  private style: RiderStyle = 'ghost';
+  private style: RiderStyle = 'solid';
   private s = { crouch: 0, tuck: 0, lean: 0, grind: 0, air: 0, push: 0 };
   private disposed = false;
   ready = false;

@@ -316,7 +316,7 @@ export class Rider {
       this.coat = new THREE.Mesh(new THREE.CylinderGeometry(L.torsoR * 1.05, L.torsoR * 1.5, 0.42 * k, 14, 1, true), mat(0xf4f4f0));
       this.body.add(this.coat);
     }
-    this.setStyle('ghost');
+    this.setStyle('solid');
   }
 
   setStyle(style: RiderStyle) {
