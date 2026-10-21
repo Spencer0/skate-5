@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Terrain, Rail } from './terrain';
-import { TrickSpec, TrickResult, trickName, trickPoints, GrindFamily, GrindMod, grindName, grindBasePoints } from './tricks';
+import { TrickSpec, TrickResult, trickName, trickPoints, GRABS, grabPoints, GrindFamily, GrindMod, grindName, grindBasePoints } from './tricks';
 import { DECK } from './board';
 
 /* ------------------------------------------------------------------ */
@@ -55,6 +55,7 @@ export type SkaterEvent =
   | { type: 'grindEnd'; record: TrickRecord; popped: boolean }
   | { type: 'push' }
   | { type: 'revert' }
+  | { type: 'grab'; name: string }
   | { type: 'spinTick' }
   | { type: 'fallOff' }
   | { type: 'wall'; impact: number }
@@ -148,6 +149,12 @@ export class Skater {
   wobble = 0;
   lean = 0;
   yawOffset = 0; // visual-only: eases out landing / lock snaps
+  /** held grab: index into GRABS and how long it's been held */
+  grab: { idx: number; t: number } | null = null;
+  grabIdx = 0; // last grab, so the tweak can ease out
+  grabAmt = 0; // 0..1 visual blend of the grab pose
+  private grabRecords: TrickRecord[] = [];
+  private lateGrab = false;
   yawDecay = 11; // how fast yawOffset unwinds (slow for the in-air vert turn)
   autoRevert = true; // pivot back to forward after rolling down a ramp fakie
   private lastSteep = -10;
@@ -177,6 +184,9 @@ export class Skater {
     this.pos.set(x, this.terrain.height(x, z), z);
     this.vel.set(0, 0, 0);
     this.fwd.set(Math.cos(heading), 0, Math.sin(heading));
+    this.grab = null;
+    this.grabAmt = 0;
+    this.grabRecords = [];
     this.up.copy(UP);
     this.mode = 'ground';
     this.trick = freshTrick();
@@ -207,6 +217,8 @@ export class Skater {
     this.carry = inp.pushHold;
     this.steerS += (inp.steer - this.steerS) * Math.min(1, dt * 14);
     this.updateSprings(dt);
+    if (this.grab) this.grab.t += dt;
+    this.grabAmt += ((this.grab ? 1 : 0) - this.grabAmt) * Math.min(1, dt * (this.grab ? 14 : 10));
     switch (this.mode) {
       case 'ground':
         this.groundStep(dt, inp);
@@ -571,8 +583,29 @@ export class Skater {
   /* ------------------------------ tricks --------------------------- */
 
   /** Flick gesture released. Returns true if it started something. */
+  /** Grab the board (air only). Returns true if a grab started. */
+  startGrab(idx: number): boolean {
+    if (this.mode !== 'air' || this.grab) return false;
+    // you need your feet on the board: not while it's still flipping
+    if (this.trick.active && (!this.trick.caught || this.residual() > 0.35)) return false;
+    this.grab = { idx, t: 0 };
+    this.grabIdx = idx;
+    this.events.push({ type: 'grab', name: GRABS[idx].name });
+    return true;
+  }
+
+  /** Let go of the board; the grab is scored with the next landing. */
+  releaseGrab() {
+    const g = this.grab;
+    if (!g) return;
+    this.grab = null;
+    const def = GRABS[g.idx];
+    this.grabRecords.push({ name: def.name, points: grabPoints(def, g.t), kind: 'trick' });
+  }
+
   flick(spec: TrickSpec): boolean {
     if (this.mode === 'bail') return false;
+    this.releaseGrab();
     const canPop = this.mode === 'ground' || this.mode === 'grind' || (this.mode === 'air' && !this.popped && this.sinceGround < TUNE.coyote);
     if (this.mode === 'air' && !canPop) {
       if (spec.flip === 0 && spec.shove === 0 && spec.wrap === 0) return false;
@@ -756,6 +789,8 @@ export class Skater {
       const r: TrickResult = { flips: 0, shoves: 0, wraps: 0, body, nollie: false, fakie: false };
       out.push({ name: trickName(r), points: trickPoints(r) - 100, quality: landQ, kind: 'trick' });
     }
+    for (const g of this.grabRecords) out.push({ ...g, quality: landQ });
+    this.grabRecords = [];
     this.airTricks = [];
     this.airQualities = [];
     this.bodySpin = 0;
@@ -773,6 +808,9 @@ export class Skater {
     const airTime = this.airTime;
     const tr = this.trick;
 
+    // still holding the grab at touchdown: you let go late and land sketchy
+    this.lateGrab = !!this.grab;
+    this.releaseGrab();
     if (tr.active && !tr.caught) return this.bail('uncaught', impact);
     if (this.residual() > 0.62) return this.bail('sloppy', impact);
     if (impact > 11.5) return this.bail('impact', impact);
@@ -804,12 +842,12 @@ export class Skater {
     const allPerfect = this.airQualities.length > 0 && this.airQualities.every((x) => x === 'perfect');
     if (res > 0.26 || angle > 0.55) q = 'sketchy';
     else if (allPerfect && angle < 0.25) q = 'perfect';
-    if (impact > 8) q = 'sketchy';
+    if (impact > 8 || this.lateGrab) q = 'sketchy';
 
     this.mode = 'ground';
     this.squashV -= Math.min(2.2, 0.4 + impact * 0.22);
     if (q === 'sketchy') this.wobble = 1;
-    const meaningful = this.popped || airTime > 0.35 || this.airTricks.length > 0;
+    const meaningful = this.popped || airTime > 0.35 || this.airTricks.length > 0 || this.grabRecords.length > 0;
     if (meaningful) {
       const tricks = this.finalizeAirTricks(q);
       this.events.push({ type: 'land', quality: q, airTime, impact, tricks });
@@ -890,6 +928,7 @@ export class Skater {
     const lip = family === 'slide' && Math.abs(vp) > 0.25 && Math.sign(fn) !== Math.sign(vp);
 
     const spd = this.vel.dot(r.dir);
+    this.releaseGrab();
     const tr = this.finalizeAirTricks('clean');
     this.grind = {
       rail: r,
@@ -1041,6 +1080,9 @@ export class Skater {
 
   bail(reason: string, impact: number) {
     if (this.mode === 'bail') return;
+    this.grab = null;
+    this.grabAmt = 0;
+    this.grabRecords = [];
     this.bq.copy(this.visualQuat(new THREE.Quaternion()));
     this.mode = 'bail';
     this.bailT = 0;
@@ -1155,6 +1197,12 @@ export class Skater {
     }
     tmpQ.setFromAxisAngle(AX_Z, this.popPitch);
     out.multiply(tmpQ);
+    if (this.grabAmt > 0.001) {
+      // grab tweak: the hand pulls the board up and twists it
+      const g = GRABS[this.grabIdx];
+      const k = this.grabAmt;
+      out.multiply(tmpQ.setFromEuler(tmpE.set(g.roll * k, g.yaw * k, g.pitch * k, 'YXZ')));
+    }
     const tr = this.trick;
     if (tr.active) {
       tmpQ.setFromAxisAngle(AX_Y, tr.shove);
@@ -1179,12 +1227,15 @@ export class Skater {
       out.addScaledVector(this.up, -deckDrop);
       if (g.mod !== 'none' && g.family === 'parallel') out.addScaledVector(this.up, 0.03);
     }
-    // ollie: board rises from the tail
-    out.addScaledVector(this.up, this.squash * 0.05 + Math.abs(this.popPitch) * 0.12);
+    // ollie: board rises from the tail; grabs pull it up toward the hand
+    out.addScaledVector(this.up, this.squash * 0.05 + Math.abs(this.popPitch) * 0.12 + this.grabAmt * GRAB_LIFT);
     return out;
   }
 }
 
+/** how far a grab lifts the board toward the rider (m) */
+export const GRAB_LIFT = 0.3;
+const tmpE = new THREE.Euler();
 const AX_X = new THREE.Vector3(1, 0, 0);
 const AX_Y = new THREE.Vector3(0, 1, 0);
 const AX_Z = new THREE.Vector3(0, 0, 1);

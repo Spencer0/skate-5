@@ -169,6 +169,8 @@ export interface RiderAct {
   speed: number; // board speed (m/s), for the planted push foot
   fakie?: boolean; // rolling backwards: look over the other shoulder
   special: boolean;
+  /** grab in progress: which hand, where on the board, the tweak, and the 0..1 blend */
+  grab?: { hand: 'front' | 'back'; x: number; z: number; pitch: number; roll: number; yaw: number; amt: number };
 }
 
 export const DECK_TOP = 0.088;

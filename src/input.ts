@@ -1,7 +1,21 @@
 import { classify, StickSample, TrickSpec, PREP } from './tricks';
 import { GrindMod } from './tricks';
 
-export type Action = { type: 'flick'; spec: TrickSpec } | { type: 'catch' } | { type: 'respawn' };
+export type Action =
+  | { type: 'flick'; spec: TrickSpec }
+  | { type: 'catch' }
+  | { type: 'respawn' }
+  | { type: 'grab'; idx: number }
+  | { type: 'release' };
+
+/** Screen-space circle around the airborne skater where a press means grab. */
+export interface GrabZone {
+  x: number;
+  y: number;
+  r: number;
+  /** which grab a press at (px, py) means */
+  pick: (px: number, py: number) => number;
+}
 
 interface Stick {
   id: number;
@@ -46,6 +60,11 @@ export class Input {
   private fading: { stick: Stick; t: number; side: 'l' | 'r' }[] = [];
   onFirstInput: (() => void) | null = null;
   enabled = true;
+  /** set each frame by the game while the skater is in the air */
+  grabZone: GrabZone | null = null;
+  private grabPtr: { id: number; idx: number; x: number; y: number; t: number } | null = null;
+  private grabKey: string | null = null;
+  private grabFlash: { x: number; y: number; t: number } | null = null;
 
   constructor(private overlay: HTMLCanvasElement) {
     this.ctx = overlay.getContext('2d')!;
@@ -60,6 +79,9 @@ export class Input {
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.left = this.right = null;
+      if (this.grabPtr || this.grabKey) this.actions.push({ type: 'release' });
+      this.grabPtr = null;
+      this.grabKey = null;
     });
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -85,6 +107,16 @@ export class Input {
       this.overlay.setPointerCapture(e.pointerId);
     } catch {
       /* ignore */
+    }
+    // a press next to the airborne skater grabs the board
+    const z = this.grabZone;
+    if (z && !this.grabPtr && Math.hypot(e.clientX - z.x, e.clientY - z.y) < z.r) {
+      const idx = z.pick(e.clientX, e.clientY);
+      this.grabPtr = { id: e.pointerId, idx, x: e.clientX, y: e.clientY, t: this.now() };
+      this.grabFlash = { x: e.clientX, y: e.clientY, t: this.now() };
+      this.actions.push({ type: 'catch' });
+      this.actions.push({ type: 'grab', idx });
+      return;
     }
     const isLeft = !trickAnywhere() && e.clientX < window.innerWidth * 0.5;
     const s: Stick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: 0, y: 0, t0: this.now(), travel: 0, samples: [] };
@@ -143,6 +175,11 @@ export class Input {
   }
 
   private up(e: PointerEvent) {
+    if (this.grabPtr?.id === e.pointerId) {
+      this.grabPtr = null;
+      this.actions.push({ type: 'release' });
+      return;
+    }
     if (this.left?.id === e.pointerId) {
       const s = this.left;
       const dur = this.now() - s.t0;
@@ -181,6 +218,13 @@ export class Input {
         '8': mk(0, 2),
         '9': mk(0, 0, 1),
       };
+      // keyboard grabs: G Indy, H Melon, T Nosegrab, Y Tailgrab (hold)
+      const grabKeys: Record<string, number> = { g: 2, h: 6, t: 0, y: 4 };
+      if (k in grabKeys && !this.grabKey) {
+        this.grabKey = k;
+        this.actions.push({ type: 'catch' });
+        this.actions.push({ type: 'grab', idx: grabKeys[k] });
+      }
       if (k === 'k' || k === 'enter') this.actions.push({ type: 'catch' });
       else if (k === 'r') this.actions.push({ type: 'respawn' });
       else if (map[k]) {
@@ -190,6 +234,10 @@ export class Input {
       }
       if (k === 'w' || k === 'arrowup') this.pushQueued = true;
       if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
+    }
+    if (!down && k === this.grabKey) {
+      this.grabKey = null;
+      this.actions.push({ type: 'release' });
     }
     if (down) this.keys.add(k);
     else this.keys.delete(k);
@@ -257,6 +305,29 @@ export class Input {
       g.fill();
       g.globalAlpha = 1;
     };
+    // grab zone: a soft ring around the airborne skater
+    const z = this.grabZone;
+    if (z) {
+      g.setLineDash([6, 7]);
+      g.lineWidth = 2;
+      g.strokeStyle = this.grabPtr ? 'rgba(217,119,87,0.9)' : 'rgba(250,249,245,0.55)';
+      g.beginPath();
+      g.arc(z.x, z.y, z.r, 0, Math.PI * 2);
+      g.stroke();
+      g.setLineDash([]);
+    }
+    if (this.grabFlash) {
+      const age = now - this.grabFlash.t;
+      if (age > 0.35) this.grabFlash = null;
+      else {
+        g.globalAlpha = 1 - age / 0.35;
+        g.fillStyle = 'rgba(217,119,87,0.85)';
+        g.beginPath();
+        g.arc(this.grabFlash.x, this.grabFlash.y, 14 + age * 60, 0, Math.PI * 2);
+        g.fill();
+        g.globalAlpha = 1;
+      }
+    }
     for (const f of this.fading) {
       const age = now - f.t;
       const a = Math.max(0, 1 - age / 0.25);

@@ -308,3 +308,47 @@ export const GUIDE: GuideEntry[] = [
   { name: 'Impossible', path: [C, ...arcPts(-90, -440, 24)], note: 'full circle' },
   { name: 'Nollie ___', path: [C, [0, 1], [0, -1]], note: 'load UP, flick down (mirrored)' },
 ];
+
+/* ------------------------------------------------------------------ */
+/* Grabs                                                               */
+/* ------------------------------------------------------------------ */
+
+export interface GrabDef {
+  name: string;
+  /** which hand grabs: front (nose side) or back (tail side) */
+  hand: 'front' | 'back';
+  /** where on the board, in the board frame: x = toward the nose, z = toward the toe edge */
+  x: number;
+  z: number;
+  /** board tweak while held (rad): pitch = nose up, roll = toe edge up, yaw */
+  pitch: number;
+  roll: number;
+  yaw: number;
+  points: number;
+}
+
+/**
+ * Eight grabs, one per direction around the board, starting at the nose and
+ * going round through the toe side (index = round(angle / 45deg)).
+ */
+export const GRABS: GrabDef[] = [
+  { name: 'Nosegrab', hand: 'front', x: 0.37, z: 0, pitch: 0.32, roll: 0, yaw: 0, points: 180 },
+  { name: 'Mute', hand: 'front', x: 0.1, z: 0.1, pitch: 0.05, roll: 0.25, yaw: 0, points: 200 },
+  { name: 'Indy', hand: 'back', x: -0.04, z: 0.1, pitch: 0, roll: 0.22, yaw: 0, points: 180 },
+  { name: 'Japan', hand: 'front', x: 0.12, z: 0.1, pitch: -0.4, roll: 0.55, yaw: -0.3, points: 320 },
+  { name: 'Tailgrab', hand: 'back', x: -0.37, z: 0, pitch: -0.32, roll: 0, yaw: 0, points: 180 },
+  { name: 'Stalefish', hand: 'back', x: -0.08, z: -0.1, pitch: 0, roll: -0.22, yaw: 0, points: 220 },
+  { name: 'Melon', hand: 'front', x: 0.04, z: -0.1, pitch: 0.05, roll: -0.25, yaw: 0, points: 200 },
+  { name: 'Method', hand: 'front', x: 0.06, z: -0.1, pitch: 0.2, roll: -0.7, yaw: 0.25, points: 300 },
+];
+
+/** Grab for a direction in the board frame (along = toward the nose, across = toward the toe edge). */
+export function grabForDirection(along: number, across: number): number {
+  const a = Math.atan2(across, along);
+  return ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
+}
+
+/** Holding a grab longer scores more (THPS-style), capped. */
+export function grabPoints(g: GrabDef, held: number) {
+  return Math.round(g.points + Math.min(2, held) * 350);
+}

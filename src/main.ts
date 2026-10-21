@@ -6,6 +6,7 @@ import { LEVELS, LevelData, GapDef, GoalDef, inRect, V3 } from './levels';
 import { BoardModel, DECK } from './board';
 import { Skater, SkaterEvent, TrickRecord, Quality } from './skater';
 import { Input } from './input';
+import { grabForDirection, GRABS } from './tricks';
 import { Audio } from './audio';
 import { Hud } from './hud';
 import { Particles } from './fx';
@@ -681,6 +682,11 @@ function dustBurst(n: number, strength: number) {
 
 function handle(ev: SkaterEvent) {
   switch (ev.type) {
+    case 'grab':
+      audio.grab();
+      buzz(8);
+      hud.popup(ev.name, 'hold it…', 'clean');
+      break;
     case 'revert':
       audio.revert();
       hud.popup('Revert', undefined, 'clean');
@@ -881,6 +887,7 @@ function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
       speed: skater.speed,
       fakie: skater.mode === 'ground' && skater.fwdSpeed < -0.4,
       special: !!tr.spec?.special,
+      grab: skater.grabAmt > 0.01 ? { ...GRABS[skater.grabIdx], amt: skater.grabAmt } : undefined,
     },
   });
 }
@@ -1101,8 +1108,18 @@ function frame(now: number) {
         audio.flipWhoosh(Math.abs(sp.flip) + Math.abs(sp.shove) * 0.5 + Math.abs(sp.wrap));
       }
     } else if (a.type === 'respawn') respawnAtStart();
+    else if (a.type === 'grab') pendingGrab = a.idx;
+    else if (a.type === 'release') {
+      pendingGrab = null;
+      skater.releaseGrab();
+    }
   }
   input.actions.length = 0;
+  // a grab pressed while the board is still settling from a catch starts as soon as it can
+  if (pendingGrab !== null) {
+    if (skater.mode !== 'air') pendingGrab = null;
+    else if (skater.startGrab(pendingGrab)) pendingGrab = null;
+  }
 
   if (hitStop > 0) {
     hitStop -= dt;
@@ -1245,8 +1262,63 @@ function frame(now: number) {
   }
   sun.position.copy(cut.active ? camera.position : skater.pos).add(SUN_OFFSET);
   sun.target.position.copy(cut.active ? camera.position : skater.pos);
+  input.grabZone = playing && skater.mode === 'air' && !cut.active ? grabZone() : null;
   input.draw();
   renderer.render(scene, camera);
+}
+
+let pendingGrab: number | null = null;
+const gzA = new THREE.Vector3();
+const gzB = new THREE.Vector3();
+const gzRay = new THREE.Raycaster();
+const gzPlane = new THREE.Plane();
+const gzNdc = new THREE.Vector2();
+
+/** Screen circle around the airborne skater; a press inside it grabs. */
+function grabZone(): import('./input').GrabZone | null {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const base = skater.pos;
+  // centre on the rider's hips, size by how tall they look on screen
+  const toScreen = (v: THREE.Vector3) => new THREE.Vector2((v.x * 0.5 + 0.5) * W, (-v.y * 0.5 + 0.5) * H);
+  gzA.copy(base).addScaledVector(skater.up, 0.75).project(camera);
+  if (gzA.z > 1) return null;
+  const mid = toScreen(gzA);
+  const feet = toScreen(gzB.copy(base).project(camera));
+  const head = toScreen(gzB.copy(base).addScaledVector(skater.up, 1.7).project(camera));
+  const r = Math.max(70, Math.min(Math.min(W, H) * 0.32, feet.distanceTo(head) * 0.75));
+  const x = mid.x;
+  const y = mid.y;
+  const fwd = skater.fwd.clone();
+  const toe = new THREE.Vector3().crossVectors(fwd, skater.up).normalize();
+  return {
+    x,
+    y,
+    r,
+    pick: (px, py) => {
+      // where on the board's plane did the press land?
+      gzNdc.set((px / W) * 2 - 1, -(py / H) * 2 + 1);
+      gzRay.setFromCamera(gzNdc, camera);
+      gzPlane.setFromNormalAndCoplanarPoint(skater.up, base);
+      const hit = new THREE.Vector3();
+      let along: number;
+      let across: number;
+      if (gzRay.ray.intersectPlane(gzPlane, hit)) {
+        hit.sub(base);
+        along = hit.dot(fwd);
+        across = hit.dot(toe);
+      } else {
+        // looking edge-on: fall back to screen directions
+        const ps = base.clone().add(fwd).project(camera);
+        const ts = base.clone().add(toe).project(camera);
+        const bs = base.clone().project(camera);
+        const d = new THREE.Vector2(gzNdc.x - bs.x, gzNdc.y - bs.y);
+        along = d.dot(new THREE.Vector2(ps.x - bs.x, ps.y - bs.y));
+        across = d.dot(new THREE.Vector2(ts.x - bs.x, ts.y - bs.y));
+      }
+      return grabForDirection(along, across);
+    },
+  };
 }
 
 window.addEventListener('resize', () => {

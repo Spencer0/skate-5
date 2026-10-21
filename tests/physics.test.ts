@@ -212,3 +212,45 @@ test('pushing while riding fakie reverts first, then pushes forward', () => {
   assert.deepEqual(types(events).filter((t) => t === 'revert' || t === 'push'), ['revert', 'push']);
   assert.ok(sk.fwdSpeed > before, 'push speeds up the way it rolls');
 });
+
+test('grabs: hold an Indy off the jump box, let go, land clean and score it', () => {
+  const { sk, events, run } = rig(-34, 36, 0, -7.5);
+  run(1.1);
+  sk.flick(spec(0, 0));
+  run(0.15);
+  assert.ok(sk.startGrab(2));
+  run(0.5);
+  sk.releaseGrab();
+  run(1.5);
+  const land = events.find((e) => e.type === 'land');
+  assert.ok(land && land.type === 'land', types(events).join(','));
+  const indy = land.tricks.find((t) => t.name === 'Indy');
+  assert.ok(indy, land.tricks.map((t) => t.name).join(','));
+  assert.ok(indy.points > 300, `held grab scores more (${indy.points})`);
+  assert.notEqual(land.quality, 'sketchy');
+});
+
+test('grabs: holding the grab into the landing is sketchy; no grabbing on the ground', () => {
+  const { sk, events, run } = rig(0, 40, 0, -5);
+  assert.equal(sk.startGrab(0), false);
+  run(0.1);
+  sk.flick(spec(0, 0));
+  run(0.1);
+  assert.ok(sk.startGrab(0));
+  run(1);
+  const land = events.find((e) => e.type === 'land');
+  assert.ok(land && land.type === 'land');
+  assert.equal(land.quality, 'sketchy');
+  assert.ok(land.tricks.some((t) => t.name === 'Nosegrab'));
+});
+
+test('grabs: you cannot grab a board that is still flipping', () => {
+  const { sk, run } = rig(0, 40, 0, -5);
+  run(0.1);
+  sk.flick(spec(1, 0));
+  run(0.2);
+  assert.equal(sk.startGrab(2), false);
+  sk.catchBoard();
+  run(0.15);
+  assert.ok(sk.startGrab(2));
+});

@@ -199,6 +199,12 @@ export class Audio {
     }
   }
 
+  /** Grab: a hand slapping the griptape. */
+  grab() {
+    this.burst({ dur: 0.07, freq: 2200, q: 0.9, gain: 0.45 });
+    this.tone(330, 0.1, 0.05, 'triangle', 1.3);
+  }
+
   /** Revert: a short wheel scrub as the board pivots. */
   revert() {
     this.burst({ dur: 0.22, freq: 1500, q: 1.2, gain: 0.35, attack: 0.03 });

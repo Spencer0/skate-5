@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Rider, RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
 import { CustomLook, defaultLook, heightOf, partColors, shapeInfluences } from './custom';
-import { TUNE } from './skater';
+import { TUNE, GRAB_LIFT } from './skater';
+import { DECK } from './board';
 import { Ragdoll, RAG, Ground } from './ragdoll';
 
 /**
@@ -587,6 +588,22 @@ export class HumanRider {
     s.grind = ease(s.grind, st.grind ?? 0, 10);
     s.air = ease(s.air, st.air ? 1 : 0, 8);
     const c = this.choreo(st);
+    // grab: the board comes up to the hand. Feet stay on the (tweaked) deck,
+    // knees fold toward the chest, the body folds down over the board.
+    const grab = st.act?.grab;
+    const ga = grab ? grab.amt : 0;
+    let tweakQ: THREE.Quaternion | null = null;
+    if (grab) {
+      tweakQ = tq().setFromEuler(new THREE.Euler(grab.roll * ga, grab.yaw * ga, grab.pitch * ga, 'YXZ'));
+      const pivot = new THREE.Vector3(0, DECK.deckY, 0);
+      const onDeck = (x: number, z: number) => new THREE.Vector3(x, DECK_TOP + this.ankleH - 0.01, z).sub(pivot).applyQuaternion(tweakQ!).add(pivot);
+      c.fL.lerp(onDeck(0.19, -0.06), ga);
+      c.fR.lerp(onDeck(-0.19, -0.06), ga);
+      c.pitchL *= 1 - ga;
+      c.pitchR *= 1 - ga;
+      c.hipDrop += ga * (GRAB_LIFT + 0.1);
+      c.arms = Math.max(c.arms, ga);
+    }
     // pushing turns the body down the board for as long as the push footwork runs
     s.push = this.push.into;
     // rolling backwards: look over the other shoulder toward where you're going
@@ -604,12 +621,12 @@ export class HumanRider {
     // intent (rider frame: +X nose, +Y up, +Z toe side; the rider faces +Z)
     // pushing turns the whole body (hips first) to face down the board
     const twist = s.push * 1.25;
-    const bend = 0.06 + HUNCH[this.id] + s.crouch * 0.42 + s.push * 0.18 + s.lean * 0.8;
+    const bend = 0.06 + HUNCH[this.id] + s.crouch * 0.42 + s.push * 0.18 + s.lean * 0.8 + ga * 0.55;
     const roll = s.grind * 0.25;
     const hipYaw = 0.15 + twist;
     const hipQ = tq().setFromEuler(new THREE.Euler(bend * 0.35, hipYaw, -roll * 0.5, 'YXZ'));
     const torsoQ = tq().setFromEuler(new THREE.Euler(bend, twist * 0.95 + 0.25 - s.fakie * 0.45, -roll, 'YXZ'));
-    const headQ = tq().setFromEuler(new THREE.Euler(-0.1 + s.crouch * 0.1 - s.air * 0.15, 1.05 + s.push * 0.3 - s.fakie * 2.0, 0, 'YXZ'));
+    const headQ = tq().setFromEuler(new THREE.Euler(-0.1 + s.crouch * 0.1 - s.air * 0.15 + ga * 0.3, 1.05 + s.push * 0.3 - s.fakie * 2.0, 0, 'YXZ'));
 
     const fL = c.fL;
     const fR = c.fR;
@@ -677,6 +694,13 @@ export class HumanRider {
       // pushing: arms swing against the kicking leg
       if (c.armSwing) relaxed.addScaledVector(new THREE.Vector3(1, 0, 0), side * c.armSwing * 0.22);
       const target = relaxed.lerp(out, Math.min(1, wide + s.crouch * 0.35));
+      // the grabbing hand goes to its spot on the board edge
+      const grabbing = grab && (grab.hand === 'front' ? side < 0 : side > 0);
+      if (grabbing && tweakQ) {
+        const pivot = new THREE.Vector3(0, DECK.deckY, 0);
+        const spot = new THREE.Vector3(grab.x, DECK.deckY, grab.z * 1.15).sub(pivot).applyQuaternion(tweakQ).add(pivot);
+        target.lerp(spot, ga);
+      }
       const pole = toW(new THREE.Vector3(0, -0.3, -1).applyQuaternion(torsoQ)).sub(toW(new THREE.Vector3()));
       const elbow = tv();
       const end = tv();
