@@ -92,6 +92,7 @@ const career = new Career();
 applyStats(career.effectiveStats());
 board.setDeck(career.data.deck);
 const options = loadOptions();
+skater.autoRevert = options.autoRevert;
 let rider = new HumanRider(career.data.rider ?? 'brock');
 rider.setStyle(options.rider);
 scene.add(rider.group);
@@ -225,6 +226,12 @@ const ui = new UI(app, career, {
     options.camera = i;
     saveOptions(options);
     cam.init = false;
+  },
+  getAutoRevert: () => options.autoRevert,
+  setAutoRevert(v) {
+    options.autoRevert = v;
+    skater.autoRevert = v;
+    saveOptions(options);
   },
   getRiderStyle: () => options.rider,
   setRiderStyle(st) {
@@ -674,6 +681,11 @@ function dustBurst(n: number, strength: number) {
 
 function handle(ev: SkaterEvent) {
   switch (ev.type) {
+    case 'revert':
+      audio.revert();
+      hud.popup('Revert', undefined, 'clean');
+      combo.add({ name: 'Revert', points: 100, kind: 'trick' });
+      break;
     case 'push':
       act.pushStart = now();
       audio.push();
@@ -867,6 +879,7 @@ function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
       ground: skater.mode === 'ground',
       clock: now(),
       speed: skater.speed,
+      fakie: skater.mode === 'ground' && skater.fwdSpeed < -0.4,
       special: !!tr.spec?.special,
     },
   });

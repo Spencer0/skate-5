@@ -54,6 +54,7 @@ export type SkaterEvent =
   | { type: 'grindChange'; name: string }
   | { type: 'grindEnd'; record: TrickRecord; popped: boolean }
   | { type: 'push' }
+  | { type: 'revert' }
   | { type: 'spinTick' }
   | { type: 'fallOff' }
   | { type: 'wall'; impact: number }
@@ -146,6 +147,9 @@ export class Skater {
   wobble = 0;
   lean = 0;
   yawOffset = 0; // visual-only: eases out landing / lock snaps
+  yawDecay = 11; // how fast yawOffset unwinds (slow for the in-air vert turn)
+  autoRevert = true; // pivot back to forward after rolling down a ramp fakie
+  private lastSteep = -10;
   /** visual-only: the deck is turned end for end (after an odd number of shove-it half turns) */
   boardFlipped = false;
   boost = 0; // extra top speed while the special meter is full
@@ -230,7 +234,7 @@ export class Skater {
     this.squashV += (-k2 * this.squash - c2 * this.squashV) * dt;
     this.squash += this.squashV * dt;
     this.wobble *= Math.exp(-dt * 3);
-    this.yawOffset *= Math.exp(-dt * 11);
+    this.yawOffset *= Math.exp(-dt * this.yawDecay);
     this.posOffset.multiplyScalar(Math.exp(-dt * 16));
   }
 
@@ -337,6 +341,16 @@ export class Skater {
       return;
     }
 
+    // revert: rolled back down a ramp backwards -> pivot to face forward
+    if (n2.y < 0.85) this.lastSteep = this.time;
+    if (this.autoRevert && n2.y > 0.97 && this.time - this.lastSteep < 1.2 && this.fwdSpeed < -1.2 && !this.braking) {
+      this.fwd.negate();
+      this.yawOffset += Math.PI * (this.steerS < -0.1 ? -1 : 1);
+      this.yawDecay = 9;
+      this.lastSteep = -10;
+      this.events.push({ type: 'revert' });
+    }
+
     // safe spot for respawn
     this.safeT += dt;
     if (this.safeT > 0.25) {
@@ -417,6 +431,13 @@ export class Skater {
         if (into > 0 && !spine) {
           this.vel.x += ux * into;
           this.vel.z += uz * into;
+        }
+        // straight up and back down: turn 180 in the air so you come down
+        // facing forward (THPS-style, free - it doesn't count as a spin)
+        if (!spine && this.vel.dot(this.fwd) > 0.3) {
+          this.fwd.negate();
+          this.yawOffset += Math.PI * (this.steerS < -0.1 ? -1 : 1);
+          this.yawDecay = 3.4;
         }
         if (!spine) {
           this.vel.x += ux * 0.22;
@@ -779,6 +800,7 @@ export class Skater {
     }
     this.popped = false;
     this.alignTarget = null;
+    this.yawDecay = Math.max(this.yawDecay, 9);
   }
 
   /* ------------------------------ grinds --------------------------- */

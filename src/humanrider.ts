@@ -78,7 +78,7 @@ export class HumanRider {
   private restQ = new Map<THREE.Bone, THREE.Quaternion>();
   private mats: THREE.MeshStandardMaterial[] = [];
   private style: RiderStyle = 'solid';
-  private s = { crouch: 0, tuck: 0, lean: 0, grind: 0, air: 0, push: 0 };
+  private s = { crouch: 0, tuck: 0, lean: 0, grind: 0, air: 0, push: 0, fakie: 0 };
   private disposed = false;
   ready = false;
   // rest measurements (rider frame, after scaling)
@@ -540,6 +540,8 @@ export class HumanRider {
     const c = this.choreo(st);
     // pushing turns the body down the board for as long as the push footwork runs
     s.push = this.push.into;
+    // rolling backwards: look over the other shoulder toward where you're going
+    s.fakie = ease(s.fakie, st.act?.fakie ? 1 : 0, 6);
 
     // back to the rest pose, then build the pose top-down
     for (const [b, r] of this.rest) {
@@ -557,8 +559,8 @@ export class HumanRider {
     const roll = s.grind * 0.25;
     const hipYaw = 0.15 + twist;
     const hipQ = tq().setFromEuler(new THREE.Euler(bend * 0.35, hipYaw, -roll * 0.5, 'YXZ'));
-    const torsoQ = tq().setFromEuler(new THREE.Euler(bend, twist * 0.95 + 0.25, -roll, 'YXZ'));
-    const headQ = tq().setFromEuler(new THREE.Euler(-0.1 + s.crouch * 0.1 - s.air * 0.15, 1.05 + s.push * 0.3, 0, 'YXZ'));
+    const torsoQ = tq().setFromEuler(new THREE.Euler(bend, twist * 0.95 + 0.25 - s.fakie * 0.45, -roll, 'YXZ'));
+    const headQ = tq().setFromEuler(new THREE.Euler(-0.1 + s.crouch * 0.1 - s.air * 0.15, 1.05 + s.push * 0.3 - s.fakie * 2.0, 0, 'YXZ'));
 
     const fL = c.fL;
     const fR = c.fR;

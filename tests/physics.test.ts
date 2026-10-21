@@ -174,3 +174,27 @@ test('fuzz: random play never produces NaNs or escapes the park', () => {
     }
   }
 });
+
+test('vert air turns you around: you ride out of the quarter pipe facing forward', () => {
+  const { sk, events, run } = rig(60, 0, 8.5, 0);
+  run(4);
+  assert.ok(!types(events).includes('bail'), types(events).join(','));
+  assert.ok(sk.vel.x < -1, 'should be rolling back out');
+  assert.ok(sk.fwdSpeed > 0, `facing backwards (fwdSpeed ${sk.fwdSpeed.toFixed(2)})`);
+});
+
+test('rolling back down a ramp without air reverts to forward', () => {
+  // too slow to reach the lip of the east quarter pipe
+  const { sk, events, run } = rig(65, 0, 4.5, 0);
+  run(4);
+  assert.ok(types(events).includes('revert'), types(events).join(','));
+  assert.ok(sk.vel.x < 0 && sk.fwdSpeed > 0);
+});
+
+test('auto-revert can be turned off to ride fakie', () => {
+  const { sk, events, run } = rig(65, 0, 4.5, 0);
+  sk.autoRevert = false;
+  run(4);
+  assert.ok(!types(events).includes('revert'));
+  assert.ok(sk.fwdSpeed < 0);
+});

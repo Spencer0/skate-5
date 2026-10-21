@@ -24,6 +24,8 @@ export interface UIHooks {
   getCamera(): number;
   setCamera(i: number): void;
   getRiderStyle(): RiderStyle;
+  getAutoRevert(): boolean;
+  setAutoRevert(v: boolean): void;
   setRiderStyle(s: RiderStyle): void;
 }
 
@@ -435,6 +437,16 @@ export class UI {
       (id) => this.hooks.setRiderStyle(id as RiderStyle),
     );
     el('p', 'menu-p small', this.card, 'Ghost keeps the rider see-through so you can always read the board.');
+    seg(
+      'Auto-revert',
+      [
+        { id: 'on', name: 'On' },
+        { id: 'off', name: 'Off (ride fakie)' },
+      ],
+      this.hooks.getAutoRevert() ? 'on' : 'off',
+      (id) => this.hooks.setAutoRevert(id === 'on'),
+    );
+    el('p', 'menu-p small', this.card, 'Pivot to face forward after rolling back down a ramp. Vert airs always turn you around.');
     seg(
       'Sound',
       [

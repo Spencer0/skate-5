@@ -199,6 +199,11 @@ export class Audio {
     }
   }
 
+  /** Revert: a short wheel scrub as the board pivots. */
+  revert() {
+    this.burst({ dur: 0.22, freq: 1500, q: 1.2, gain: 0.35, attack: 0.03 });
+  }
+
   push() {
     this.burst({ dur: 0.16, freq: 420, q: 0.9, gain: 0.35, attack: 0.04 });
   }

@@ -143,6 +143,7 @@ export interface RiderAct {
   ground: boolean; // rolling on the ground (pushing is possible)
   clock: number; // physics time, for the footwork state machines
   speed: number; // board speed (m/s), for the planted push foot
+  fakie?: boolean; // rolling backwards: look over the other shoulder
   special: boolean;
 }
 
