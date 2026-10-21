@@ -138,7 +138,10 @@ export interface RiderAct {
   caught: boolean;
   catchT: number; // seconds since catch, -1 if none
   landT: number; // seconds since last landing
-  pushT: number; // seconds into the visual push cycle, -1 when not pushing
+  pushAt: number; // physics time of the last push event
+  pushHold: boolean; // push is held: keep kicking instead of stepping back on
+  ground: boolean; // rolling on the ground (pushing is possible)
+  clock: number; // physics time, for the footwork state machines
   speed: number; // board speed (m/s), for the planted push foot
   special: boolean;
 }
