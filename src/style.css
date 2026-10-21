@@ -1514,3 +1514,10 @@ body {
   padding: 10px 22px 18px;
   background: linear-gradient(to bottom, rgba(250, 249, 245, 0), rgba(250, 249, 245, 0.96) 30%);
 }
+.creator-ends {
+  display: flex;
+  justify-content: space-between;
+  font: 600 11px var(--sans);
+  color: #6b6860;
+  margin-top: -2px;
+}

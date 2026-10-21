@@ -11,6 +11,7 @@ import {
   HEIGHT_MAX,
   HEIGHT_MIN,
   Option,
+  SHAPES,
   SHOES,
   SKIN_TONES,
   TOPS,
@@ -190,7 +191,10 @@ export class Creator {
     switch (this.tab) {
       case 'body':
         this.seg(body, 'Build', [{ id: 'm', label: 'Masculine' }, { id: 'f', label: 'Feminine' }], L.body, (id) => this.set({ body: id as CustomLook['body'] }));
-        this.slider(body, 'Height', L.height, `${Math.round(heightOf(L) * 100)} cm`, (v) => this.quiet({ height: v }));
+        this.slider(body, 'Height', L.height, `${Math.round(heightOf(L) * 100)} cm`, (v) => this.quiet({ height: v }), true);
+        for (const d of SHAPES) {
+          this.slider(body, d.label, L.shape[d.id] ?? 0.5, '', (v) => this.shape(d.id, v), false, [d.lo, d.hi]);
+        }
         this.swatches(body, 'Skin tone', SKIN_TONES, L.skin, (c) => this.quiet({ skin: c }), true);
         break;
       case 'hair':
@@ -226,8 +230,16 @@ export class Creator {
     }
   }
 
-  private slider(parent: HTMLElement, label: string, v: number, text: string, change: (v: number) => void) {
-    const head = el('div', 'opt-label', parent, label + ' · ');
+  /** A body shape slider: blends morph targets in place, no rebuild. */
+  private shape(id: string, v: number) {
+    this.look = { ...this.look, shape: { ...this.look.shape, [id]: v } };
+    this.rider?.reshape(this.look);
+    this.pending?.reshape(this.look);
+    this.onChange(this.look);
+  }
+
+  private slider(parent: HTMLElement, label: string, v: number, text: string, change: (v: number) => void, isHeight = false, ends?: [string, string]) {
+    const head = el('div', 'opt-label', parent, label + (text ? ' · ' : ''));
     const val = el('span', 'creator-val', head, text);
     const input = el('input', 'creator-range', parent) as HTMLInputElement;
     input.type = 'range';
@@ -238,14 +250,21 @@ export class Creator {
     input.addEventListener('input', () => {
       const n = Number(input.value);
       this.look = { ...this.look, height: n };
-      val.textContent = `${Math.round(heightOf(this.look) * 100)} cm`;
+      if (isHeight) val.textContent = `${Math.round(heightOf(this.look) * 100)} cm`;
       change(n);
     });
-    input.addEventListener('change', () => {
-      this.rebuildRider();
-      this.onChange(this.look);
-    });
-    input.setAttribute('aria-label', `${label} (${HEIGHT_MIN}–${HEIGHT_MAX} m)`);
+    if (isHeight) {
+      input.addEventListener('change', () => {
+        this.rebuildRider();
+        this.onChange(this.look);
+      });
+      input.setAttribute('aria-label', `${label} (${HEIGHT_MIN}–${HEIGHT_MAX} m)`);
+    } else if (ends) {
+      const row = el('div', 'creator-ends', parent);
+      el('span', '', row, ends[0]);
+      el('span', '', row, ends[1]);
+      input.setAttribute('aria-label', `${label}: ${ends[0]} to ${ends[1]}`);
+    }
   }
 
   /** Palette swatches plus a free colour picker. Colour edits tint the live materials, so no model rebuild. */

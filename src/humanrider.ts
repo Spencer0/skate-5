@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Rider, RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
-import { CustomLook, defaultLook, heightOf, partColors } from './custom';
+import { CustomLook, defaultLook, heightOf, partColors, shapeInfluences } from './custom';
 import { TUNE } from './skater';
 import { Ragdoll, RAG, Ground } from './ragdoll';
 
@@ -181,7 +181,10 @@ export class HumanRider {
 
     this.group.remove(this.fallback.group);
     this.fallback.dispose();
-    if (this.look) this.recolor(this.look);
+    if (this.look) {
+      this.recolor(this.look);
+      this.reshape(this.look);
+    }
     this.ready = true;
     this.setStyle(this.style);
   }
@@ -190,6 +193,17 @@ export class HumanRider {
   recolor(look: CustomLook) {
     this.look = look;
     for (const [part, c] of Object.entries(partColors(look))) if (c) this.matByPart.get(part)?.color.set(c);
+  }
+
+  /** Blend the body / top / bottom morph targets to the look's shape sliders. */
+  reshape(look: CustomLook) {
+    this.look = look;
+    const w = shapeInfluences(look);
+    this.model?.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !m.morphTargetDictionary || !m.morphTargetInfluences) return;
+      for (const [name, i] of Object.entries(m.morphTargetDictionary)) m.morphTargetInfluences[i] = w[name] ?? 0;
+    });
   }
 
   setStyle(style: RiderStyle) {
