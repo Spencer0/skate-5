@@ -4,7 +4,7 @@ import { Terrain } from './terrain';
 import { buildMeshes, makeMaterials } from './park';
 import { LEVELS, LevelData, GapDef, GoalDef, inRect, V3 } from './levels';
 import { BoardModel, DECK } from './board';
-import { Skater, SkaterEvent, TrickRecord, Quality, TUNE } from './skater';
+import { Skater, SkaterEvent, TrickRecord, Quality } from './skater';
 import { Input } from './input';
 import { Audio } from './audio';
 import { Hud } from './hud';
@@ -675,10 +675,14 @@ function dustBurst(n: number, strength: number) {
 function handle(ev: SkaterEvent) {
   switch (ev.type) {
     case 'push':
+      act.pushStart = now();
       audio.push();
       tutorialAdvance('push');
       break;
     case 'pop':
+      act.popAt = now();
+      act.catchAt = -1;
+      act.nollie = ev.nollie;
       audio.pop();
       buzz(8);
       tutorialAdvance('pop');
@@ -686,6 +690,7 @@ function handle(ev: SkaterEvent) {
       combo.groundT = 0;
       break;
     case 'catch':
+      act.catchAt = now();
       audio.catchClick(ev.quality === 'perfect');
       buzz(ev.quality === 'perfect' ? [6, 30, 6] : 6);
       hud.popup(ev.name, ev.quality === 'perfect' ? 'perfect catch' : ev.quality === 'sketchy' ? 'late catch' : undefined, ev.quality);
@@ -693,6 +698,8 @@ function handle(ev: SkaterEvent) {
       tutorialAdvance('catch');
       break;
     case 'land': {
+      act.landAt = now();
+      act.popAt = -1;
       audio.land(ev.impact, ev.quality);
       buzz(ev.quality === 'sketchy' ? [20, 30, 20] : 14);
       shake.t = 0.18;
@@ -716,6 +723,8 @@ function handle(ev: SkaterEvent) {
       break;
     }
     case 'touchdown':
+      act.landAt = now();
+      act.popAt = -1;
       audio.touchdown(ev.impact);
       break;
     case 'bail': {
@@ -784,6 +793,10 @@ function handle(ev: SkaterEvent) {
   }
 }
 
+/** Timeline of the last pop / catch / landing / push, for the rider's choreography. */
+const act = { popAt: -1, catchAt: -1, landAt: -10, pushStart: -10, nollie: false };
+const now = () => skater.time;
+const PUSH_CYCLE = 0.52;
 const riderQ = new THREE.Quaternion();
 const yawQ = new THREE.Quaternion();
 const AX_Y = new THREE.Vector3(0, 1, 0);
@@ -827,10 +840,23 @@ function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
     crouch: Math.min(1, crouch),
     tuck,
     lean: skater.mode === 'ground' ? skater.steerS * Math.min(1, skater.speed / 4) * 0.28 : 0,
-    push: skater.pushT > 0 ? 1 - skater.pushT / TUNE.pushTime : -1,
+    push: skater.mode === 'ground' && now() - act.pushStart < PUSH_CYCLE ? (now() - act.pushStart) / PUSH_CYCLE : -1,
     grind: grinding ? skater.grind!.balance : null,
     air,
     time: t,
+    act: {
+      popT: air && act.popAt >= 0 ? now() - act.popAt : -1,
+      flip: Math.sign(tr.flipRate),
+      shove: Math.sign(tr.shoveRate),
+      wrap: Math.sign(tr.wrapRate),
+      nollie: act.nollie,
+      caught: !tr.active || tr.caught,
+      catchT: act.catchAt >= 0 && air ? now() - act.catchAt : -1,
+      landT: now() - act.landAt,
+      pushT: skater.mode === 'ground' && now() - act.pushStart < PUSH_CYCLE ? now() - act.pushStart : -1,
+      speed: skater.speed,
+      special: !!tr.spec?.special,
+    },
   });
 }
 

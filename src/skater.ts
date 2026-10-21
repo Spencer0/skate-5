@@ -13,7 +13,7 @@ export const TUNE = {
   beat: 0.38, // seconds per flip revolution / shove half turn at speed 1
   pushAccel: 7.5,
   pushTime: 0.24,
-  pushCooldown: 0.42,
+  pushCooldown: 0.5,
   pushMaxSpeed: 8.2,
   brakeDecel: 5.5,
   rollingResistance: 0.12,

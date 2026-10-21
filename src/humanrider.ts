@@ -190,6 +190,155 @@ export class HumanRider {
     b.updateMatrixWorld(true);
   }
 
+  private lastR = new THREE.Vector3(-0.19, 0, -0.06);
+  private lastL = new THREE.Vector3(0.19, 0, -0.06);
+
+  /**
+   * Foot choreography in the board's frame. Stance: front (left) foot over the
+   * front bolts, back (right) foot on the tail, toes across the board.
+   */
+  private choreo(st: RiderState) {
+    const a = st.act;
+    const deck = DECK_TOP + this.ankleH;
+    const sm = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+    const seg = (t: number, t0: number, t1: number) => sm((t - t0) / (t1 - t0));
+    const out = {
+      fL: new THREE.Vector3(0.19, deck, -0.06),
+      fR: new THREE.Vector3(-0.19, deck, -0.06),
+      yawL: 0.35,
+      yawR: -0.15,
+      pitchL: 0,
+      pitchR: 0,
+      hipDrop: 0,
+      hipX: 0,
+      arms: 0,
+      armsUp: 0,
+      armSwing: 0,
+    };
+    if (!a) {
+      out.fL.y += st.tuck * 0.3;
+      out.fR.y += st.tuck * 0.34;
+      return out;
+    }
+    const { fL, fR } = out;
+
+    // ---- pushing: step off, plant by the front truck, kick back, step back on
+    if (a.pushT >= 0) {
+      const t = a.pushT;
+      const into = seg(t, 0, 0.08) * (1 - seg(t, 0.44, 0.52));
+      // front foot turns to point down the board and shifts to the middle
+      fL.set(0.13, deck, -0.03);
+      out.yawL = 0.35 + into * 1.15;
+      const plant = new THREE.Vector3(0.16, this.ankleH, 0.21);
+      const tail = new THREE.Vector3(-0.19, deck, -0.06);
+      let p: THREE.Vector3;
+      if (t < 0.13) {
+        const k = seg(t, 0, 0.13);
+        p = this.lastR.clone().lerp(plant, k);
+        p.y += Math.sin(k * Math.PI) * 0.09;
+      } else if (t < 0.4) {
+        // planted on the ground: slides back as the board rolls forward
+        p = plant.clone();
+        p.x -= Math.min(0.85, a.speed * (t - 0.13) * 0.95 + (t - 0.13) * 0.6);
+      } else {
+        const k = seg(t, 0.4, 0.52);
+        const from = plant.clone();
+        from.x -= Math.min(0.85, a.speed * 0.27 * 0.95 + 0.27 * 0.6);
+        p = from.lerp(tail, k);
+        p.y += Math.sin(k * Math.PI) * 0.16;
+      }
+      fR.copy(p);
+      const onGround = t > 0.08 && t < 0.46;
+      out.yawR = onGround ? 1.35 : -0.15 + into * 1.2;
+      out.pitchR = t > 0.3 && t < 0.46 ? 0.5 : 0; // toe-off at the end of the kick
+      out.hipDrop = 0.08 * Math.sin(Math.PI * seg(t, 0.05, 0.5));
+      out.hipX = 0.06 * into;
+      out.armSwing = Math.sin(Math.PI * seg(t, 0, 0.5)) * (t < 0.27 ? -1 : 1);
+      this.lastR.copy(fR);
+      return out;
+    }
+
+    // ---- popped air: pop, flick, tuck, catch
+    if (a.popT >= 0) {
+      const t = a.popT;
+      const sx = a.nollie ? -1 : 1; // which end pops
+      const popFoot = a.nollie ? fL : fR;
+      const slideFoot = a.nollie ? fR : fL;
+      // pop: the popping foot snaps the tail down to the very end
+      const snap = seg(t, 0, 0.05) * (1 - seg(t, 0.12, 0.2));
+      popFoot.x = -sx * (0.19 + 0.12 * snap);
+      popFoot.y = deck - 0.01 * snap + seg(t, 0.06, 0.16) * 0.18;
+      // the other foot drags up the grip toward the nose...
+      const drag = seg(t, 0.02, 0.12);
+      slideFoot.x = sx * (0.19 + 0.13 * drag);
+      slideFoot.y = deck + drag * 0.14;
+      if (a.nollie) out.pitchR = 0.4 * drag;
+      else out.pitchL = 0.4 * drag;
+      // ...and flicks it off: kickflip off the heel side, heelflip off the toe side
+      const flick = seg(t, 0.08, 0.17) * (1 - seg(t, 0.22, 0.32));
+      if (a.flip > 0) {
+        slideFoot.z = -0.06 - 0.32 * flick;
+        slideFoot.y += 0.05 * flick;
+        slideFoot.x += sx * 0.05 * flick;
+        if (a.nollie) out.yawR = -0.15 + 0.6 * flick;
+        else out.yawL = 0.35 + 0.6 * flick;
+      } else if (a.flip < 0) {
+        slideFoot.z = -0.06 + 0.3 * flick;
+        slideFoot.y += 0.05 * flick;
+        if (a.nollie) out.pitchR = -0.5 * flick;
+        else out.pitchL = -0.5 * flick;
+      }
+      // shove-its: the popping foot scoops the tail around
+      if (a.shove !== 0) {
+        const scoop = seg(t, 0.03, 0.14) * (1 - seg(t, 0.2, 0.3));
+        popFoot.z = -0.06 + (a.shove < 0 ? -0.22 : 0.22) * scoop;
+      }
+      if (a.wrap !== 0) {
+        // impossible: the back foot scoops the board up around itself
+        const wrap = seg(t, 0.04, 0.18) * (1 - seg(t, 0.25, 0.35));
+        popFoot.y += wrap * 0.12;
+        popFoot.x += sx * 0.1 * wrap;
+      }
+      const tricky = a.flip !== 0 || a.shove !== 0 || a.wrap !== 0;
+      // knees up while the board spins underneath; stomp back down on the catch
+      const tuckIn = tricky ? seg(t, 0.12, 0.22) : seg(t, 0.12, 0.2) * 0.45;
+      let tuck = tuckIn;
+      if (tricky && a.caught) tuck = a.catchT >= 0 ? tuckIn * (1 - seg(a.catchT, 0, 0.1)) : 0;
+      if (!tricky) tuck *= 1 - seg(t, 0.28, 0.42); // ollie: feet back on the board at the peak
+      const tuckPos = (x: number) => new THREE.Vector3(x, deck + (a.special ? 0.26 : 0.18), -0.04);
+      fL.lerp(tuckPos(0.23), tuck);
+      fR.lerp(tuckPos(-0.23), tuck);
+      out.pitchL *= 1 - tuck;
+      out.pitchR *= 1 - tuck;
+      out.yawL += (0.35 - out.yawL) * tuck;
+      out.yawR += (-0.15 - out.yawR) * tuck;
+      // knees come up toward the chest rather than the whole body floating
+      out.hipDrop = -0.03 * snap + tuck * 0.14 + seg(t, 0.25, 0.45) * 0.05;
+      out.armsUp = seg(t, 0, 0.08) * (1 - seg(t, 0.2, 0.45)) * 0.45;
+      out.arms = Math.max(seg(t, 0.03, 0.12) * 0.55, tuck * 0.6);
+      this.lastL.copy(fL);
+      this.lastR.copy(fR);
+      return out;
+    }
+
+    // ---- unpopped air (rolled off a lip): legs soak up, arms out
+    if (st.air) {
+      fL.y += st.tuck * 0.2;
+      fR.y += st.tuck * 0.2;
+      out.arms = 0.6;
+    }
+    // ---- landing: knees absorb the impact
+    if (a.landT >= 0 && a.landT < 0.5) {
+      const k = Math.exp(-a.landT * 9) * Math.min(1, a.landT * 30);
+      out.hipDrop = 0.17 * k;
+      out.armsUp = 0.25 * k;
+      out.arms = Math.max(out.arms, 0.5 * k);
+    }
+    this.lastL.copy(fL);
+    this.lastR.copy(fR);
+    return out;
+  }
+
   update(dt: number, st: RiderState) {
     if (!this.ready) {
       this.fallback.update(dt, st);
@@ -216,22 +365,18 @@ export class HumanRider {
     const toW = (v: THREE.Vector3) => v.applyMatrix4(this.group.matrixWorld);
 
     // intent (rider frame: +X nose, +Y up, +Z toe side; the rider faces +Z)
-    const twist = s.push * 0.75;
+    const twist = s.push * 0.8;
     const bend = 0.06 + HUNCH[this.id] + s.crouch * 0.42 + s.push * 0.3 + s.lean * 0.8;
     const roll = s.grind * 0.25;
     const hipQ = tq().setFromEuler(new THREE.Euler(bend * 0.35, twist * 0.35 + 0.15, -roll * 0.5, 'YXZ'));
     const torsoQ = tq().setFromEuler(new THREE.Euler(bend, twist + 0.25, -roll, 'YXZ'));
     const headQ = tq().setFromEuler(new THREE.Euler(-0.1 + s.crouch * 0.1 - s.air * 0.15, 1.05 - s.push * 0.6, 0, 'YXZ'));
 
-    const fL = new THREE.Vector3(0.19, DECK_TOP + this.ankleH + s.tuck * 0.3, -0.06);
-    const fR = new THREE.Vector3(-0.19, DECK_TOP + this.ankleH + s.tuck * 0.34, -0.06);
-    if (pushing) {
-      const ph = st.push;
-      const ground = new THREE.Vector3(0.12 - ph * 0.6, this.ankleH, 0.24);
-      fR.lerp(ground, Math.min(1, Math.sin(ph * Math.PI) * 1.6));
-    }
-    const hipY = DECK_TOP + this.ankleH + this.legLen * (0.9 - 0.3 * s.crouch) + s.tuck * 0.12 - s.push * 0.1;
-    const hipC = new THREE.Vector3(-0.02 - s.push * 0.08, hipY, -0.03 + Math.sin(s.lean) * 0.35);
+    const c = this.choreo(st);
+    const fL = c.fL;
+    const fR = c.fR;
+    const hipY = DECK_TOP + this.ankleH + this.legLen * (0.9 - 0.3 * s.crouch) - c.hipDrop;
+    const hipC = new THREE.Vector3(-0.02 + c.hipX, hipY, -0.03 + Math.sin(s.lean) * 0.35);
 
     // pelvis: place so the hip joints straddle hipC, then rotate
     const pelvisPos = hipC.clone().sub(this.hipOffset.clone().applyQuaternion(hipQ));
@@ -259,19 +404,21 @@ export class HumanRider {
       ik(root, toW(target.clone()), a, b, legPole, knee, end);
       this.aim(thigh, calf, knee);
       this.aim(calf, foot, end);
-      // foot flat on the deck, toes across the board
-      const fq = tq().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      // foot flat on the deck (or pointed for a flick), toes across the board
+      const fq = tq().setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
       this.setRiderQ(foot, fq.multiply(this.restQ.get(foot)!));
     };
-    leg(B.thigh_l, B.calf_l, B.foot_l, fL, 0.35);
-    leg(B.thigh_r, B.calf_r, B.foot_r, fR, pushing ? 0.6 : -0.15);
+    let pitch = c.pitchL;
+    leg(B.thigh_l, B.calf_l, B.foot_l, fL, c.yawL);
+    pitch = c.pitchR;
+    leg(B.thigh_r, B.calf_r, B.foot_r, fR, c.yawR);
 
     // arms: by the sides, wide on rails, flung up in the air
     const right = new THREE.Vector3(-1, 0, 0).applyQuaternion(torsoQ);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(torsoQ);
     const front = new THREE.Vector3(0, 0, 1).applyQuaternion(torsoQ);
     const g2l = this.group.matrixWorld.clone().invert();
-    const wide = Math.max(st.grind !== null ? 1 : 0, s.air * 0.8);
+    const wide = Math.max(st.grind !== null ? 1 : 0, st.act ? 0 : s.air * 0.8, c.arms);
     const swingT = Math.sin(st.time * 2.4) * 0.05;
     const arm = (upper: THREE.Bone, lower: THREE.Bone, hand: THREE.Bone, side: number) => {
       const sh = upper.getWorldPosition(tv());
@@ -286,8 +433,10 @@ export class HumanRider {
       const out = shL
         .clone()
         .addScaledVector(right, side * (a + b) * 0.88)
-        .addScaledVector(up, -0.1 + (side > 0 ? s.grind : -s.grind) * 0.3)
+        .addScaledVector(up, -0.1 + (side > 0 ? s.grind : -s.grind) * 0.3 + c.armsUp * 0.35)
         .addScaledVector(front, 0.06);
+      // pushing: arms swing against the kicking leg
+      if (c.armSwing) relaxed.addScaledVector(new THREE.Vector3(1, 0, 0), side * c.armSwing * 0.22);
       const target = relaxed.lerp(out, Math.min(1, wide + s.crouch * 0.35));
       const pole = toW(new THREE.Vector3(0, -0.3, -1).applyQuaternion(torsoQ)).sub(toW(new THREE.Vector3()));
       const elbow = tv();

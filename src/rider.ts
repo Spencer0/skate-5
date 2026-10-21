@@ -125,6 +125,22 @@ export interface RiderState {
   grind: number | null; // balance -1..1 when grinding
   air: boolean;
   time: number;
+  /** richer cues for the full-body rider (the capsule rider ignores them) */
+  act?: RiderAct;
+}
+
+export interface RiderAct {
+  popT: number; // seconds since the pop, -1 when not in a popped air
+  flip: number; // +1 kickflip, -1 heelflip, 0 none
+  shove: number; // +1 FS, -1 BS, 0 none
+  wrap: number; // impossible
+  nollie: boolean;
+  caught: boolean;
+  catchT: number; // seconds since catch, -1 if none
+  landT: number; // seconds since last landing
+  pushT: number; // seconds into the visual push cycle, -1 when not pushing
+  speed: number; // board speed (m/s), for the planted push foot
+  special: boolean;
 }
 
 export const DECK_TOP = 0.088;
