@@ -734,6 +734,8 @@ function handle(ev: SkaterEvent) {
       fall.q.copy(rider.group.quaternion);
       fall.vel.copy(skater.vel).multiplyScalar(0.6);
       fall.side = Math.random() < 0.5 ? 1 : -1;
+      // the full rider goes limp; the capsule stand-in keeps the scripted tip-over
+      rider.startRagdoll(skater.vel, fall.side, terrain);
       audio.bail();
       buzz([40, 50, 40]);
       shake.t = 0.35;
@@ -788,6 +790,7 @@ function handle(ev: SkaterEvent) {
       break;
     case 'respawn':
       fall.on = false;
+      rider.stopRagdoll();
       fade.classList.remove('on');
       break;
   }
@@ -805,6 +808,12 @@ const AX_X = new THREE.Vector3(1, 0, 0);
 /** Pose the skater from the board's state (feet stay planted via IK). */
 function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
   if (!rider.group.visible) return;
+  // any way out of the bail (respawn, restart, level change) stands the rider back up
+  if (rider.ragdolling && skater.mode !== 'bail') rider.stopRagdoll();
+  if (rider.ragdolling) {
+    rider.update(dt, { crouch: 0, tuck: 0, lean: 0, push: -1, grind: null, air: false, time: t });
+    return;
+  }
   if (fall.on && skater.mode === 'bail') {
     // tip over and slide to a stop next to the board
     fall.t += dt;

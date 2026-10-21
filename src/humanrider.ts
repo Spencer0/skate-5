@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Rider, RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
 import { TUNE } from './skater';
+import { Ragdoll, RAG, Ground } from './ragdoll';
 
 /**
  * A MakeHuman character (generated in Blender with MPFB, CC0) driven by the
@@ -58,6 +59,14 @@ const _c = tv();
 const _q = tq();
 const _q2 = tq();
 
+/** Orientation of the frame whose +X is `across` and +Y is (orthogonalized) `up`. */
+function frameQ(across: THREE.Vector3, up: THREE.Vector3, out: THREE.Quaternion) {
+  const x = across.clone().normalize();
+  const z = tv().crossVectors(x, up).normalize();
+  const y = tv().crossVectors(z, x);
+  return out.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+}
+
 export class HumanRider {
   group = new THREE.Group();
   private fallback: Rider;
@@ -76,6 +85,11 @@ export class HumanRider {
   private ankleH = 0.08;
   private legLen = 0.9;
   private hipOffset = new THREE.Vector3(); // pelvis origin -> midpoint of thigh heads
+  // rest-pose torso frames (rider frame) for posing from the ragdoll
+  private restHipQ = new THREE.Quaternion();
+  private restChestQ = new THREE.Quaternion();
+  private rag: Ragdoll | null = null;
+  private ground: Ground | null = null;
 
   constructor(public id: RiderId) {
     this.fallback = new Rider(id);
@@ -132,6 +146,10 @@ export class HumanRider {
     this.ankleH = P('foot_l').y;
     this.legLen = P('thigh_l').distanceTo(P('calf_l')) + P('calf_l').distanceTo(P('foot_l'));
     this.hipOffset = P('thigh_l').add(P('thigh_r')).multiplyScalar(0.5).sub(P('pelvis'));
+    const hipMid = P('thigh_l').add(P('thigh_r')).multiplyScalar(0.5);
+    const up = P('spine_03').sub(hipMid);
+    frameQ(P('thigh_l').sub(P('thigh_r')), up, this.restHipQ);
+    frameQ(P('upperarm_l').sub(P('upperarm_r')), up, this.restChestQ);
 
     this.group.remove(this.fallback.group);
     this.fallback.dispose();
@@ -421,7 +439,92 @@ export class HumanRider {
     return out;
   }
 
+  /* ---------------------------- ragdoll --------------------------- */
+
+  get ragdolling() {
+    return this.rag !== null;
+  }
+
+  /**
+   * Go limp from the current pose. The feet catch (the board shoots out from
+   * under them) while the upper body carries on, so the rider tips over and
+   * tumbles in the direction of travel; `side` picks which way they topple.
+   * Returns false while the model hasn't loaded (the caller animates the fall).
+   */
+  startRagdoll(vel: THREE.Vector3, side: number, ground: Ground) {
+    if (!this.ready) return false;
+    const B = this.bones;
+    const order: BoneName[] = [
+      'thigh_l', 'thigh_r', 'spine_03', 'head', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r',
+      'hand_l', 'hand_r', 'calf_l', 'calf_r', 'foot_l', 'foot_r',
+    ];
+    this.group.updateMatrixWorld(true);
+    const pos = order.map((n) => B[n].getWorldPosition(tv()));
+    // toward the rider's front (rider frame +Z) or back
+    const tip = tv().set(0, 0, side).applyQuaternion(this.group.quaternion);
+    tip.y = 0;
+    tip.normalize();
+    const vels = order.map((_, i) => {
+      const v = vel.clone();
+      if (i === RAG.ankL || i === RAG.ankR) return v.multiplyScalar(0.3);
+      if (i === RAG.kneeL || i === RAG.kneeR) return v.multiplyScalar(0.55);
+      if (i === RAG.hipL || i === RAG.hipR) return v.multiplyScalar(0.85).addScaledVector(tip, 0.4);
+      return v.addScaledVector(tip, 1.3).add(tv().set(0, 0.6, 0));
+    });
+    this.rag = new Ragdoll(TUNE.gravity);
+    this.rag.start(pos, vels);
+    this.ground = ground;
+    return true;
+  }
+
+  stopRagdoll() {
+    this.rag = null;
+  }
+
+  private poseRagdoll(dt: number) {
+    const rag = this.rag!;
+    rag.step(dt, this.ground!);
+    for (const [b, r] of this.rest) {
+      b.position.copy(r.p);
+      b.quaternion.copy(r.q);
+    }
+    this.group.updateMatrixWorld(true);
+    const B = this.bones;
+    const P = rag.p;
+    const hipMid = tv().addVectors(P[RAG.hipL], P[RAG.hipR]).multiplyScalar(0.5);
+    const up = tv().subVectors(P[RAG.chest], hipMid);
+    // rotation taking the rest torso frames (rider frame) to the ragdoll's (world)
+    const hipR = frameQ(tv().subVectors(P[RAG.hipL], P[RAG.hipR]), up, tq()).multiply(this.restHipQ.clone().invert());
+    const chestR = frameQ(tv().subVectors(P[RAG.shL], P[RAG.shR]), up, tq()).multiply(this.restChestQ.clone().invert());
+    const setW = (b: THREE.Bone, q: THREE.Quaternion) => {
+      const parentW = (b.parent as THREE.Object3D).getWorldQuaternion(_q2).invert();
+      b.quaternion.copy(parentW.multiply(q));
+      b.updateMatrixWorld(true);
+    };
+    // pelvis: placed so its hip joints sit on the ragdoll's hips
+    const pw = hipMid.clone().sub(this.hipOffset.clone().applyQuaternion(hipR));
+    B.pelvis.position.copy((B.pelvis.parent as THREE.Object3D).worldToLocal(pw));
+    B.pelvis.updateMatrixWorld(true);
+    setW(B.pelvis, hipR.clone().multiply(this.restQ.get(B.pelvis)!));
+    const spine: BoneName[] = ['spine_01', 'spine_02', 'spine_03'];
+    spine.forEach((n, i) => setW(B[n], hipR.clone().slerp(chestR, (i + 1) / spine.length).multiply(this.restQ.get(B[n])!)));
+    this.aim(B.neck_01, B.head, P[RAG.head]);
+    setW(B.head, chestR.clone().multiply(this.restQ.get(B.head)!));
+    this.aim(B.thigh_l, B.calf_l, P[RAG.kneeL]);
+    this.aim(B.calf_l, B.foot_l, P[RAG.ankL]);
+    this.aim(B.thigh_r, B.calf_r, P[RAG.kneeR]);
+    this.aim(B.calf_r, B.foot_r, P[RAG.ankR]);
+    this.aim(B.upperarm_l, B.lowerarm_l, P[RAG.elbL]);
+    this.aim(B.lowerarm_l, B.hand_l, P[RAG.handL]);
+    this.aim(B.upperarm_r, B.lowerarm_r, P[RAG.elbR]);
+    this.aim(B.lowerarm_r, B.hand_r, P[RAG.handR]);
+  }
+
   update(dt: number, st: RiderState) {
+    if (this.rag) {
+      if (this.group.visible) this.poseRagdoll(dt);
+      return;
+    }
     if (!this.ready) {
       this.fallback.update(dt, st);
       return;
