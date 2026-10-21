@@ -139,6 +139,8 @@ export class Skater {
   squashV = 0;
   wobble = 0;
   lean = 0;
+  yawOffset = 0; // visual-only: eases out landing / lock snaps
+  carry = false; // holding forward: carry over lips instead of vert assist
 
   // bail
   bailT = 0;
@@ -187,6 +189,7 @@ export class Skater {
 
   step(dt: number, inp: SkaterInput) {
     this.time += dt;
+    this.carry = inp.pushHold;
     this.steerS += (inp.steer - this.steerS) * Math.min(1, dt * 14);
     this.updateSprings(dt);
     switch (this.mode) {
@@ -217,6 +220,7 @@ export class Skater {
     this.squashV += (-k2 * this.squash - c2 * this.squashV) * dt;
     this.squash += this.squashV * dt;
     this.wobble *= Math.exp(-dt * 3);
+    this.yawOffset *= Math.exp(-dt * 11);
   }
 
   /* ------------------------------ ground --------------------------- */
@@ -255,7 +259,7 @@ export class Skater {
 
     // push
     this.pushCd -= dt;
-    if ((inp.push || (inp.pushHold && this.pushT <= 0)) && this.pushCd <= 0 && !inp.brake) {
+    if ((inp.push || (inp.pushHold && this.pushT <= 0)) && this.pushCd <= 0 && !inp.brake && n.y > 0.94) {
       this.pushT = TUNE.pushTime;
       this.pushCd = TUNE.pushCooldown;
       this.events.push({ type: 'push' });
@@ -390,7 +394,7 @@ export class Skater {
         const into = -(this.vel.x * ux + this.vel.z * uz);
         // no deck behind the lip (spine): let momentum carry you over
         const behind = this.terrain.height(this.pos.x - ux * 0.6, this.pos.z - uz * 0.6);
-        const spine = behind < this.pos.y - 0.35;
+        const spine = behind < this.pos.y - 0.35 || this.carry;
         if (into > 0 && !spine) {
           this.vel.x += ux * into;
           this.vel.z += uz * into;
@@ -704,9 +708,12 @@ export class Skater {
       const c = this.fwd.dot(vd);
       angle = Math.acos(Math.min(1, Math.abs(c)));
       if (angle > 1.05) return this.bail('sideways', impact);
-      // snap to forward or fakie
+      // snap to forward or fakie (the visual eases into it)
       const sign = c >= 0 ? 1 : -1;
+      const before = tmp2.copy(this.fwd);
       this.fwd.copy(vd).multiplyScalar(sign);
+      const cr = tmpV3.crossVectors(this.fwd, before).dot(n);
+      this.yawOffset += Math.atan2(cr, this.fwd.dot(before));
       this.vel.multiplyScalar(1 - 0.55 * (angle / 1.05) ** 2);
     }
     // soak up some of the impact
@@ -1036,7 +1043,7 @@ export class Skater {
     if (this.mode === 'grind' && this.grind) leanT = this.grind.balance * 0.32;
     this.lean += (leanT - this.lean) * 0.25;
     const wob = Math.sin(this.time * 38) * this.wobble * 0.12;
-    tmpQ.setFromAxisAngle(AX_Y, this.slideYaw + wob * 0.6);
+    tmpQ.setFromAxisAngle(AX_Y, this.slideYaw + this.yawOffset + wob * 0.6);
     out.multiply(tmpQ);
     tmpQ.setFromAxisAngle(AX_X, this.lean + wob);
     out.multiply(tmpQ);

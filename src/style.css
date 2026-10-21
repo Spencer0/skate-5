@@ -434,3 +434,17 @@ body {
     line-height: 1.5;
   }
 }
+
+.fade {
+  position: fixed;
+  inset: 0;
+  background: #efe7da;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 4;
+}
+.fade.on {
+  opacity: 1;
+  transition: opacity 0.25s;
+}

@@ -81,6 +81,10 @@ const hud = new Hud(app);
 /* Start screen                                                        */
 /* ------------------------------------------------------------------ */
 
+const fade = document.createElement('div');
+fade.className = 'fade';
+app.appendChild(fade);
+
 const start = document.getElementById('start')!;
 let started = false;
 function begin() {
@@ -352,6 +356,7 @@ function handle(ev: SkaterEvent) {
       hud.popup('Slipped off', undefined, 'sketchy');
       break;
     case 'respawn':
+      fade.classList.remove('on');
       break;
   }
 }
@@ -516,6 +521,8 @@ function frame(now: number) {
   }
   for (const ev of skater.events) handle(ev);
   skater.events.length = 0;
+
+  if (skater.mode === 'bail' && skater.bailT > 1.45) fade.classList.add('on');
 
   // combo banks after a beat on the ground
   if (skater.mode === 'ground' && combo.active) {
