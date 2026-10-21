@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Rider, RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
+import { CustomLook, defaultLook, heightOf, partColors } from './custom';
 
 /**
  * A MakeHuman character (generated in Blender with MPFB, CC0) driven by the
@@ -12,17 +13,27 @@ import { Rider, RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
  * bolts. Until the GLB finishes loading, the capsule rider stands in.
  */
 
-const HEIGHT: Record<RiderId, number> = { brock: 1.86, coral: 1.64, voss: 1.72 };
-const HUNCH: Record<RiderId, number> = { brock: 0.05, coral: 0, voss: 0.2 };
+const HEIGHT: Record<RiderId, number> = { brock: 1.86, coral: 1.64, voss: 1.72, custom: 1.75 };
+const HUNCH: Record<RiderId, number> = { brock: 0.05, coral: 0, voss: 0.2, custom: 0 };
 
-const cache = new Map<RiderId, Promise<THREE.Group>>();
-function loadModel(id: RiderId) {
-  let p = cache.get(id);
+const cache = new Map<string, Promise<THREE.Group>>();
+function loadModel(file: string) {
+  let p = cache.get(file);
   if (!p) {
-    p = new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}riders/${id}.glb`).then((g) => g.scene);
-    cache.set(id, p);
+    p = new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}riders/${file}.glb`).then((g) => g.scene);
+    cache.set(file, p);
   }
   return p;
+}
+
+/** Hide every part of the modular model the look doesn't wear and tint the ones it does. */
+function dress(scene: THREE.Object3D, look: CustomLook) {
+  const colors = partColors(look);
+  const drop: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh && !(o.name in colors)) drop.push(o);
+  });
+  for (const o of drop) o.removeFromParent();
 }
 
 const BONES = [
@@ -67,6 +78,7 @@ export class HumanRider {
   /** rest rotation of each bone relative to the rider frame (group local) */
   private restQ = new Map<THREE.Bone, THREE.Quaternion>();
   private mats: THREE.MeshStandardMaterial[] = [];
+  private matByPart = new Map<string, THREE.MeshStandardMaterial>();
   private style: RiderStyle = 'ghost';
   private s = { crouch: 0, tuck: 0, lean: 0, grind: 0, air: 0, push: 0 };
   private disposed = false;
@@ -76,10 +88,17 @@ export class HumanRider {
   private legLen = 0.9;
   private hipOffset = new THREE.Vector3(); // pelvis origin -> midpoint of thigh heads
 
-  constructor(public id: RiderId) {
+  private look: CustomLook | null;
+
+  /** `look` dresses the modular create-a-skater model when id is 'custom'. */
+  constructor(
+    public id: RiderId,
+    look: CustomLook | null = null,
+  ) {
+    this.look = id === 'custom' ? (look ?? defaultLook()) : null;
     this.fallback = new Rider(id);
     this.group.add(this.fallback.group);
-    loadModel(id).then(
+    loadModel(this.look ? `custom_${this.look.body}` : id).then(
       (scene) => {
         if (!this.disposed) this.attach(scene.clone(true));
       },
@@ -88,6 +107,7 @@ export class HumanRider {
   }
 
   private attach(scene: THREE.Object3D) {
+    if (this.look) dress(scene, this.look);
     // skinned clones need their skeletons rebound to the cloned bones
     const byName = new Map<string, THREE.Bone>();
     scene.traverse((o) => {
@@ -102,6 +122,13 @@ export class HumanRider {
         const m = (sm.material as THREE.MeshStandardMaterial).clone();
         sm.material = m;
         m.userData.cut = /hair|brow|lash|ponytail|bob|short0/i.test(m.name);
+        this.matByPart.set(sm.name, m);
+        if (/^(top|bottom|shoes|hat)_/.test(sm.name)) {
+          // cloth always wins the depth test against the skin under it
+          m.polygonOffset = true;
+          m.polygonOffsetFactor = -2;
+          m.polygonOffsetUnits = -2;
+        }
         this.mats.push(m);
       }
     });
@@ -117,8 +144,9 @@ export class HumanRider {
     for (const b of this.all) this.rest.set(b, { p: b.position.clone(), q: b.quaternion.clone() });
 
     // scale to the character's height; MakeHuman faces +Z with feet at y=0
-    const box = new THREE.Box3().setFromObject(scene);
-    const k = HEIGHT[this.id] / Math.max(0.5, box.max.y - box.min.y);
+    // hats and hair don't count towards how tall the character is
+    const box = new THREE.Box3().setFromObject(this.look ? (scene.getObjectByName('body') ?? scene) : scene);
+    const k = (this.look ? heightOf(this.look) : HEIGHT[this.id]) / Math.max(0.5, box.max.y - box.min.y);
     scene.scale.setScalar(k);
     this.model = scene;
     this.group.add(scene);
@@ -134,8 +162,15 @@ export class HumanRider {
 
     this.group.remove(this.fallback.group);
     this.fallback.dispose();
+    if (this.look) this.recolor(this.look);
     this.ready = true;
     this.setStyle(this.style);
+  }
+
+  /** Re-tint a create-a-skater model in place (same parts, new colours). */
+  recolor(look: CustomLook) {
+    this.look = look;
+    for (const [part, c] of Object.entries(partColors(look))) if (c) this.matByPart.get(part)?.color.set(c);
   }
 
   setStyle(style: RiderStyle) {

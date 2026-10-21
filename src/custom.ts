@@ -1,0 +1,105 @@
+import OPT from './data/skater-options.json';
+
+/**
+ * The create-a-skater look. Every option id comes from
+ * src/data/skater-options.json, which tools/riders/generate_custom.py also
+ * reads to build the modular models in public/riders/custom_{m,f}.glb.
+ */
+
+export type Body = 'm' | 'f';
+
+export interface CustomLook {
+  body: Body;
+  height: number; // 0 short .. 1 tall
+  skin: string;
+  hair: string | null;
+  hairColor: string;
+  hat: string | null;
+  hatColor: string;
+  top: string;
+  topColor: string;
+  bottom: string;
+  bottomColor: string;
+  shoes: string;
+  shoesColor: string;
+}
+
+export interface Option {
+  id: string;
+  label: string;
+}
+
+export const HAIR: Option[] = OPT.hair;
+export const HATS: Option[] = OPT.hats;
+export const TOPS: Option[] = OPT.tops;
+export const BOTTOMS: Option[] = OPT.bottoms;
+export const SHOES: Option[] = OPT.shoes;
+
+export const SKIN_TONES = ['#f6dcc7', '#ecc19c', '#d49c72', '#b87a50', '#8d5a3b', '#62402b', '#3f2a1d'];
+export const HAIR_COLORS = ['#17120f', '#3a2619', '#6b4226', '#a5683a', '#d7b25f', '#ecdcae', '#b23a2a', '#8f6fb5', '#3f8fbd', '#e8e6e1', '#8b8b8b', '#e0709a'];
+export const CLOTH_COLORS = ['#f4f1ea', '#1f1f1f', '#5b5b5b', '#c8402d', '#d97757', '#e3a83a', '#788c5d', '#3fa7a0', '#3a6fb0', '#2c3e64', '#7a56a8', '#d9779a', '#8a5a3a', '#c9b793'];
+
+export const HEIGHT_MIN = 1.55;
+export const HEIGHT_MAX = 1.95;
+export const heightOf = (look: CustomLook) => HEIGHT_MIN + (HEIGHT_MAX - HEIGHT_MIN) * look.height;
+
+export function defaultLook(): CustomLook {
+  return {
+    body: 'm',
+    height: 0.5,
+    skin: SKIN_TONES[2],
+    hair: 'short02',
+    hairColor: HAIR_COLORS[1],
+    hat: null,
+    hatColor: '#6b6a64',
+    top: 'tee',
+    topColor: '#d97757',
+    bottom: 'jeans',
+    bottomColor: '#4d6c9b',
+    shoes: 'shoes06',
+    shoesColor: '#f4f1ea',
+  };
+}
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** Anything from storage (or an older build) -> a look the models can actually dress. */
+export function sanitizeLook(raw: unknown): CustomLook {
+  const d = defaultLook();
+  if (!raw || typeof raw !== 'object') return d;
+  const r = raw as Record<string, unknown>;
+  const color = (k: keyof CustomLook) => (typeof r[k] === 'string' && HEX.test(r[k] as string) ? (r[k] as string) : (d[k] as string));
+  const pick = (k: keyof CustomLook, list: Option[]) => (typeof r[k] === 'string' && list.some((o) => o.id === r[k]) ? (r[k] as string) : (d[k] as string));
+  const optional = (k: 'hair' | 'hat', list: Option[]) => (r[k] === null ? null : typeof r[k] === 'string' && list.some((o) => o.id === r[k]) ? (r[k] as string) : d[k]);
+  return {
+    body: r.body === 'f' ? 'f' : 'm',
+    height: typeof r.height === 'number' && isFinite(r.height) ? Math.min(1, Math.max(0, r.height)) : d.height,
+    skin: color('skin'),
+    hair: optional('hair', HAIR),
+    hairColor: color('hairColor'),
+    hat: optional('hat', HATS),
+    hatColor: color('hatColor'),
+    top: pick('top', TOPS),
+    topColor: color('topColor'),
+    bottom: pick('bottom', BOTTOMS),
+    bottomColor: color('bottomColor'),
+    shoes: pick('shoes', SHOES),
+    shoesColor: color('shoesColor'),
+  };
+}
+
+/** node name -> material colour for the parts the look keeps visible */
+export function partColors(look: CustomLook): Record<string, string> {
+  const out: Record<string, string> = {
+    body: look.skin,
+    eyes: '',
+    lashes: '',
+    brows: look.hairColor,
+    ['top_' + look.top]: look.topColor,
+    ['bottom_' + look.bottom]: look.bottomColor,
+    ['shoes_' + look.shoes]: look.shoesColor,
+  };
+  if (look.hair) out['hair_' + look.hair] = look.hairColor;
+  if (look.hat) out['hat_' + look.hat] = look.hatColor;
+  return out;
+}

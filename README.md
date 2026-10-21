@@ -40,6 +40,11 @@ Moreno (Spark Skateboards team manager) and Officer Pete (plaza security).
   (beach local: Balance/Spin up), Dr. Elmer Voss (retired physicist: Flip +2,
   Balance up, Ollie/Speed down). They are MakeHuman characters (CC0) generated in Blender, animated with IK —
   feet stay on the bolts through pushes, pops, flips and grinds.
+- **Create a skater:** the fourth card in the Rider menu opens a creator with a
+  live 3D preview: masculine or feminine build, height, skin tone, hair style
+  and colour, hat, top, bottoms (jeans, shorts, leggings, skirt…), shoes, and a
+  free colour picker for each. Your skater has no stat bonuses or penalties and
+  is saved with your career.
 - **Ghost / Solid / Board only:** the rider defaults to a see-through ghost so
   the board is always readable.
 - **Camera button** (top right) cycles Chase, Classic, Overhead and Filmer views;
@@ -109,6 +114,7 @@ Code map:
 - `src/ui.ts`, `src/cutscene.ts`, `src/cast.ts` – menus, cutscene player, characters
 - `src/props.ts` – letters, tapes and knockable objects
 - `src/rider.ts`, `src/humanrider.ts`, `src/settings.ts` – skater IK, the MakeHuman riders and saved options
+- `src/custom.ts`, `src/creator.ts`, `src/data/skater-options.json` – the create-a-skater look, its menu and the shared option list
 - `tools/riders/` – Blender + MPFB pipeline that generates `public/riders/*.glb`
 - `src/main.ts` – loop, level loading, camera, combo scoring, effects
 

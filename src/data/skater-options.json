@@ -1,0 +1,160 @@
+{
+  "hair": [
+    {
+      "id": "short01",
+      "label": "Buzz"
+    },
+    {
+      "id": "short02",
+      "label": "Crop"
+    },
+    {
+      "id": "short03",
+      "label": "Side part"
+    },
+    {
+      "id": "short04",
+      "label": "Messy"
+    },
+    {
+      "id": "bob01",
+      "label": "Bob"
+    },
+    {
+      "id": "bob02",
+      "label": "Long bob"
+    },
+    {
+      "id": "ponytail01",
+      "label": "Ponytail"
+    },
+    {
+      "id": "braid01",
+      "label": "Braid"
+    },
+    {
+      "id": "long01",
+      "label": "Long"
+    },
+    {
+      "id": "afro01",
+      "label": "Afro"
+    }
+  ],
+  "tops": [
+    {
+      "id": "tee",
+      "src": "male_casualsuit06",
+      "label": "Tee"
+    },
+    {
+      "id": "crew",
+      "src": "male_casualsuit04",
+      "label": "Crew tee"
+    },
+    {
+      "id": "longsleeve",
+      "src": "male_casualsuit02",
+      "label": "Long sleeve"
+    },
+    {
+      "id": "flannel",
+      "src": "male_casualsuit03",
+      "label": "Flannel"
+    },
+    {
+      "id": "puffer",
+      "src": "male_casualsuit05",
+      "label": "Puffer"
+    },
+    {
+      "id": "fitted",
+      "src": "female_casualsuit01",
+      "label": "Fitted tee"
+    },
+    {
+      "id": "baggy",
+      "src": "female_casualsuit02",
+      "label": "Baggy tee"
+    },
+    {
+      "id": "crop",
+      "src": "female_sportsuit01",
+      "label": "Crop top"
+    },
+    {
+      "id": "blouse",
+      "src": "female_elegantsuit01",
+      "label": "Blouse"
+    },
+    {
+      "id": "blazer",
+      "src": "male_elegantsuit01",
+      "label": "Blazer"
+    }
+  ],
+  "bottoms": [
+    {
+      "id": "jeans",
+      "src": "male_casualsuit06",
+      "label": "Jeans"
+    },
+    {
+      "id": "skinny",
+      "src": "female_casualsuit01",
+      "label": "Skinny jeans"
+    },
+    {
+      "id": "shorts",
+      "src": "female_casualsuit02",
+      "label": "Shorts"
+    },
+    {
+      "id": "leggings",
+      "src": "female_sportsuit01",
+      "label": "Leggings"
+    },
+    {
+      "id": "skirt",
+      "src": "female_elegantsuit01",
+      "label": "Skirt"
+    },
+    {
+      "id": "trousers",
+      "src": "male_elegantsuit01",
+      "label": "Trousers"
+    }
+  ],
+  "shoes": [
+    {
+      "id": "shoes01",
+      "label": "Loafers"
+    },
+    {
+      "id": "shoes02",
+      "label": "Worn sneakers"
+    },
+    {
+      "id": "shoes03",
+      "label": "Boots"
+    },
+    {
+      "id": "shoes04",
+      "label": "Dress shoes"
+    },
+    {
+      "id": "shoes05",
+      "label": "Runners"
+    },
+    {
+      "id": "shoes06",
+      "label": "Court shoes"
+    }
+  ],
+  "hats": [
+    {
+      "id": "fedora01",
+      "label": "Fedora"
+    }
+  ]
+}

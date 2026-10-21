@@ -9,7 +9,7 @@ Pipeline (Python 3.13, run from this folder):
 ```sh
 export MH_WORK=/tmp/mh/          # scratch dir
 python -m venv $MH_WORK/venv && $MH_WORK/venv/bin/pip install bpy==5.2.2 pillow
-git clone --depth 1 https://github.com/makehumancommunity/mpfb2 /tmp/mpfb2
+git clone https://github.com/makehumancommunity/mpfb2 /tmp/mpfb2 && git -C /tmp/mpfb2 checkout b1a2dc98776da9d1eea751b159d42cf61778fe2e
 export MPFB_SRC=/tmp/mpfb2/src/mpfb
 curl -L -o $MH_WORK/sys.zip https://files.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip
 unzip -q $MH_WORK/sys.zip -d $MH_WORK/sysassets
@@ -27,3 +27,32 @@ $MH_WORK/venv/bin/python repack.py brock coral voss   # JPEG textures -> public/
 `generate.py` holds each character's body sliders (gender, age, muscle,
 weight, height…), skin, hair and clothes. The game drives the `game_engine`
 rig with its own IK (`src/humanrider.ts`).
+
+## Create-a-skater models
+
+`public/riders/custom_m.glb` and `custom_f.glb` are modular: one body per
+gender with every hair, hat, top, bottom and shoe option fitted to it and
+sharing one skeleton. The game hides the parts a player didn't pick and tints
+the rest (`src/humanrider.ts`, `src/custom.ts`, `src/creator.ts`).
+
+The option list is `src/data/skater-options.json`. It is the single source of
+truth: `generate_custom.py` builds whatever it lists and the game's menus read
+the same file. Tops and bottoms name a MakeHuman suit (`src`); suits are split
+into their loose shirt / trousers parts, so any top goes with any bottom.
+
+```sh
+# same setup as above (pin MPFB so rebuilds are reproducible)
+git clone https://github.com/makehumancommunity/mpfb2 /tmp/mpfb2 && git -C /tmp/mpfb2 checkout b1a2dc98776da9d1eea751b159d42cf61778fe2e
+$MH_WORK/venv/bin/python setup.py
+$MH_WORK/venv/bin/python generate_custom.py     # ONLY=m or ONLY=f for one body
+$MH_WORK/venv/bin/python repack_custom.py m f   # greyscale textures, logos painted out -> public/riders/
+```
+
+`repack_custom.py` turns skin, cloth, shoe and hair textures greyscale so a
+material colour multiplied on top reads as that colour, and paints the logos
+and orange trim out of the tees. To add an option: add the asset to the JSON,
+re-run the two scripts, commit the JSON and both GLBs. No `.blend` files are
+needed: the scripts rebuild everything from the CC0 asset pack.
+
+Nodes are named `body`, `eyes`, `brows`, `lashes`, `hair_*`, `hat_*`,
+`top_*`, `bottom_*` and `shoes_*`; each has its own material named the same.

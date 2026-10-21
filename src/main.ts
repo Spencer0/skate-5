@@ -92,13 +92,13 @@ const career = new Career();
 applyStats(career.effectiveStats());
 board.setDeck(career.data.deck);
 const options = loadOptions();
-let rider = new HumanRider(career.data.rider ?? 'brock');
+let rider = new HumanRider(career.data.rider ?? 'brock', career.customLook());
 rider.setStyle(options.rider);
 scene.add(rider.group);
 function swapRider() {
   scene.remove(rider.group);
   rider.dispose();
-  rider = new HumanRider(career.data.rider ?? 'brock');
+  rider = new HumanRider(career.data.rider ?? 'brock', career.customLook());
   rider.setStyle(options.rider);
   scene.add(rider.group);
 }
