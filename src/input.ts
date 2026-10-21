@@ -15,9 +15,19 @@ interface Stick {
 }
 
 /**
+ * Touch screens get two thumbs: the trick stick lives on the right and the
+ * left steers. A fine pointer (mouse, trackpad) has only one hand on it, so
+ * there the trick stick starts from anywhere. Pointer capability is the signal,
+ * not screen size: a narrow desktop window is still a mouse.
+ */
+const finePointer = typeof matchMedia === 'function' ? matchMedia('(pointer: fine)') : null;
+export const trickAnywhere = () => finePointer?.matches ?? false;
+
+/**
  * Two floating thumb sticks:
  *  - left half: steer (drag), push (tap), hold up = keep pushing, hold down = powerslide
  *  - right half: the flick trick stick. Tap in the air to catch.
+ *  - fine pointer: the trick stick takes any press, so there is no steer side to pick.
  */
 export class Input {
   steer = 0;
@@ -76,7 +86,7 @@ export class Input {
     } catch {
       /* ignore */
     }
-    const isLeft = e.clientX < window.innerWidth * 0.5;
+    const isLeft = !trickAnywhere() && e.clientX < window.innerWidth * 0.5;
     const s: Stick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: 0, y: 0, t0: this.now(), travel: 0, samples: [] };
     s.samples.push({ t: s.t0, x: 0, y: 0 });
     if (isLeft) {
