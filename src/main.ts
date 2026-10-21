@@ -4,7 +4,7 @@ import { Terrain } from './terrain';
 import { buildMeshes, makeMaterials } from './park';
 import { LEVELS, LevelData, GapDef, GoalDef, inRect, V3 } from './levels';
 import { BoardModel, DECK } from './board';
-import { Skater, SkaterEvent, TrickRecord, Quality } from './skater';
+import { Skater, SkaterEvent, TrickRecord, Quality, GRAB_LIFT } from './skater';
 import { Input } from './input';
 import { grabForDirection, GRABS } from './tricks';
 import { Audio } from './audio';
@@ -1317,6 +1317,12 @@ function grabZone(): import('./input').GrabZone | null {
         across = d.dot(new THREE.Vector2(ts.x - bs.x, ts.y - bs.y));
       }
       return grabForDirection(along, across);
+    },
+    spot: (idx) => {
+      const gd = GRABS[idx];
+      const lift = skater.up.clone().multiplyScalar(0.12 + GRAB_LIFT * 0.5);
+      const p = base.clone().add(lift).addScaledVector(fwd, gd.x).addScaledVector(toe, gd.z * 1.2).project(camera);
+      return { x: (p.x * 0.5 + 0.5) * W, y: (-p.y * 0.5 + 0.5) * H };
     },
   };
 }
