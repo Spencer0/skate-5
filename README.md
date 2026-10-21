@@ -4,21 +4,34 @@ A mobile-first skateboarding game with Skate-style flick-stick tricks, built wit
 Three.js. Top-down-ish chase camera, a big concrete park, and a board with a
 Claude/Anthropic graphic on the bottom.
 
-## Story Mode
+## Career mode
 
-Three chapters of Tony Hawk-style goals. Complete enough goals in a chapter to
-unlock the next; progress saves on your device.
+A Tony Hawk-style career across four chapters, told through letterboxed
+cutscenes with a small cast: Mara (your crew leader), Dex (the rival), Kai
+Moreno (Spark Skateboards team manager) and Officer Pete (plaza security).
+
+- **Runs:** each session is a 2:00 run. Goals save the moment you land them.
+  When the clock hits zero your current line gets to finish.
+- **Goals (≈13 per spot):** High / Pro / Sick score, collect C-L-A-U-D-E in one run,
+  find the secret tape, knock over 5 signs / cones / beach balls, named gaps
+  (optionally with a specific trick), grind distances, big air, combos.
+  Every goal has a hint and most have a **Show** camera preview.
+- **Unlocks:** finish enough goals to open the next chapter. Each goal is a
+  stat point (Speed, Ollie, Spin, Flip, Rail Balance). Goal totals unlock deck
+  graphics (Haiku, Sonnet, Opus, Spark, Constitution, Classic Gold) and special tricks.
+- **Specials:** landing tricks fills the special meter; when it glows you get
+  a speed boost and the ★ button fires your equipped special (catch it like any flip).
+- **Scoring:** combos multiply by trick count, gaps add bonuses, and repeating
+  the same trick in a run scores less each time.
 
 | Chapter | Spot | Highlights |
 | --- | --- | --- |
-| 1 | **Claude Park** | Jump Box gap, 6-stair, long flat rail, vert air, bowl |
-| 2 | **Fountain Plaza** | Gap over the fountain, grind a lap of the fountain rim, 7-stair handrail, planter gap |
-| 3 | **The Pier** | Pier Gap over rotten planks, a 250 m rail wrapping the whole pier, promenade stairs — fall in and it's a splash |
+| 1 | **Claude Park** | Jump Box gap, kickflip the 6-stair, spine transfer, vert air, bowl |
+| 2 | **Fountain Plaza** | Gap over the fountain, rim lap, slide the 7-stair handrail, planter gap |
+| 3 | **The Pier** | Pier Gap over rotten planks, 100 m on the 250 m pier rail, splash zones |
+| 4 | **The Claude Classic** | Contest: 3 heats × 60 s vs CPU riders, best two count, medals, ending + credits |
 
-Every chapter also hides the letters **C-L-A-U-D-E** (orange dots on the
-minimap) and has a combo-score goal. Gaps are scored THPS-style: take off in
-one spot, land cleanly in another. **Free Skate** lets you ride any unlocked
-spot with no goals.
+**Free Skate** rides any unlocked spot with no clock.
 
 ## Controls
 
@@ -79,8 +92,10 @@ Code map:
 - `src/input.ts` – floating touch sticks + keyboard
 - `src/board.ts`, `src/textures.ts` – board model and procedural textures
 - `src/audio.ts` – procedural WebAudio (no sound files)
-- `src/levels/` – the three story spots, their gaps, letters and goals
-- `src/story.ts`, `src/menu.ts` – goal tracking, saved progress, menus
+- `src/levels/` – the four spots: layout, gaps, collectibles, goals and cutscene scripts
+- `src/career.ts` – save data, stats, unlocks, goal tracking
+- `src/ui.ts`, `src/cutscene.ts`, `src/cast.ts` – menus, cutscene player, characters
+- `src/props.ts` – letters, tapes and knockable objects
 - `src/main.ts` – loop, level loading, camera, combo scoring, effects
 
 ## Deploying to GitHub Pages
