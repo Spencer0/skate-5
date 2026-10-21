@@ -598,7 +598,8 @@ function frame(now: number) {
   hud.showCombo(combo.names, combo.points + (skater.grind ? skater.grind.points : 0), combo.mult + (liveGrind ? 1 : 0), liveGrind);
   hud.balance(skater.mode === 'grind' && skater.grind ? skater.grind.balance : null);
   hud.setSpeed(skater.speed * 3.6);
-  hud.setHint(started ? tutorialHint() : null);
+  const uncaught = skater.mode === 'air' && skater.trick.active && !skater.trick.caught;
+  hud.setHint(started ? (uncaught && !tutorial.done ? 'TAP to catch it!' : tutorialHint()) : null);
   minimap.draw(skater.mode === 'bail' ? skater.bpos.x : skater.pos.x, skater.mode === 'bail' ? skater.bpos.z : skater.pos.z, cam.yaw);
 
   if (!debug.freeCam) updateCamera(dt);

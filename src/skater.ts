@@ -548,7 +548,7 @@ export class Skater {
     this.bodySpin = 0;
     this.airTime = 0;
     // tail pops pitch the nose up; nose pops pitch it down
-    const sgn = (spec.nollie ? -1 : 1) * (fakie ? -1 : 1);
+    const sgn = spec.nollie ? -1 : 1;
     this.popPitchV += sgn * 10.5;
     this.events.push({ type: 'pop', nollie: spec.nollie, fakie, fromGrind });
     this.startTrick(spec);
