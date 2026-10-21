@@ -118,6 +118,7 @@ export class Skater {
   steerS = 0;
   pushT = 0;
   pushCd = 0;
+  pushQueued = -1; // >= 0: a push waiting for a push-revert pivot to finish
   braking = false;
   slideYaw = 0; // visual powerslide yaw
 
@@ -220,6 +221,7 @@ export class Skater {
         this.bailStep(dt);
         break;
     }
+    if (this.mode !== 'ground') this.pushQueued = -1;
     if (this.mode !== 'bail') this.settleTrick(dt);
   }
 
@@ -272,17 +274,22 @@ export class Skater {
     // carving bleeds a little speed
     this.vel.multiplyScalar(1 - Math.abs(this.steerS) * 0.05 * dt);
 
-    // push
+    // push (riding fakie: revert to forward first, then push once the pivot lands)
     this.pushCd -= dt;
-    if ((inp.push || (inp.pushHold && this.pushT <= 0)) && this.pushCd <= 0 && !inp.brake && n.y > 0.94) {
-      this.pushT = TUNE.pushTime;
-      this.pushCd = TUNE.pushCooldown;
-      this.events.push({ type: 'push' });
-      this.squashV -= 0.35;
+    const wantPush = (inp.push || (inp.pushHold && this.pushT <= 0)) && !inp.brake && n.y > 0.94;
+    if (this.pushQueued >= 0) {
+      this.pushQueued -= dt;
+      if (inp.brake) this.pushQueued = -1;
+      else if (this.pushQueued < 0) this.startPush();
+    } else if (wantPush && vf < -0.3) {
+      this.revert();
+      this.pushQueued = 0.22;
+    } else if (wantPush && this.pushCd <= 0) {
+      this.startPush();
     }
     if (this.pushT > 0) {
       this.pushT -= dt;
-      const dir = vf < -0.3 ? -1 : 1;
+      const dir = this.vel.dot(this.fwd) < -0.3 ? -1 : 1;
       const s = this.vel.length();
       const f = Math.max(0, 1 - s / (TUNE.pushMaxSpeed + this.boost));
       // the push ramps in and out for a smooth kick
@@ -344,11 +351,7 @@ export class Skater {
     // revert: rolled back down a ramp backwards -> pivot to face forward
     if (n2.y < 0.85) this.lastSteep = this.time;
     if (this.autoRevert && n2.y > 0.97 && this.time - this.lastSteep < 1.2 && this.fwdSpeed < -1.2 && !this.braking) {
-      this.fwd.negate();
-      this.yawOffset += Math.PI * (this.steerS < -0.1 ? -1 : 1);
-      this.yawDecay = 9;
-      this.lastSteep = -10;
-      this.events.push({ type: 'revert' });
+      this.revert();
     }
 
     // safe spot for respawn
@@ -360,6 +363,22 @@ export class Skater {
         this.safeFwd.set(this.fwd.x, 0, this.fwd.z).normalize();
       }
     }
+  }
+
+  private startPush() {
+    this.pushT = TUNE.pushTime;
+    this.pushCd = TUNE.pushCooldown;
+    this.events.push({ type: 'push' });
+    this.squashV -= 0.35;
+  }
+
+  /** Pivot 180 on the back wheels to face the direction of travel. */
+  private revert() {
+    this.fwd.negate();
+    this.yawOffset += Math.PI * (this.steerS < -0.1 ? -1 : 1);
+    this.yawDecay = 9;
+    this.lastSteep = -10;
+    this.events.push({ type: 'revert' });
   }
 
   private isClear(x: number, z: number) {

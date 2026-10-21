@@ -198,3 +198,17 @@ test('auto-revert can be turned off to ride fakie', () => {
   assert.ok(!types(events).includes('revert'));
   assert.ok(sk.fwdSpeed < 0);
 });
+
+test('pushing while riding fakie reverts first, then pushes forward', () => {
+  const { sk, events, run } = rig(0, 40, 0, -3);
+  sk.fwd.negate(); // rolling backwards on the flat
+  run(0.1);
+  assert.ok(sk.fwdSpeed < 0);
+  run(1 / 240, { push: true });
+  assert.deepEqual(types(events).filter((t) => t === 'revert' || t === 'push'), ['revert']);
+  assert.ok(sk.fwdSpeed > 0, 'facing the way it rolls');
+  const before = sk.vel.length();
+  run(0.6);
+  assert.deepEqual(types(events).filter((t) => t === 'revert' || t === 'push'), ['revert', 'push']);
+  assert.ok(sk.fwdSpeed > before, 'push speeds up the way it rolls');
+});
