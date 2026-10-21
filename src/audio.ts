@@ -161,6 +161,15 @@ export class Audio {
     this.burst({ dur: 0.25, freq: 900, q: 0.8, gain: 0.12 * strength, attack: 0.08 });
   }
 
+  /** Wheels rolling over an expansion joint: a soft double clack. */
+  joint(speed: number) {
+    if (speed < 0.8) return;
+    const g = Math.min(0.5, 0.08 + speed * 0.045);
+    this.burst({ dur: 0.035, freq: 900, q: 1.5, gain: g });
+    // back wheels cross the joint a wheelbase later
+    this.burst({ dur: 0.035, freq: 850, q: 1.5, gain: g * 0.8, delay: Math.min(0.2, 0.37 / speed) });
+  }
+
   spinTick() {
     this.burst({ dur: 0.05, freq: 1500, q: 3, gain: 0.18 });
   }

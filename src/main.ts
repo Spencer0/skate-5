@@ -456,6 +456,7 @@ const q = new THREE.Quaternion();
 const p = new THREE.Vector3();
 let lastDist = 0;
 let sparkAcc = 0;
+const joint = { x: Infinity, z: Infinity };
 
 // adaptive resolution: drop pixel ratio if the device can't hold ~50fps
 const perf = { t: 0, frames: 0, ratio: Math.min(window.devicePixelRatio || 1, 2) };
@@ -576,6 +577,15 @@ function frame(now: number) {
   }
   sparks.update(dt);
   dust.update(dt);
+
+  // expansion joints click under the wheels on the plaza concrete
+  if (skater.mode === 'ground' && Math.abs(skater.pos.y) < 0.001 && skater.groundN.y > 0.999) {
+    const jx = Math.floor(skater.pos.x / 4);
+    const jz = Math.floor(skater.pos.z / 4);
+    if ((jx !== joint.x || jz !== joint.z) && joint.x !== Infinity) audio.joint(skater.speed);
+    joint.x = jx;
+    joint.z = jz;
+  } else joint.x = joint.z = Infinity;
 
   // audio
   const grindKind = skater.mode === 'grind' && skater.grind ? (skater.grind.family === 'slide' ? 'slide' : 'grind') : 'none';

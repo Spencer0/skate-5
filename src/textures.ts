@@ -120,8 +120,9 @@ export function rampTexture() {
 export function boxTexture() {
   const S = 256;
   const { c, g } = canvas(S, S);
-  noiseFill(g, S, S, [180, 176, 168], 14, 21);
-  blotches(g, S, S, 12, 'rgba(60,50,40,0.1)', 60, 22);
+  noiseFill(g, S, S, [200, 194, 184], 10, 21);
+  blotches(g, S, S, 10, 'rgba(60,50,40,0.035)', 70, 22);
+  blotches(g, S, S, 8, 'rgba(255,250,240,0.05)', 60, 23);
   return tex(c);
 }
 

@@ -140,6 +140,7 @@ export class Skater {
   wobble = 0;
   lean = 0;
   yawOffset = 0; // visual-only: eases out landing / lock snaps
+  posOffset = new THREE.Vector3(); // visual-only: eases the magnet snap onto rails
   carry = false; // holding forward: carry over lips instead of vert assist
 
   // bail
@@ -221,6 +222,7 @@ export class Skater {
     this.squash += this.squashV * dt;
     this.wobble *= Math.exp(-dt * 3);
     this.yawOffset *= Math.exp(-dt * 11);
+    this.posOffset.multiplyScalar(Math.exp(-dt * 16));
   }
 
   /* ------------------------------ ground --------------------------- */
@@ -773,6 +775,7 @@ export class Skater {
         this.bail('uncaught', 3);
         return true;
       }
+      this.posOffset.set(next.x - cx, next.y - ry, next.z - cz);
       this.startGrind(r, s, along);
       return true;
     }
@@ -1017,6 +1020,8 @@ export class Skater {
     this.popped = false;
     this.alignTarget = null;
     this.popPitch = this.popPitchV = this.squash = this.squashV = 0;
+    this.posOffset.set(0, 0, 0);
+    this.yawOffset = 0;
     this.events.push({ type: 'respawn' });
   }
 
@@ -1071,7 +1076,7 @@ export class Skater {
   /** Root position for the board model. */
   visualPos(out: THREE.Vector3) {
     if (this.mode === 'bail') return out.copy(this.bpos).addScaledVector(UP, -DECK.deckY);
-    out.copy(this.pos);
+    out.copy(this.pos).add(this.posOffset);
     if (this.mode === 'grind' && this.grind) {
       const g = this.grind;
       // slides sit the deck on the rail; grinds sit on the trucks

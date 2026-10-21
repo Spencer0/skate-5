@@ -709,6 +709,45 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials): 
     group.add(m);
   }
 
+  // Ground zones: tinted concrete pads with painted borders break up the plaza
+  const zones: [number, number, number, number, number][] = [
+    // x0, z0, x1, z1, tint
+    [8, -10, 40, 30, 0xe4dccf],
+    [-72, -22, -40, 18, 0xd2ccc2],
+    [-12, -42, 30, -22, 0xefe6d6],
+    [-44, 44, -8, 70, 0xddd5c8],
+  ];
+  const lineMat = new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -3 });
+  for (const [x0, z0, x1, z1, tint] of zones) {
+    const w = x1 - x0;
+    const d = z1 - z0;
+    const geo = new THREE.PlaneGeometry(w, d);
+    geo.rotateX(-Math.PI / 2);
+    const uv = geo.getAttribute('uv');
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / 4, (uv.getY(i) * d) / 4);
+    const m = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({ map: mats.concrete.map, color: tint, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1 }),
+    );
+    m.position.set((x0 + x1) / 2, 0.002, (z0 + z1) / 2);
+    m.receiveShadow = true;
+    group.add(m);
+    const lw = 0.18;
+    for (const [cx, cz, sx, sz] of [
+      [(x0 + x1) / 2, z0, w, lw],
+      [(x0 + x1) / 2, z1, w, lw],
+      [x0, (z0 + z1) / 2, lw, d],
+      [x1, (z0 + z1) / 2, lw, d],
+    ]) {
+      const lg = new THREE.PlaneGeometry(sx, sz);
+      lg.rotateX(-Math.PI / 2);
+      const l = new THREE.Mesh(lg, lineMat);
+      l.position.set(cx, 0.004, cz);
+      l.receiveShadow = true;
+      group.add(l);
+    }
+  }
+
   // Decor: painted spark on the plaza near spawn
   const sparkMat = new THREE.MeshStandardMaterial({ map: T.groundSparkTexture(), transparent: true, roughness: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   const spark = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), sparkMat);
