@@ -54,5 +54,15 @@ and orange trim out of the tees. To add an option: add the asset to the JSON,
 re-run the two scripts, commit the JSON and both GLBs. No `.blend` files are
 needed: the scripts rebuild everything from the CC0 asset pack.
 
+**Body shape** (weight, muscle, shoulders, chest, waist, hips) is baked as glTF
+morph targets on the body, tops and bottoms. `generate_custom.py` rebuilds the
+whole character once per slider end (`weight-lo`, `weight-hi`, …) using
+MakeHuman macro values or detail targets, so every garment is re-fitted to the
+changed body; the vertex order is identical across builds, so the differences
+become morph targets. The game blends them with sliders (`reshape` in
+`src/humanrider.ts`). The sliders are listed under `shape` in the JSON. The
+skeleton is not morphed, so height is a plain uniform scale and shapes stay
+within what the bones can follow. A full run takes about 6 minutes per body.
+
 Nodes are named `body`, `eyes`, `brows`, `lashes`, `hair_*`, `hat_*`,
 `top_*`, `bottom_*` and `shoes_*`; each has its own material named the same.

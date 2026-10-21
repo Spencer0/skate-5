@@ -156,5 +156,72 @@
       "id": "fedora01",
       "label": "Fedora"
     }
+  ],
+  "shape": [
+    {
+      "id": "weight",
+      "label": "Weight",
+      "lo": "Slim",
+      "hi": "Heavy",
+      "macro": "weight"
+    },
+    {
+      "id": "muscle",
+      "label": "Muscle",
+      "lo": "Soft",
+      "hi": "Athletic",
+      "macro": "muscle"
+    },
+    {
+      "id": "shoulders",
+      "label": "Shoulders",
+      "lo": "Narrow",
+      "hi": "Broad",
+      "details": {
+        "lo": [
+          "torso-vshape-decr"
+        ],
+        "hi": [
+          "torso-vshape-incr"
+        ]
+      }
+    },
+    {
+      "id": "chest",
+      "label": "Chest",
+      "lo": "Flat",
+      "hi": "Full",
+      "macro": "cupsize"
+    },
+    {
+      "id": "waist",
+      "label": "Waist",
+      "lo": "Narrow",
+      "hi": "Wide",
+      "details": {
+        "lo": [
+          "measure-waist-circ-decr"
+        ],
+        "hi": [
+          "measure-waist-circ-incr"
+        ]
+      }
+    },
+    {
+      "id": "hips",
+      "label": "Hips",
+      "lo": "Narrow",
+      "hi": "Wide",
+      "details": {
+        "lo": [
+          "hip-scale-horiz-decr",
+          "buttocks-volume-decr"
+        ],
+        "hi": [
+          "hip-scale-horiz-incr",
+          "buttocks-volume-incr"
+        ]
+      }
+    }
   ]
 }
