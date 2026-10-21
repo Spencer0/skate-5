@@ -431,6 +431,10 @@ export interface ParkMaterials {
   wall: THREE.MeshStandardMaterial;
   metal: THREE.MeshStandardMaterial;
   clay: THREE.MeshStandardMaterial;
+  wood: THREE.MeshStandardMaterial;
+  stone: THREE.MeshStandardMaterial;
+  water: THREE.MeshStandardMaterial;
+  facade: THREE.MeshStandardMaterial;
 }
 
 export function makeMaterials(): ParkMaterials {
@@ -445,10 +449,16 @@ export function makeMaterials(): ParkMaterials {
     wall: new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.95, side: THREE.DoubleSide }),
     metal: new THREE.MeshStandardMaterial({ color: 0xc9c6c0, roughness: 0.3, metalness: 0.85 }),
     clay: new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.55, metalness: 0.2 }),
+    wood: new THREE.MeshStandardMaterial({ map: T.plankTexture(), roughness: 0.85, side: THREE.DoubleSide }),
+    stone: new THREE.MeshStandardMaterial({ map: T.paverTexture(), roughness: 0.9, side: THREE.DoubleSide }),
+    water: new THREE.MeshStandardMaterial({ map: T.waterTexture(), color: 0xffffff, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.9 }),
+    facade: new THREE.MeshStandardMaterial({ map: T.facadeTexture(), roughness: 0.9 }),
   };
 }
 
-const TEX_SCALE: Record<Material, number> = { concrete: 4, ramp: 3, box: 1.5, paint: 4, wall: 4 };
+const TEX_SCALE: Record<Material, number> = { concrete: 4, ramp: 3, box: 1.5, paint: 4, wall: 4, wood: 3, stone: 3 };
+
+let SKIRT_FLOOR = 0;
 
 function elementGeometry(e: Element): THREE.BufferGeometry {
   const k = knots.get(e) ?? { uK: lin(-e.hx, e.hx, 2), vK: lin(-e.hz, e.hz, 2) };
@@ -525,9 +535,9 @@ function elementGeometry(e: Element): THREE.BufferGeometry {
 }
 
 function skirtGeometry(e: Element, edge: [number, number][], sc: number) {
-  let maxH = 0;
+  let maxH = -Infinity;
   for (const [u, v] of edge) maxH = Math.max(maxH, e.h(u, v));
-  if (maxH < 0.01) return null;
+  if (maxH - SKIRT_FLOOR < 0.01) return null;
   const pos: number[] = [];
   const uv: number[] = [];
   const idx: number[] = [];
@@ -538,8 +548,8 @@ function skirtGeometry(e: Element, edge: [number, number][], sc: number) {
     const x = e.cx + u * e.c - v * e.s;
     const z = e.cz + u * e.s + v * e.c;
     const h = e.h(u, v);
-    pos.push(x, h, z, x, -0.02, z);
-    uv.push(along / sc, h / sc, along / sc, 0);
+    pos.push(x, h, z, x, SKIRT_FLOOR - 0.02, z);
+    uv.push(along / sc, h / sc, along / sc, SKIRT_FLOOR / sc);
   }
   for (let i = 0; i < edge.length - 1; i++) {
     const a = i * 2;
@@ -581,8 +591,9 @@ function stairsGeometry(e: Element): THREE.BufferGeometry {
   return geo;
 }
 
-export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials): THREE.Group {
+export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, opts: { ground?: boolean } = {}): THREE.Group {
   const group = new THREE.Group();
+  SKIRT_FLOOR = t.floor;
 
   // Ground with bowl holes
   const G = 140;
@@ -603,7 +614,28 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials): 
   for (let i = 0; i < guv.count; i++) guv.setXY(i, guv.getX(i) / 4, guv.getY(i) / 4);
   const ground = new THREE.Mesh(groundGeo, mats.concrete);
   ground.receiveShadow = true;
-  group.add(ground);
+  if (opts.ground !== false) group.add(ground);
+
+  // Water
+  for (const w of t.water) {
+    let geo: THREE.BufferGeometry;
+    if (w.circle) {
+      geo = new THREE.CircleGeometry(w.circle.r, 48);
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(w.circle.cx, w.y, w.circle.cz);
+    } else {
+      const r = w.rect!;
+      geo = new THREE.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0);
+      geo.rotateX(-Math.PI / 2);
+      geo.translate((r.x0 + r.x1) / 2, w.y, (r.z0 + r.z1) / 2);
+    }
+    const p = geo.getAttribute('position');
+    const uv = geo.getAttribute('uv');
+    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 6, p.getZ(i) / 6);
+    const m = new THREE.Mesh(geo, mats.water);
+    m.receiveShadow = true;
+    group.add(m);
+  }
 
   // Bowls
   for (const b of t.bowls) {
@@ -639,7 +671,7 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials): 
   // Elements, batched by material
   const byMat = new Map<Material, THREE.BufferGeometry[]>();
   for (const e of t.elements) {
-    const g = e.custom ? stairsGeometry(e) : elementGeometry(e);
+    const g = e.meshFn ? e.meshFn() : e.custom ? stairsGeometry(e) : elementGeometry(e);
     const arr = byMat.get(e.mat) ?? [];
     arr.push(g.index ? g.toNonIndexed() : g);
     byMat.set(e.mat, arr);
@@ -650,7 +682,7 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials): 
       for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
     }
     const merged = mergeGeometries(geos, false)!;
-    const material = mat === 'ramp' ? mats.ramp : mat === 'wall' ? mats.wall : mats.box;
+    const material = { ramp: mats.ramp, wall: mats.wall, wood: mats.wood, stone: mats.stone, box: mats.box, concrete: mats.concrete, paint: mats.box }[mat];
     const m = new THREE.Mesh(merged, material);
     m.castShadow = mat !== 'wall';
     m.receiveShadow = true;
@@ -708,7 +740,11 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials): 
     m.castShadow = true;
     group.add(m);
   }
+  return group;
+}
 
+/** Claude Park set dressing: painted zones, the floor spark, billboard, trees. */
+export function parkDecor(group: THREE.Group, mats: ParkMaterials) {
   // Ground zones: tinted concrete pads with painted borders break up the plaza
   const zones: [number, number, number, number, number][] = [
     // x0, z0, x1, z1, tint

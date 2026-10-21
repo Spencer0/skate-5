@@ -10,6 +10,13 @@ export class Minimap {
 
   constructor(parent: HTMLElement, terrain: Terrain, size = 96) {
     this.size = size;
+    // fit the map to whatever is rideable
+    let ext = 20;
+    for (const e of terrain.elements) {
+      if (e.mat === 'wall') continue;
+      ext = Math.max(ext, Math.abs(e.minX), Math.abs(e.maxX), Math.abs(e.minZ), Math.abs(e.maxZ));
+    }
+    this.half = Math.min(110, ext + 4);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'minimap';
@@ -36,6 +43,22 @@ export class Minimap {
     g.beginPath();
     g.roundRect(0, 0, S, S, 12);
     g.fill();
+    g.save();
+    g.clip();
+    for (const w of t.water) {
+      g.fillStyle = 'rgba(63,138,156,0.45)';
+      if (w.rect) {
+        const a = this.toMap(Math.max(w.rect.x0, -this.half), Math.max(w.rect.z0, -this.half));
+        const b = this.toMap(Math.min(w.rect.x1, this.half), Math.min(w.rect.z1, this.half));
+        g.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
+      } else if (w.circle) {
+        const [cx, cz] = this.toMap(w.circle.cx, w.circle.cz);
+        g.beginPath();
+        g.arc(cx, cz, (w.circle.r * S) / (this.half * 2), 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    g.restore();
     const s = S / (this.half * 2);
     for (const e of t.elements) {
       if (e.mat === 'wall') continue;
@@ -43,7 +66,7 @@ export class Minimap {
       const [cx, cz] = this.toMap(e.cx, e.cz);
       g.translate(cx, cz);
       g.rotate(e.rot);
-      g.fillStyle = e.mat === 'ramp' ? 'rgba(184,92,62,0.55)' : 'rgba(20,20,19,0.35)';
+      g.fillStyle = e.mat === 'ramp' ? 'rgba(184,92,62,0.55)' : e.mat === 'wood' ? 'rgba(150,110,70,0.55)' : e.mat === 'concrete' ? 'rgba(20,20,19,0.18)' : 'rgba(20,20,19,0.35)';
       g.fillRect(-e.hx * s, -e.hz * s, e.hx * 2 * s, e.hz * 2 * s);
       g.restore();
     }
@@ -67,10 +90,25 @@ export class Minimap {
     }
   }
 
-  draw(x: number, z: number, yaw: number) {
+  destroy() {
+    this.canvas.remove();
+  }
+
+  draw(x: number, z: number, yaw: number, dots: { x: number; z: number }[] = []) {
     const g = this.ctx;
     g.clearRect(0, 0, this.size, this.size);
     g.drawImage(this.base, 0, 0, this.size, this.size);
+    // uncollected letters
+    for (const d of dots) {
+      const [dx, dz] = this.toMap(d.x, d.z);
+      g.fillStyle = '#D97757';
+      g.strokeStyle = '#FAF9F5';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.arc(dx, dz, 3, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    }
     const [px, pz] = this.toMap(x, z);
     g.save();
     g.translate(px, pz);

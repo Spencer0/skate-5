@@ -214,6 +214,29 @@ export class Audio {
     this.burst({ dur: 0.12, freq: 380, q: 1.5, gain: Math.min(1, impact * 0.3) });
   }
 
+  /** Goal complete: a little rising arpeggio. */
+  goal() {
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((f, i) => this.tone(f, 0.25, 0.12, 'triangle', 1, i * 0.09));
+    this.tone(1568, 0.5, 0.06, 'sine', 1, 0.36);
+  }
+
+  letter() {
+    this.tone(988, 0.12, 0.12, 'triangle', 1);
+    this.tone(1319, 0.2, 0.1, 'triangle', 1, 0.07);
+  }
+
+  gap() {
+    this.tone(660, 0.16, 0.08, 'sine', 1);
+    this.tone(880, 0.22, 0.08, 'sine', 1, 0.08);
+  }
+
+  splash() {
+    this.burst({ dur: 0.6, freq: 700, q: 0.6, gain: 1.4, attack: 0.01 });
+    this.burst({ dur: 0.9, freq: 2600, q: 0.8, gain: 0.5, delay: 0.05, attack: 0.05 });
+    this.burst({ dur: 0.3, freq: 180, q: 1, gain: 1.2, type: 'lowpass' });
+  }
+
   combo(mult: number) {
     const base = 520;
     this.tone(base, 0.12, 0.09, 'sine', 1);

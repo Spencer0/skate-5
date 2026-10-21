@@ -21,9 +21,9 @@ export class Hud {
   private hint: HTMLElement;
   private speedo: HTMLElement;
   guide: HTMLElement;
-  soundBtn: HTMLButtonElement;
-  guideBtn: HTMLButtonElement;
-  resetBtn: HTMLButtonElement;
+  goalsBtn: HTMLButtonElement;
+  menuBtn: HTMLButtonElement;
+  private toasts: HTMLElement;
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'hud', parent);
@@ -32,14 +32,15 @@ export class Hud {
     this.score = el('div', 'score', scoreBox, '0');
     this.best = el('div', 'best', scoreBox, 'best combo 0');
     const btns = el('div', 'hud-btns', top);
-    this.guideBtn = el('button', 'hud-btn', btns, 'Tricks') as HTMLButtonElement;
-    this.soundBtn = el('button', 'hud-btn', btns, 'Sound on') as HTMLButtonElement;
-    this.resetBtn = el('button', 'hud-btn', btns, 'Reset') as HTMLButtonElement;
+    this.goalsBtn = el('button', 'hud-btn goals-chip', btns, 'Goals') as HTMLButtonElement;
+    this.menuBtn = el('button', 'hud-btn', btns, 'Menu') as HTMLButtonElement;
+    for (const b of [this.goalsBtn, this.menuBtn]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
 
     this.combo = el('div', 'combo', this.root);
     this.comboNames = el('div', 'combo-names', this.combo);
     this.comboPts = el('div', 'combo-pts', this.combo);
     this.popups = el('div', 'popups', this.root);
+    this.toasts = el('div', 'toasts', this.root);
 
     this.balanceWrap = el('div', 'balance', this.root);
     el('div', 'balance-bar', this.balanceWrap);
@@ -55,6 +56,19 @@ export class Hud {
   setScore(total: number, best: number) {
     this.score.textContent = total.toLocaleString();
     this.best.textContent = `best combo ${best.toLocaleString()}`;
+  }
+
+  setGoals(done: number, total: number | null) {
+    this.goalsBtn.style.display = total === null ? 'none' : '';
+    if (total !== null) this.goalsBtn.textContent = `Goals ${done}/${total}`;
+  }
+
+  /** Big banner for goal completions and letters. */
+  toast(title: string, sub: string, kind: 'goal' | 'letter' = 'goal') {
+    const t = el('div', 'toast ' + kind, this.toasts);
+    el('div', 'toast-title', t, title);
+    el('div', 'toast-sub', t, sub);
+    setTimeout(() => t.remove(), kind === 'goal' ? 3200 : 1800);
   }
 
   setSpeed(kmh: number) {

@@ -94,6 +94,7 @@ interface GrindState {
   balance: number;
   drift: number;
   time: number;
+  dist: number; // metres ground on this grind (across chained rails)
   name: string;
   points: number;
 }
@@ -118,6 +119,8 @@ export class Skater {
 
   airTime = 0;
   sinceGround = 0;
+  takeoff = new THREE.Vector3(); // where the current air started (for gaps)
+  maxAirY = 0;
   popped = false;
   followPitch = false;
   alignTarget: THREE.Vector3 | null = null;
@@ -322,6 +325,12 @@ export class Skater {
     const l2 = this.vel.length();
     if (l2 > 1e-5) this.vel.multiplyScalar(s / l2);
 
+    const gw = t.waterAt(this.pos.x, this.pos.z);
+    if (gw !== null && this.pos.y < gw) {
+      this.bail('water', 0);
+      return;
+    }
+
     // safe spot for respawn
     this.safeT += dt;
     if (this.safeT > 0.25) {
@@ -379,6 +388,8 @@ export class Skater {
   private launch(popped: boolean) {
     const n = this.groundN;
     this.mode = 'air';
+    this.takeoff.copy(this.pos);
+    this.maxAirY = this.pos.y;
     this.popped = popped;
     this.airTime = 0;
     this.sinceGround = 0;
@@ -485,6 +496,13 @@ export class Skater {
 
     if (this.time - this.lastGrindExit > 0.2 && this.tryGrind(prev, next)) return;
 
+    if (next.y > this.maxAirY) this.maxAirY = next.y;
+    const wy = t.waterAt(next.x, next.z);
+    if (wy !== null && next.y < wy) {
+      this.pos.copy(next);
+      this.bail('water', 0);
+      return;
+    }
     const hN = t.height(next.x, next.z);
     if (next.y <= hN) {
       const pen = hN - next.y;
@@ -537,6 +555,12 @@ export class Skater {
     } else {
       const n = this.mode === 'ground' ? this.groundN : UP;
       const dir = tmp.copy(n).multiplyScalar(0.4).addScaledVector(UP, 0.6).normalize();
+      // never let the pop push back against the direction of travel (kicker lips)
+      if (dir.x * this.vel.x + dir.z * this.vel.z < 0) {
+        dir.x = 0;
+        dir.z = 0;
+        dir.normalize();
+      }
       if (this.mode === 'air') this.vel.y = Math.max(this.vel.y, 0);
       this.vel.addScaledVector(dir, popV);
       if (this.mode === 'ground') this.launch(true);
@@ -825,6 +849,7 @@ export class Skater {
       balance: (Math.random() - 0.5) * 0.25,
       drift: (Math.random() - 0.5) * 0.6,
       time: 0,
+      dist: 0,
       name: grindName(family, 'none', lip, r.kind === 'ledge'),
       points: 0,
     };
@@ -851,15 +876,16 @@ export class Skater {
     const slide = g.family === 'slide' || (g.family === 'angled' && g.mod !== 'none');
     const acc = -TUNE.gravity * r.dir.y;
     g.spd += acc * dt;
-    const fr = slide ? TUNE.slideFriction : TUNE.grindFriction;
+    const fr = (slide ? TUNE.slideFriction : TUNE.grindFriction) * r.friction;
     const sgn = Math.sign(g.spd);
     g.spd -= sgn * Math.min(Math.abs(g.spd), fr * dt);
     g.t += g.spd * dt;
+    g.dist += Math.abs(g.spd) * dt;
 
     // balance: unstable equilibrium nudged by drift; steer to correct
     g.drift += (Math.random() - 0.5) * 5 * dt;
     g.drift = Math.max(-0.9, Math.min(0.9, g.drift * (1 - 0.4 * dt)));
-    const k = 0.5 + g.time * 0.2;
+    const k = Math.min(1.5, 0.5 + g.time * 0.2);
     g.balance += (g.balance * k + g.drift * 0.5 + inp.steer * 2.6) * dt;
     if (Math.abs(g.balance) > 1) {
       // lost it: slip off the side you were leaning to
@@ -945,6 +971,8 @@ export class Skater {
     this.events.push({ type: 'grindEnd', record: { name: g.name, points: g.points, kind: 'grind' }, popped });
     this.grind = null;
     this.mode = 'air';
+    this.takeoff.copy(this.pos);
+    this.maxAirY = this.pos.y;
     this.popped = false;
     this.airTime = 0;
     // rolling off the end of a rail still allows a late pop (coyote time)
@@ -976,6 +1004,15 @@ export class Skater {
     this.bailT += dt;
     this.bvel.y -= TUNE.gravity * dt;
     this.bpos.addScaledVector(this.bvel, dt);
+    const wy = this.terrain.waterAt(this.bpos.x, this.bpos.z);
+    if (wy !== null && this.bpos.y < wy) {
+      // splash: float and drift
+      this.bpos.y = wy - 0.02;
+      this.bvel.y = Math.max(0, this.bvel.y) * 0.2;
+      this.bvel.x *= Math.exp(-dt * 3);
+      this.bvel.z *= Math.exp(-dt * 3);
+      this.bw.multiplyScalar(Math.exp(-dt * 4));
+    }
     const h = this.terrain.height(this.bpos.x, this.bpos.z) + 0.03;
     if (this.bpos.y < h) {
       const was = this.bpos.y;
@@ -1006,7 +1043,8 @@ export class Skater {
     const heading = tmp2.set(this.fwd.x, 0, this.fwd.z);
     if (heading.lengthSq() < 1e-4) heading.copy(this.safeFwd);
     heading.normalize();
-    if (this.mode === 'bail' && n.y > 0.999 && this.isClear(bx, bz) && Math.abs(bx) < 70 && Math.abs(bz) < 70) {
+    const wet = this.terrain.waterAt(bx, bz) !== null;
+    if (this.mode === 'bail' && !wet && n.y > 0.999 && this.isClear(bx, bz) && Math.abs(bx) < 70 && Math.abs(bz) < 70) {
       this.pos.set(bx, this.terrain.height(bx, bz), bz);
     } else {
       this.pos.copy(this.safePos);

@@ -347,3 +347,152 @@ export function sparkBillboardTexture() {
   g.fillText('S K A T E   P A R K', H * 0.98, H * 0.78);
   return tex(c, false);
 }
+
+/** Weathered boardwalk planks running along u. 1 tile = 3m. */
+export function plankTexture() {
+  const S = 512;
+  const { c, g } = canvas(S, S);
+  const r = rng(61);
+  const rows = 12;
+  const h = S / rows;
+  for (let i = 0; i < rows; i++) {
+    const base = 150 + r() * 30;
+    g.fillStyle = `rgb(${base + 20},${base - 5},${base - 40})`;
+    g.fillRect(0, i * h, S, h);
+    // grain
+    for (let k = 0; k < 40; k++) {
+      g.strokeStyle = `rgba(80,55,30,${0.05 + r() * 0.08})`;
+      g.lineWidth = 1;
+      const y = i * h + r() * h;
+      g.beginPath();
+      g.moveTo(0, y);
+      g.bezierCurveTo(S * 0.3, y + (r() - 0.5) * 6, S * 0.7, y + (r() - 0.5) * 6, S, y);
+      g.stroke();
+    }
+    // butt joints
+    const off = r() * S;
+    g.fillStyle = 'rgba(40,28,18,0.6)';
+    g.fillRect(off, i * h, 3, h);
+    g.fillRect((off + S / 2) % S, i * h, 3, h);
+    // gaps between planks
+    g.fillStyle = 'rgba(30,20,12,0.75)';
+    g.fillRect(0, i * h, S, 3);
+  }
+  // nails
+  g.fillStyle = 'rgba(60,60,60,0.7)';
+  for (let i = 0; i < rows; i++) for (const x of [S * 0.25, S * 0.75]) g.fillRect(x, i * h + h * 0.3, 3, 3), g.fillRect(x, i * h + h * 0.7, 3, 3);
+  return tex(c);
+}
+
+/** Granite plaza pavers. 1 tile = 3m. */
+export function paverTexture() {
+  const S = 512;
+  const { c, g } = canvas(S, S);
+  noiseFill(g, S, S, [196, 188, 176], 16, 71);
+  const r = rng(72);
+  const n = 6;
+  const w = S / n;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const t = (r() - 0.5) * 22;
+      g.fillStyle = `rgba(${t > 0 ? 255 : 0},${t > 0 ? 250 : 0},${t > 0 ? 240 : 0},${Math.abs(t) / 255})`;
+      const off = j % 2 ? w / 2 : 0;
+      g.fillRect(i * w + off, j * w, w, w);
+      g.fillRect(i * w + off - S, j * w, w, w);
+    }
+  }
+  g.strokeStyle = 'rgba(90,82,72,0.6)';
+  g.lineWidth = 3;
+  for (let j = 0; j <= n; j++) {
+    g.beginPath();
+    g.moveTo(0, j * w);
+    g.lineTo(S, j * w);
+    g.stroke();
+    const off = j % 2 ? w / 2 : 0;
+    for (let i = 0; i <= n; i++) {
+      g.beginPath();
+      g.moveTo(i * w + off, j * w);
+      g.lineTo(i * w + off, j * w + w);
+      g.stroke();
+    }
+  }
+  return tex(c);
+}
+
+export function waterTexture() {
+  const S = 256;
+  const { c, g } = canvas(S, S);
+  g.fillStyle = '#3f8a9c';
+  g.fillRect(0, 0, S, S);
+  const r = rng(81);
+  for (let i = 0; i < 160; i++) {
+    const x = r() * S;
+    const y = r() * S;
+    const l = 8 + r() * 24;
+    g.strokeStyle = `rgba(255,255,255,${0.06 + r() * 0.16})`;
+    g.lineWidth = 1.5;
+    for (const ox of [-S, 0, S]) {
+      g.beginPath();
+      g.moveTo(x + ox, y);
+      g.quadraticCurveTo(x + ox + l / 2, y - 3, x + ox + l, y);
+      g.stroke();
+    }
+  }
+  blotches(g, S, S, 10, 'rgba(20,70,90,0.25)', 60, 82);
+  return tex(c);
+}
+
+/** Building facade: rows of windows. 1 tile = 6m. */
+export function facadeTexture() {
+  const S = 512;
+  const { c, g } = canvas(S, S);
+  noiseFill(g, S, S, [222, 208, 188], 10, 91);
+  const r = rng(92);
+  const cols = 4;
+  const rows = 2;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const x = (i + 0.2) * (S / cols);
+      const y = (j + 0.18) * (S / rows);
+      const w = S / cols * 0.6;
+      const h = S / rows * 0.55;
+      g.fillStyle = '#6f6a63';
+      g.fillRect(x - 4, y - 4, w + 8, h + 8);
+      const lit = r() > 0.6;
+      const grd = g.createLinearGradient(x, y, x + w, y + h);
+      grd.addColorStop(0, lit ? '#f3d9a8' : '#7d97a8');
+      grd.addColorStop(1, lit ? '#d9a86c' : '#45596a');
+      g.fillStyle = grd;
+      g.fillRect(x, y, w, h);
+      g.fillStyle = 'rgba(255,255,255,0.25)';
+      g.fillRect(x + w * 0.48, y, 3, h);
+    }
+  }
+  return tex(c);
+}
+
+/** A collectible letter: clay disc with a cream serif letter. */
+export function letterTexture(ch: string) {
+  const S = 256;
+  const { c, g } = canvas(S, S);
+  const grd = g.createRadialGradient(S / 2, S / 2, S * 0.2, S / 2, S / 2, S / 2);
+  grd.addColorStop(0, 'rgba(255,214,170,0.9)');
+  grd.addColorStop(0.7, 'rgba(217,119,87,0.55)');
+  grd.addColorStop(1, 'rgba(217,119,87,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, S, S);
+  g.fillStyle = PALETTE.clay;
+  g.beginPath();
+  g.arc(S / 2, S / 2, S * 0.34, 0, Math.PI * 2);
+  g.fill();
+  g.lineWidth = 8;
+  g.strokeStyle = PALETTE.ivory;
+  g.stroke();
+  g.fillStyle = PALETTE.ivory;
+  g.font = 'bold 130px Georgia, serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(ch, S / 2, S / 2 + 8);
+  const t = tex(c, false);
+  return t;
+}

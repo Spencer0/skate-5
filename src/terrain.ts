@@ -6,7 +6,7 @@ import * as THREE from 'three';
  * the meshes are built from, so what you see is exactly what you ride.
  */
 
-export type Material = 'concrete' | 'ramp' | 'box' | 'paint' | 'wall';
+export type Material = 'concrete' | 'ramp' | 'box' | 'paint' | 'wall' | 'wood' | 'stone';
 
 export interface Element {
   kind: string;
@@ -25,6 +25,8 @@ export interface Element {
   skirt: boolean;
   /** Optional custom mesh builder (stairs). */
   custom?: boolean;
+  /** Fully custom mesh (round things the grid sampler can't do). */
+  meshFn?: () => THREE.BufferGeometry;
   // derived
   c: number;
   s: number;
@@ -42,6 +44,8 @@ export interface Rail {
   dir: THREE.Vector3; // unit a->b (3D)
   len: number;
   kind: RailKind;
+  tag?: string; // story goals refer to rails by tag
+  friction: number; // multiplier on grind friction (polished rails run longer)
   minX: number;
   maxX: number;
   minZ: number;
@@ -57,13 +61,25 @@ export interface BowlDef {
   R: number; // transition arc radius
 }
 
+/** Water you can splash into: a circle or an axis-aligned rect. */
+export interface WaterZone {
+  y: number;
+  circle?: { cx: number; cz: number; r: number };
+  rect?: { x0: number; z0: number; x1: number; z1: number };
+}
+
 const CELL = 8;
 
 export class Terrain {
   elements: Element[] = [];
   rails: Rail[] = [];
   bowls: BowlDef[] = [];
+  water: WaterZone[] = [];
   bounds = 78;
+  /** Height outside every element (sea floor on the pier, 0 elsewhere). */
+  floor = 0;
+  /** Optional replacement for the flat floor. */
+  baseFn: ((x: number, z: number) => number) | null = null;
   private grid = new Map<number, Element[]>();
 
   addElement(e: Omit<Element, 'c' | 's' | 'minX' | 'maxX' | 'minZ' | 'maxZ'>): Element {
@@ -92,7 +108,7 @@ export class Terrain {
     return el;
   }
 
-  addRail(a: THREE.Vector3, b: THREE.Vector3, kind: RailKind) {
+  addRail(a: THREE.Vector3, b: THREE.Vector3, kind: RailKind, tag?: string, friction = 1) {
     const d = b.clone().sub(a);
     const len = d.length();
     this.rails.push({
@@ -101,6 +117,8 @@ export class Terrain {
       dir: d.divideScalar(len),
       len,
       kind,
+      tag,
+      friction,
       minX: Math.min(a.x, b.x) - 1,
       maxX: Math.max(a.x, b.x) + 1,
       minZ: Math.min(a.z, b.z) - 1,
@@ -116,7 +134,22 @@ export class Terrain {
       const r2 = dx * dx + dz * dz;
       if (r2 < b.radius * b.radius) return bowlProfile(b, Math.sqrt(r2));
     }
-    return 0;
+    return this.baseFn ? this.baseFn(x, z) : this.floor;
+  }
+
+  /** Water surface height at (x,z), or null if there's no water here. */
+  waterAt(x: number, z: number): number | null {
+    for (const w of this.water) {
+      if (w.circle) {
+        const dx = x - w.circle.cx;
+        const dz = z - w.circle.cz;
+        if (dx * dx + dz * dz < w.circle.r * w.circle.r) return w.y;
+      } else if (w.rect) {
+        const r = w.rect;
+        if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) return w.y;
+      }
+    }
+    return null;
   }
 
   height(x: number, z: number): number {
