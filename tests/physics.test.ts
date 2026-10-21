@@ -52,6 +52,22 @@ test('kickflip caught on time is a perfect landing', () => {
   assert.equal(land.tricks[0].name, 'Kickflip');
 });
 
+test('shove-it turns the deck around but the rider keeps riding forward', () => {
+  const { sk, events, run } = rig(0, 40, 0, -5);
+  run(0.1);
+  const fwd = sk.fwd.clone();
+  sk.flick(spec(0, 1));
+  run(TUNE.flickDelay + TUNE.beat);
+  assert.ok(sk.catchBoard());
+  run(1);
+  const land = events.find((e) => e.type === 'land');
+  assert.ok(land && land.type === 'land');
+  assert.equal(sk.mode, 'ground');
+  assert.ok(sk.fwd.dot(fwd) > 0.9, 'rider still faces the way they were going');
+  assert.ok(sk.fwdSpeed > 0, 'not rolling fakie');
+  assert.ok(sk.boardFlipped);
+});
+
 test('uncaught kickflip bails', () => {
   const { events, run, sk } = rig(0, 40, 0, -5);
   run(0.1);

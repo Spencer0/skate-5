@@ -146,6 +146,8 @@ export class Skater {
   wobble = 0;
   lean = 0;
   yawOffset = 0; // visual-only: eases out landing / lock snaps
+  /** visual-only: the deck is turned end for end (after an odd number of shove-it half turns) */
+  boardFlipped = false;
   boost = 0; // extra top speed while the special meter is full
   posOffset = new THREE.Vector3(); // visual-only: eases the magnet snap onto rails
   carry = false; // holding forward: carry over lips instead of vert assist
@@ -690,8 +692,10 @@ export class Skater {
   private foldTrick() {
     const tr = this.trick;
     if (!tr.active) return;
+    // a shove-it turns the deck end for end under the rider; the rider (and
+    // so fwd, stance and the camera) keep facing the same way
     const halfTurns = Math.round(tr.target[1] / Math.PI);
-    if (Math.abs(halfTurns) % 2 === 1) this.fwd.negate();
+    if (Math.abs(halfTurns) % 2 === 1) this.boardFlipped = !this.boardFlipped;
     tr.flip -= tr.target[0];
     tr.shove -= tr.target[1];
     tr.wrap -= tr.target[2];
@@ -1119,6 +1123,7 @@ export class Skater {
       tmpQ.setFromAxisAngle(AX_Z, tr.wrap);
       out.multiply(tmpQ);
     }
+    if (this.boardFlipped) out.multiply(tmpQ.setFromAxisAngle(AX_Y, Math.PI));
     return out;
   }
 
