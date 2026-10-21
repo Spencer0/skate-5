@@ -132,3 +132,29 @@ test('riding into a ledge at speed bails', () => {
   run(1.5);
   assert.ok(types(events).includes('bail'));
 });
+
+test('fuzz: random play never produces NaNs or escapes the park', () => {
+  let seed = 12345;
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const specs = [spec(0, 0), spec(1, 0), spec(-1, 0), spec(0, -1), spec(1, -2), spec(-1, 2), spec(0, 0, 1), spec(1, 1)];
+  for (let run = 0; run < 12; run++) {
+    const { sk, run: step } = rig((rnd() - 0.5) * 120, (rnd() - 0.5) * 120, 0, 0);
+    if (Math.abs(sk.pos.y) > 0.01) continue;
+    const inp: SkaterInput = { ...idle };
+    for (let i = 0; i < 1500; i++) {
+      if (rnd() < 0.05) inp.steer = rnd() * 2 - 1;
+      inp.pushHold = rnd() < 0.7;
+      inp.brake = rnd() < 0.02;
+      inp.grindMod = rnd() < 0.1 ? 'nose' : rnd() < 0.1 ? 'tail' : 'none';
+      if (rnd() < 0.03) sk.flick(specs[Math.floor(rnd() * specs.length)]);
+      if (rnd() < 0.06) sk.catchBoard();
+      step(1 / 60, inp);
+      for (const v of [sk.pos.x, sk.pos.y, sk.pos.z, sk.vel.x, sk.vel.y, sk.vel.z, sk.fwd.x, sk.fwd.z]) assert.ok(Number.isFinite(v), `NaN at run ${run} step ${i}`);
+      assert.ok(Math.abs(sk.pos.x) < 76 && Math.abs(sk.pos.z) < 76, `escaped to ${sk.pos.x},${sk.pos.z}`);
+      assert.ok(sk.pos.y > -3 && sk.pos.y < 12, `height ${sk.pos.y}`);
+    }
+  }
+});

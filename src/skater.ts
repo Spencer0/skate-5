@@ -947,7 +947,8 @@ export class Skater {
     this.mode = 'air';
     this.popped = false;
     this.airTime = 0;
-    this.sinceGround = 1;
+    // rolling off the end of a rail still allows a late pop (coyote time)
+    this.sinceGround = popped ? 1 : 0;
     this.followPitch = false;
     this.bodySpin = 0;
     this.lastGrindExit = this.time;

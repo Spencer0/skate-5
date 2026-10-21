@@ -9,6 +9,7 @@ import { Audio } from './audio';
 import { Hud } from './hud';
 import { Particles } from './fx';
 import { shadowTexture } from './textures';
+import { Minimap } from './minimap';
 
 /* ------------------------------------------------------------------ */
 /* Setup                                                               */
@@ -76,6 +77,7 @@ app.appendChild(overlay);
 const input = new Input(overlay);
 const audio = new Audio();
 const hud = new Hud(app);
+const minimap = new Minimap(hud.root, terrain);
 
 /* ------------------------------------------------------------------ */
 /* Start screen                                                        */
@@ -597,6 +599,7 @@ function frame(now: number) {
   hud.balance(skater.mode === 'grind' && skater.grind ? skater.grind.balance : null);
   hud.setSpeed(skater.speed * 3.6);
   hud.setHint(started ? tutorialHint() : null);
+  minimap.draw(skater.mode === 'bail' ? skater.bpos.x : skater.pos.x, skater.mode === 'bail' ? skater.bpos.z : skater.pos.z, cam.yaw);
 
   if (!debug.freeCam) updateCamera(dt);
   sun.position.copy(skater.pos).add(SUN_OFFSET);

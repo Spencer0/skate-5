@@ -448,3 +448,17 @@ body {
   opacity: 1;
   transition: opacity 0.25s;
 }
+
+.minimap {
+  position: absolute;
+  top: max(52px, calc(env(safe-area-inset-top) + 44px));
+  right: max(12px, env(safe-area-inset-right));
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(20, 20, 19, 0.12);
+}
+@media (max-height: 420px) {
+  .minimap {
+    width: 76px !important;
+    height: 76px !important;
+  }
+}
