@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOTTOMS, HAIR, HATS, SHOES, TOPS, defaultLook, heightOf, partColors, sanitizeLook, HEIGHT_MAX, HEIGHT_MIN } from '../src/custom';
+import { BOTTOMS, HAIR, HATS, SHAPES, SHOES, TOPS, defaultLook, heightOf, partColors, sanitizeLook, shapeInfluences, HEIGHT_MAX, HEIGHT_MIN } from '../src/custom';
 
 test('garbage from storage falls back to the default look', () => {
   for (const raw of [null, undefined, 5, 'x', [], {}]) assert.deepEqual(sanitizeLook(raw), defaultLook());
@@ -39,4 +39,25 @@ test('every option exists in the model catalogue and the default look wears real
   const colors = partColors(defaultLook());
   for (const part of ['body', 'eyes', 'brows', 'lashes', 'top_tee', 'bottom_jeans', 'shoes_shoes06', 'hair_short02']) assert.ok(part in colors, part);
   assert.ok(!Object.keys(partColors({ ...defaultLook(), hair: null, hat: null })).some((k) => k.startsWith('hair_') || k.startsWith('hat_')));
+});
+
+test('body shape sliders are repaired and old saves get average shapes', () => {
+  const d = defaultLook();
+  assert.ok(SHAPES.length > 0);
+  for (const def of SHAPES) assert.equal(d.shape[def.id], 0.5);
+  const { shape: _omit, ...old } = d; // a save from before shapes existed
+  assert.deepEqual(sanitizeLook(old).shape, d.shape);
+  const out = sanitizeLook({ ...d, shape: { [SHAPES[0].id]: 9, [SHAPES[1].id]: 'x', bogus: 1 } });
+  assert.equal(out.shape[SHAPES[0].id], 1);
+  assert.equal(out.shape[SHAPES[1].id], 0.5);
+  assert.ok(!('bogus' in out.shape));
+});
+
+test('shape sliders blend the lo / hi morph targets around the average', () => {
+  const id = SHAPES[0].id;
+  const at = (v: number) => shapeInfluences({ ...defaultLook(), shape: { ...defaultLook().shape, [id]: v } });
+  assert.deepEqual([at(0.5)[id + '-lo'], at(0.5)[id + '-hi']], [0, 0]);
+  assert.deepEqual([at(0)[id + '-lo'], at(0)[id + '-hi']], [1, 0]);
+  assert.deepEqual([at(1)[id + '-lo'], at(1)[id + '-hi']], [0, 1]);
+  assert.equal(at(0.75)[id + '-hi'], 0.5);
 });

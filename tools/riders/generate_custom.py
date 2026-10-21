@@ -95,10 +95,27 @@ def split_suit(obj, zmin, height):
     return out
 
 
-def build(gid, spec):
+TargetService = dyn('mpfb.services.targetservice', 'TargetService')
+
+
+def variants():
+    """(shape key name, macro overrides, detail targets) for every slider end."""
+    out = []
+    for sh in OPT['shape']:
+        for end, val in (('lo', 0.0), ('hi', 1.0)):
+            macro = {sh['macro']: val} if 'macro' in sh else {}
+            out.append((f"{sh['id']}-{end}", macro, sh.get('details', {}).get(end, [])))
+    return out
+
+
+def build(gid, spec, macro=None, details=(), export=True, morphs=None):
+    """Build one body with every option fitted. With export=False (a shape variant) return
+    {part: vertex coordinates} instead of writing the GLB."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.preferences.addon_enable(module='bl_ext.user_default.mpfb')
-    basemesh = HumanService.create_human(macro_detail_dict=spec['macro'])
+    basemesh = HumanService.create_human(macro_detail_dict={**spec['macro'], **(macro or {})})
+    for t in details:
+        TargetService.load_target(basemesh, TargetService.target_full_path(t), weight=1.0)
     HumanService.set_character_skin(AssetService.find_asset_absolute_path(spec['skin'], asset_subdir='skins'), basemesh, skin_type='GAMEENGINE')
     HumanService.add_builtin_rig(basemesh, 'game_engine')
     asset('eyes', 'low-poly', 'Eyes', basemesh)
@@ -187,6 +204,24 @@ def build(gid, spec):
         tgt = 256 if small or 'shoe' in n else 1024 if 'skin' in n else 512
         if img.size[0] > tgt:
             img.scale(tgt, tgt)
+    if not export:
+        import numpy as np
+        out = {}
+        for o in bpy.data.objects:
+            if o.type == 'MESH' and (o.name == 'body' or o.name.startswith(('top_', 'bottom_'))):
+                a = np.empty(len(o.data.vertices) * 3, dtype=np.float32)
+                o.data.vertices.foreach_get('co', a)
+                out[o.name] = a
+        return out
+    for key, coords in (morphs or {}).items():
+        for name, a in coords.items():
+            o = bpy.data.objects[name]
+            if o.data.shape_keys is None:
+                o.shape_key_add(name='Basis')
+            if len(o.data.vertices) * 3 != len(a):
+                raise SystemExit(f'{name}: vertex count differs in {key}')
+            k = o.shape_key_add(name=key)
+            k.data.foreach_set('co', a)
     tris = 0
     for o in bpy.data.objects:
         if o.type == 'MESH':
@@ -197,7 +232,7 @@ def build(gid, spec):
     bpy.ops.object.select_all(action='SELECT')
     path = OUT + f'custom_{gid}.glb'
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_image_format='AUTO',
-                              export_jpeg_quality=80, export_morph=False, export_animations=False, export_skins=True,
+                              export_jpeg_quality=80, export_morph=True, export_morph_normal=False, export_animations=False, export_skins=True,
                               export_apply=False, export_yup=True)
     print('wrote', path, os.path.getsize(path))
 
@@ -206,4 +241,8 @@ only = os.environ.get('ONLY')
 for gid, spec in BODIES.items():
     if only and gid != only:
         continue
-    build(gid, spec)
+    morphs = {}
+    for key, macro, details in variants():
+        morphs[key] = build(gid, spec, macro, details, export=False)
+        print('variant', gid, key, flush=True)
+    build(gid, spec, morphs=morphs)

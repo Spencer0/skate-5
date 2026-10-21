@@ -11,6 +11,8 @@ export type Body = 'm' | 'f';
 export interface CustomLook {
   body: Body;
   height: number; // 0 short .. 1 tall
+  /** body shape sliders by ShapeDef id, 0 = the "lo" end, 0.5 = average, 1 = the "hi" end */
+  shape: Record<string, number>;
   skin: string;
   hair: string | null;
   hairColor: string;
@@ -28,6 +30,13 @@ export interface Option {
   id: string;
   label: string;
 }
+
+export interface ShapeDef extends Option {
+  lo: string;
+  hi: string;
+}
+
+export const SHAPES: ShapeDef[] = OPT.shape;
 
 export const HAIR: Option[] = OPT.hair;
 export const HATS: Option[] = OPT.hats;
@@ -47,6 +56,7 @@ export function defaultLook(): CustomLook {
   return {
     body: 'm',
     height: 0.5,
+    shape: Object.fromEntries(SHAPES.map((d) => [d.id, 0.5])),
     skin: SKIN_TONES[2],
     hair: 'short02',
     hairColor: HAIR_COLORS[1],
@@ -63,6 +73,19 @@ export function defaultLook(): CustomLook {
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
+const unit = (v: unknown, fallback: number) => (typeof v === 'number' && isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
+
+/** morph target name -> influence for the body shape sliders (`weight-lo`, `weight-hi`, ...) */
+export function shapeInfluences(look: CustomLook): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const d of SHAPES) {
+    const v = look.shape[d.id] ?? 0.5;
+    out[d.id + '-lo'] = Math.max(0, 1 - v * 2);
+    out[d.id + '-hi'] = Math.max(0, v * 2 - 1);
+  }
+  return out;
+}
+
 /** Anything from storage (or an older build) -> a look the models can actually dress. */
 export function sanitizeLook(raw: unknown): CustomLook {
   const d = defaultLook();
@@ -73,7 +96,8 @@ export function sanitizeLook(raw: unknown): CustomLook {
   const optional = (k: 'hair' | 'hat', list: Option[]) => (r[k] === null ? null : typeof r[k] === 'string' && list.some((o) => o.id === r[k]) ? (r[k] as string) : d[k]);
   return {
     body: r.body === 'f' ? 'f' : 'm',
-    height: typeof r.height === 'number' && isFinite(r.height) ? Math.min(1, Math.max(0, r.height)) : d.height,
+    height: unit(r.height, d.height),
+    shape: Object.fromEntries(SHAPES.map((def) => [def.id, unit((r.shape as Record<string, unknown> | undefined)?.[def.id], 0.5)])),
     skin: color('skin'),
     hair: optional('hair', HAIR),
     hairColor: color('hairColor'),
