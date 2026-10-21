@@ -63,6 +63,7 @@ Moreno (Spark Skateboards team manager) and Officer Pete (plaza security).
 | Right – pull down, then flick | Pop a trick (see below) |
 | Tap anywhere in the air | **Catch the board.** It keeps flipping until you do — land uncaught and you bail. Wait longer for doubles. |
 | Right – hold up / down on a rail | Nose / tail grind variants |
+| In the air: tap/click next to your skater and hold | **Grab.** Where you tap around the board picks it: Nosegrab, Tailgrab, Indy (toe), Melon (heel), Mute, Japan, Method, Stalefish. Hold longer for more points; let go before you land or it's sketchy. |
 
 **Trick stick** (pull down to load the tail; pull *up* first for nollies)
 
@@ -88,7 +89,7 @@ sideways → Boardslide / Lipslide / Noseslide / Tailslide). Flick to pop out
 
 **Keyboard** (desktop): A/D steer, W push, S brake, Space ollie/catch, J
 kickflip, L heelflip, U/O shove-its, 1–9 combo flips, Shift = nollie, N/M nose/tail
-grinds, K catch, R reset.
+grinds, G/H/T/Y grabs (hold), K catch, R reset.
 
 ## Development
 

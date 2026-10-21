@@ -205,6 +205,12 @@ export class Hud {
       'p',
       'guide-p',
       card,
+      'Grabs: in the air, tap (or click) next to your skater and hold. Where you tap picks the grab: nose = Nosegrab, tail = Tailgrab, toe side = Indy, heel side = Melon, toe-nose = Mute, toe-tail = Japan, heel-nose = Method, heel-tail = Stalefish. Hold longer for more points, and let go before you land.',
+    );
+    el(
+      'p',
+      'guide-p',
+      card,
       'Grinds: ollie onto a rail or ledge edge. Board angle picks the grind (straight = 50-50, sideways = boardslide/lipslide, in between = feeble). Hold the trick stick UP for nose variants, DOWN for tail variants. Flick to pop out.',
     );
     const grid = el('div', 'guide-grid', card);
@@ -214,7 +220,7 @@ export class Hud {
       el('div', 'guide-name', item, g.name);
       if (g.note) el('div', 'guide-note', item, g.note);
     }
-    el('p', 'guide-p small', card, 'Keyboard: A/D steer · W push · S brake · Space ollie/catch · J kickflip · L heelflip · U/O shove-its · 1–9 combos · Shift = nollie · N/M nose/tail grinds · R reset');
+    el('p', 'guide-p small', card, 'Keyboard: A/D steer · W push · S brake · Space ollie/catch · J kickflip · L heelflip · U/O shove-its · 1–9 combos · Shift = nollie · N/M nose/tail grinds · G/H/T/Y grabs (Indy, Melon, Nose, Tail) · R reset');
     wrap.addEventListener('pointerdown', (e) => {
       if (e.target === wrap) wrap.classList.remove('on');
     });

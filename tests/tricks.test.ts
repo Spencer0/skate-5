@@ -82,3 +82,16 @@ test('trick names compose from rotations', () => {
   assert.equal(trickName({ ...base, flips: 1, shoves: 0, nollie: true }), 'Nollie Kickflip');
   assert.equal(trickName({ ...base, flips: -1, shoves: 0, fakie: true }), 'Fakie Heelflip');
 });
+
+test('grab directions map around the board', async () => {
+  const { grabForDirection, GRABS } = await import('../src/tricks');
+  const g = (a: number, c: number) => GRABS[grabForDirection(a, c)].name;
+  assert.equal(g(1, 0), 'Nosegrab');
+  assert.equal(g(-1, 0), 'Tailgrab');
+  assert.equal(g(0, 1), 'Indy');
+  assert.equal(g(0, -1), 'Melon');
+  assert.equal(g(1, 1), 'Mute');
+  assert.equal(g(-1, -1), 'Stalefish');
+  assert.equal(g(1, -1), 'Method');
+  assert.equal(g(-1, 1), 'Japan');
+});
