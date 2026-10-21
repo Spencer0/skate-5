@@ -162,7 +162,10 @@ export interface RiderAct {
   caught: boolean;
   catchT: number; // seconds since catch, -1 if none
   landT: number; // seconds since last landing
-  pushT: number; // seconds into the visual push cycle, -1 when not pushing
+  pushAt: number; // physics time of the last push event
+  pushHold: boolean; // push is held: keep kicking instead of stepping back on
+  ground: boolean; // rolling on the ground (pushing is possible)
+  clock: number; // physics time, for the footwork state machines
   speed: number; // board speed (m/s), for the planted push foot
   special: boolean;
 }
@@ -337,7 +340,7 @@ export class Rider {
       this.coat = new THREE.Mesh(new THREE.CylinderGeometry(L.torsoR * 1.05, L.torsoR * 1.5, 0.42 * k, 14, 1, true), mat(0xf4f4f0));
       this.body.add(this.coat);
     }
-    this.setStyle('ghost');
+    this.setStyle('solid');
   }
 
   setStyle(style: RiderStyle) {

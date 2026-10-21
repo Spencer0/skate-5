@@ -734,6 +734,8 @@ function handle(ev: SkaterEvent) {
       fall.q.copy(rider.group.quaternion);
       fall.vel.copy(skater.vel).multiplyScalar(0.6);
       fall.side = Math.random() < 0.5 ? 1 : -1;
+      // the full rider goes limp; the capsule stand-in keeps the scripted tip-over
+      rider.startRagdoll(skater.vel, fall.side, terrain);
       audio.bail();
       buzz([40, 50, 40]);
       shake.t = 0.35;
@@ -788,6 +790,7 @@ function handle(ev: SkaterEvent) {
       break;
     case 'respawn':
       fall.on = false;
+      rider.stopRagdoll();
       fade.classList.remove('on');
       break;
   }
@@ -796,7 +799,7 @@ function handle(ev: SkaterEvent) {
 /** Timeline of the last pop / catch / landing / push, for the rider's choreography. */
 const act = { popAt: -1, catchAt: -1, landAt: -10, pushStart: -10, nollie: false };
 const now = () => skater.time;
-const PUSH_CYCLE = 0.52;
+const PUSH_CYCLE = 0.66;
 const riderQ = new THREE.Quaternion();
 const yawQ = new THREE.Quaternion();
 const AX_Y = new THREE.Vector3(0, 1, 0);
@@ -805,6 +808,12 @@ const AX_X = new THREE.Vector3(1, 0, 0);
 /** Pose the skater from the board's state (feet stay planted via IK). */
 function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
   if (!rider.group.visible) return;
+  // any way out of the bail (respawn, restart, level change) stands the rider back up
+  if (rider.ragdolling && skater.mode !== 'bail') rider.stopRagdoll();
+  if (rider.ragdolling) {
+    rider.update(dt, { crouch: 0, tuck: 0, lean: 0, push: -1, grind: null, air: false, time: t });
+    return;
+  }
   if (fall.on && skater.mode === 'bail') {
     // tip over and slide to a stop next to the board
     fall.t += dt;
@@ -853,7 +862,10 @@ function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
       caught: !tr.active || tr.caught,
       catchT: act.catchAt >= 0 && air ? now() - act.catchAt : -1,
       landT: now() - act.landAt,
-      pushT: skater.mode === 'ground' && now() - act.pushStart < PUSH_CYCLE ? now() - act.pushStart : -1,
+      pushAt: act.pushStart,
+      pushHold: playing && input.pushHold,
+      ground: skater.mode === 'ground',
+      clock: now(),
       speed: skater.speed,
       special: !!tr.spec?.special,
     },
