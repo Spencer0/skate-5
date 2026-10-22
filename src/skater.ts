@@ -26,6 +26,8 @@ export const TUNE = {
   railMagnet: 0.45,
   ledgeMagnet: 0.36,
   stepMax: 0.1, // taller than this is a wall while rolling
+  railBody: 0.2, // a rail blocks the board within this distance of it
+  railHead: 1.7, // rails higher than this above the board pass overhead
   coyote: 0.12,
   catchSettle: 26,
   balance: 1, // grind instability multiplier (Rail Balance stat lowers it)
@@ -347,6 +349,11 @@ export class Skater {
 
     // integrate
     const next = tmp.copy(this.pos).addScaledVector(this.vel, dt);
+    const railN = this.railBlock(this.pos, next);
+    if (railN) {
+      this.hitWall(next, dt, railN);
+      return;
+    }
     const hN = t.height(next.x, next.z);
     if (hN - next.y > TUNE.stepMax) {
       this.hitWall(next, dt);
@@ -422,8 +429,39 @@ export class Skater {
     return true;
   }
 
-  private hitWall(next: THREE.Vector3, _dt: number) {
-    const wn = this.terrain.wallNormal(next.x, next.z, this.vel, tmp2);
+  /**
+   * Rails are solid: a step that would carry the board through a rail below
+   * head height (and not over it) hits it. Returns the rail's horizontal
+   * normal facing us, or null if the way is clear.
+   */
+  private railBlock(prev: THREE.Vector3, next: THREE.Vector3): THREE.Vector3 | null {
+    for (const r of this.terrain.rails) {
+      if (r.kind !== 'rail') continue;
+      if (next.x < r.minX || next.x > r.maxX || next.z < r.minZ || next.z > r.maxZ) continue;
+      const dx = r.b.x - r.a.x;
+      const dz = r.b.z - r.a.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-4) continue;
+      const nx = -dz / len;
+      const nz = dx / len;
+      const d0 = (prev.x - r.a.x) * nx + (prev.z - r.a.z) * nz;
+      const d1 = (next.x - r.a.x) * nx + (next.z - r.a.z) * nz;
+      // only steps that close on the rail (or cross it) are blocked
+      const crossed = d0 * d1 < 0;
+      if (!crossed && (Math.abs(d1) > TUNE.railBody || Math.abs(d1) >= Math.abs(d0))) continue;
+      const s = ((next.x - r.a.x) * dx + (next.z - r.a.z) * dz) / (len * len);
+      if (s < 0 || s > 1) continue;
+      const ry = r.a.y + (r.b.y - r.a.y) * s;
+      const below = ry - next.y;
+      if (below < 0.08 || below > TUNE.railHead) continue;
+      const side = Math.abs(d0) > 1e-4 ? Math.sign(d0) : -Math.sign(this.vel.x * nx + this.vel.z * nz) || 1;
+      return tmpRailN.set(nx * side, 0, nz * side);
+    }
+    return null;
+  }
+
+  private hitWall(next: THREE.Vector3, _dt: number, normal?: THREE.Vector3) {
+    const wn = normal ?? this.terrain.wallNormal(next.x, next.z, this.vel, tmp2);
     const vn = this.vel.x * wn.x + this.vel.z * wn.z;
     if (vn < 0) {
       const impact = -vn;
@@ -569,6 +607,11 @@ export class Skater {
     const next = tmpNext.copy(this.pos).addScaledVector(this.vel, dt);
 
     if (this.time - this.lastGrindExit > 0.2 && this.tryGrind(prev, next)) return;
+    const railN = this.railBlock(prev, next);
+    if (railN) {
+      this.hitWall(next, dt, railN);
+      return;
+    }
 
     if (next.y > this.maxAirY) this.maxAirY = next.y;
     const wy = t.waterAt(next.x, next.z);
@@ -1261,6 +1304,7 @@ const tmpC = new THREE.Vector3();
 const tmpV3 = new THREE.Vector3();
 const tmpPrev = new THREE.Vector3();
 const tmpNext = new THREE.Vector3();
+const tmpRailN = new THREE.Vector3();
 const tmpM = new THREE.Matrix4();
 
 function freshTrick(): TrickState {

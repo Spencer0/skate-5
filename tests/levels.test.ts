@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Terrain } from '../src/terrain';
@@ -96,12 +97,40 @@ test('pier gap: kicker pop clears the rotten planks', () => {
   assert.ok(r.sk.pos.z < -30, desc);
 });
 
-test('pier: riding off the edge splashes into the sea', () => {
+test('pier: ollie the edge rail and you splash into the sea', () => {
   const { t } = level('pier');
   const r = rig(t, 0, -40, 6, 0);
+  while (r.sk.pos.x < 2.6) r.run(1 / 240);
+  r.sk.flick(spec(0, 0));
   r.run(2);
   const bail = r.events.find((e) => e.type === 'bail');
-  assert.ok(bail && bail.type === 'bail' && bail.reason === 'water');
+  assert.ok(bail && bail.type === 'bail' && bail.reason === 'water', r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(','));
+});
+
+test('rails are solid: rolling into one bumps you off it instead of through it', () => {
+  const { t } = level('pier');
+  // straight at the pier's edge rail, slowly: a bump, not a bail
+  let r = rig(t, 0, -40, 3, 0);
+  r.run(2);
+  assert.ok(r.sk.pos.x < 4.6, `went through to x=${r.sk.pos.x.toFixed(2)}`);
+  assert.ok(r.events.some((e) => e.type === 'wall') && !r.events.some((e) => e.type === 'bail'));
+  // at a glancing angle it turns you along the rail
+  r = rig(t, 0, -40, 3, -6);
+  r.run(1.5);
+  assert.ok(r.sk.pos.x < 4.6 && !r.events.some((e) => e.type === 'bail'));
+  // hard into it and you go down
+  r = rig(t, 0, -40, 7, 0);
+  r.run(1.5);
+  const bail = r.events.find((e) => e.type === 'bail');
+  assert.ok(bail && bail.type === 'bail' && bail.reason === 'wall');
+});
+
+test('high rails pass overhead', () => {
+  const t = new Terrain();
+  t.addRail(new THREE.Vector3(5, 2.2, -10), new THREE.Vector3(5, 2.2, 10), 'rail');
+  const r = rig(t, 0, 0, 5, 0);
+  r.run(2);
+  assert.ok(r.sk.pos.x > 8, `stopped at x=${r.sk.pos.x.toFixed(2)}`);
 });
 
 test('pier rail: 100m in one grind is possible', () => {
