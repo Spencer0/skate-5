@@ -22,23 +22,25 @@ def marks(n):
 M = {n: marks(n) for n in ('grind', 'laser', 'mega', 'bail')}
 # `anchor` = (frame, fraction): start the voice so that fraction of the line has been
 # spoken when that frame arrives (so "grab" lands on the grab, "land it" on the crash)
+G, L_, MG, B_ = (M[k]['marks'] for k in ('grind', 'laser', 'mega', 'bail'))
 SHOTS = [
-    dict(name='grind', a=6, b=118, voice=0.1,
-         text='I build a skate game... can you do a sick line?',
-         chunks=[('I build', []), ('a skate game...', [1, 2]), ('can you do', []), ('a sick line?', [1])]),
-    dict(name='laser', a=8, b=M['laser']['marks']['land'] + 22, voice=0.0,
-         text='Use thumbs to flick tricks.',
-         anchor=(M['laser']['marks']['flick'], 0.62),
-         chunks=[('Use thumbs', [1]), ('to flick tricks', [1, 2])]),
-    dict(name='mega', a=15, b=M['mega']['marks']['land'] + 20, voice=0.0,
-         text='Tap the board to grab.',
-         anchor=(M['mega']['marks']['grab'], 0.9),
-         chunks=[('Tap the board', [2]), ('to grab', [1])]),
-    dict(name='bail', a=20, b=M['bail']['marks']['bail'] + 58, voice=0.0,
-         text="Don't forget to land it.",
-         anchor=(M['bail']['marks']['bail'], 0.97),
-         chunks=[("Don't forget", []), ('to land it', [1])]),
+    dict(name='grind', a=G['flick'] - 14, b=G['land'] + 6, voice=0.1,
+         text="I made a skate game... bet you can't hit this line.",
+         chunks=[('I made', []), ('a skate game...', [1, 2]), ("bet you can't", [2]), ('hit this line.', [2])]),
+    dict(name='laser', a=L_['flick'] - 24, b=L_['land'] + 14, voice=0.0,
+         text='Flick your thumbs for insane tricks.',
+         anchor=(L_['flick'], 0.45),
+         chunks=[('Flick your thumbs', [2]), ('for insane tricks', [1, 2])]),
+    dict(name='mega', a=MG['pop'] - 24, b=MG['land'] + 16, voice=0.0,
+         text='Tap and hold to grab.',
+         anchor=(MG['grab'], 0.55),
+         chunks=[('Tap and hold', [2]), ('to grab', [1])]),
+    dict(name='bail', a=B_['pop'] - 20, b=B_['bail'] + 52, voice=0.0,
+         text="Just don't forget to land it.",
+         anchor=(B_['bail'], 0.97),
+         chunks=[("Just don't forget", []), ('to land it', [1])]),
 ]
+HOOK = "WAIT FOR THE LAST ONE"
 
 voice = PiperVoice.load(model)
 cfg = SynthesisConfig(length_scale=1.15, noise_scale=0.5)
@@ -74,10 +76,20 @@ def caption_png(words, hi, path, scale=1.0):
         x += widths[i] + gap
     img.save(path)
 
+def banner_png(text, path):
+    f = font(60)
+    w = int(f.getlength(text)) + 90
+    img = Image.new('RGBA', (W, 150), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    x0 = (W - w) // 2
+    d.rounded_rectangle((x0, 20, x0 + w, 120), radius=50, fill=(226, 54, 44, 255), outline=(255, 255, 255, 255), width=5)
+    d.text((x0 + 45, 34), text, font=f, fill=(255, 255, 255, 255))
+    img.save(path)
+
 def endcard_png(path):
     img = Image.new('RGBA', (W, 560), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    for txt, px, col, y in (('SKATE NATIONS', 112, ORANGE, 60), ('free in your browser · link in bio', 50, WHITE, 250)):
+    for txt, px, col, y in (('SKATE NATIONS', 112, ORANGE, 60), ('play free in your browser · link in bio', 50, WHITE, 250)):
         f = font(px)
         x = (W - f.getlength(txt)) / 2
         d.text((x, y), txt, font=f, fill=col, stroke_width=int(px * 0.1), stroke_fill=(15, 12, 10, 255))
@@ -131,13 +143,16 @@ end_png = os.path.join(work, 'end.png')
 endcard_png(end_png)
 end_a = total - 1.9
 pngs.append((end_png, end_a, total, 'end'))
+ban_png = os.path.join(work, 'hook.png')
+banner_png(HOOK, ban_png)
+pngs.append((ban_png, 0.15, 2.9, 'banner'))
 
 n0 = len(SHOTS)
 cur = 'base'
 for i, item in enumerate(pngs):
     cmd += ['-i', item[0]]
     nxt = f'o{i}'
-    y = 1010 if len(item) == 3 else 560
+    y = 1010 if len(item) == 3 else {'end': 560, 'banner': 250}[item[3]]
     chain += f"[{cur}][{n0 + i}:v]overlay=0:{y}:enable='between(t,{item[1]:.3f},{item[2]:.3f})'[{nxt}];"
     cur = nxt
 
