@@ -48,7 +48,17 @@ async function frame() {
   // a missed budget event would stall the run forever: give up after 15s and carry on
   await Promise.race([expired, new Promise((r) => setTimeout(r, 15000))]);
   await guard('__step', p.evaluate((dt) => window.__step(dt), DT));
-  const { data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 }));
+  let data;
+  for (let tries = 0; ; tries++) {
+    try {
+      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 }), 10000));
+      break;
+    } catch (e) {
+      if (tries >= 3) throw e;
+      console.log(e.message, JSON.stringify(await guard('probe', p.evaluate(() => ({ vis: document.visibilityState, now: performance.now(), pop: [...document.querySelectorAll('.popup')].map((x) => x.textContent) })), 5000).catch((x) => x.message)));
+      await p.evaluate((dt) => window.__step(dt), DT).catch(() => {});
+    }
+  }
   fs.writeFileSync(`${out}/f${String(n++).padStart(5, '0')}.jpg`, Buffer.from(data, 'base64'));
   clock += DT;
 }
