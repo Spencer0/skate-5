@@ -3,6 +3,7 @@ import { TUNE } from './skater';
 import type { TrickRecord } from './skater';
 import { RIDERS, RiderId } from './rider';
 import { CustomLook, sanitizeLook } from './custom';
+import { FLAGS } from './flags';
 
 /* ------------------------------------------------------------------ */
 /* Stats                                                               */
@@ -43,16 +44,19 @@ export interface DeckDef {
   name: string;
   /** total goals needed (or a medal) */
   needs: number | 'gold';
+  /** 'flag' decks are open from the start; 'pro' decks are the career unlocks */
+  set: 'pro' | 'flag';
 }
 
 export const DECKS: DeckDef[] = [
-  { id: 'claude', name: 'Claude', needs: 0 },
-  { id: 'haiku', name: 'Haiku', needs: 3 },
-  { id: 'sonnet', name: 'Sonnet', needs: 9 },
-  { id: 'opus', name: 'Opus', needs: 16 },
-  { id: 'spark', name: 'Spark', needs: 24 },
-  { id: 'constitution', name: 'Constitution', needs: 32 },
-  { id: 'gold', name: 'Classic Gold', needs: 'gold' },
+  { id: 'atlas', name: 'Atlas', needs: 0, set: 'pro' },
+  { id: 'compass', name: 'Compass', needs: 3, set: 'pro' },
+  { id: 'airmail', name: 'Airmail', needs: 9, set: 'pro' },
+  { id: 'passport', name: 'Passport', needs: 16, set: 'pro' },
+  { id: 'jetstream', name: 'Jet Stream', needs: 24, set: 'pro' },
+  { id: 'mosaic', name: 'All Nations', needs: 32, set: 'pro' },
+  { id: 'gold', name: 'Nations Cup Gold', needs: 'gold', set: 'pro' },
+  ...FLAGS.map((f): DeckDef => ({ id: f.id, name: f.name, needs: 0, set: 'flag' })),
 ];
 
 export interface SpecialDef {
@@ -67,10 +71,10 @@ export interface SpecialDef {
 
 /** Special tricks: unlocked through the career, fired from the special button. */
 export const SPECIALS: SpecialDef[] = [
-  { id: 'haiku', name: 'Haiku Flip', flip: 3, shove: -2, wrap: 0, needs: 4, desc: 'Triple kickflip wrapped in a 360 shove. Five, seven, five.' },
-  { id: 'context', name: 'Context Window', flip: 0, shove: 6, wrap: 0, needs: 11, desc: 'A 1080 shove-it. It just keeps going.' },
-  { id: 'constitution', name: 'Constitutional Impossible', flip: 0, shove: 0, wrap: 2, needs: 19, desc: 'Double impossible, principled and upright.' },
-  { id: 'spark', name: 'Spark Storm', flip: -2, shove: 4, wrap: 0, needs: 27, desc: 'Double laser flip. The big one.' },
+  { id: 'samba', name: 'Samba Flip', flip: 3, shove: -2, wrap: 0, needs: 4, desc: 'Triple kickflip wrapped in a 360 shove. All rhythm.' },
+  { id: 'bullet', name: 'Bullet Train', flip: 0, shove: 6, wrap: 0, needs: 11, desc: 'A 1080 shove-it. It just keeps going.' },
+  { id: 'aurora', name: 'Aurora Impossible', flip: 0, shove: 0, wrap: 2, needs: 19, desc: 'Double impossible, wrapping like the northern lights.' },
+  { id: 'southern', name: 'Southern Cross', flip: -2, shove: 4, wrap: 0, needs: 27, desc: 'Double laser flip. The big one.' },
 ];
 
 export type Medal = 'bronze' | 'silver' | 'gold';
@@ -80,6 +84,10 @@ export type Medal = 'bronze' | 'silver' | 'gold';
 /* ------------------------------------------------------------------ */
 
 const KEY = 'skate5.career.v1';
+
+/** Saves from before the Skate Nations rebrand used these deck and special ids. */
+const OLD_DECKS: Record<string, string> = { claude: 'atlas', haiku: 'compass', sonnet: 'airmail', opus: 'passport', spark: 'jetstream', constitution: 'mosaic' };
+const OLD_SPECIALS: Record<string, string> = { haiku: 'samba', context: 'bullet', constitution: 'aurora', spark: 'southern' };
 
 interface SaveData {
   done: Record<string, string[]>;
@@ -99,7 +107,7 @@ function fresh(): SaveData {
     done: {},
     gaps: {},
     stats: { speed: STAT_START, ollie: STAT_START, spin: STAT_START, flip: STAT_START, balance: STAT_START },
-    deck: 'claude',
+    deck: 'atlas',
     special: null,
     seen: [],
     medal: null,
@@ -116,6 +124,9 @@ export class Career {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) this.data = { ...fresh(), ...(JSON.parse(raw) as Partial<SaveData>) };
+      this.data.deck = OLD_DECKS[this.data.deck] ?? this.data.deck;
+      if (this.data.special) this.data.special = OLD_SPECIALS[this.data.special] ?? this.data.special;
+      if (!DECKS.some((d) => d.id === this.data.deck)) this.data.deck = 'atlas';
     } catch {
       /* private mode: progress lives for this session */
     }

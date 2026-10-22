@@ -1,4 +1,5 @@
 import { GUIDE } from './tricks';
+import { LETTERS } from './levels';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, parent?: HTMLElement, text?: string) {
   const e = document.createElement(tag);
@@ -127,7 +128,7 @@ export class Hud {
     }
     if (letters) {
       const strip = el('div', 'track letters-strip', this.trackRows);
-      'CLAUDE'.split('').forEach((c, i) => el('span', letters[i] ? 'on' : '', strip, c));
+      LETTERS.split('').forEach((c, i) => el('span', letters[i] ? 'on' : '', strip, c));
     }
   }
 
@@ -266,8 +267,8 @@ function gestureSvg(path: [number, number][]) {
     <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="2"/>
     <path d="${load}" fill="none" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.5" stroke-dasharray="3 4" stroke-linecap="round"/>
     <circle cx="${pts[1][0].toFixed(1)}" cy="${pts[1][1].toFixed(1)}" r="3.5" fill="currentColor" fill-opacity="0.6"/>
-    <path d="${d}" fill="none" stroke="#D97757" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M${a1[0].toFixed(1)} ${a1[1].toFixed(1)} L${last[0].toFixed(1)} ${last[1].toFixed(1)} L${a2[0].toFixed(1)} ${a2[1].toFixed(1)}" fill="none" stroke="#D97757" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${d}" fill="none" stroke="#E04A3B" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M${a1[0].toFixed(1)} ${a1[1].toFixed(1)} L${last[0].toFixed(1)} ${last[1].toFixed(1)} L${a2[0].toFixed(1)} ${a2[1].toFixed(1)}" fill="none" stroke="#E04A3B" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
     <circle cx="${c}" cy="${c}" r="3" fill="currentColor"/>
   </svg>`;
 }

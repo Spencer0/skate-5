@@ -19,7 +19,7 @@ cp $MH_WORK/sysassets/clothes/male_elegantsuit01/male_elegantsuit01_diffuse.png 
 cp $MH_WORK/sysassets/clothes/female_casualsuit02/female_casualsuit02_diffuse.png $MH_WORK/orig_f2.png
 
 $MH_WORK/venv/bin/python setup.py       # install MPFB into bpy, link the assets
-$MH_WORK/venv/bin/python recolor.py     # clay tee, teal tee, lab-coat white + Claude sparks
+$MH_WORK/venv/bin/python recolor.py     # clay tee, teal tee, lab-coat white + Atlas globes
 $MH_WORK/venv/bin/python generate.py    # build brock / coral / voss, export GLB
 $MH_WORK/venv/bin/python repack.py brock coral voss   # JPEG textures -> public/riders/
 ```

@@ -26,7 +26,7 @@ export class BoardModel {
   hangers: THREE.Group[] = [];
   private wheelSpin = 0;
   private graphic!: THREE.MeshStandardMaterial;
-  deck = 'claude';
+  deck = 'atlas';
 
   /** Swap the bottom graphic for an unlocked deck. */
   setDeck(id: string) {
@@ -143,7 +143,7 @@ export class BoardModel {
     const side = mk(sidePos, sideUv, sideIdx);
 
     const grip = new THREE.MeshStandardMaterial({ map: T.boardTopTexture(), roughness: 0.95 });
-    const graphic = new THREE.MeshStandardMaterial({ map: T.boardBottomTexture(), roughness: 0.42, metalness: 0.0 });
+    const graphic = new THREE.MeshStandardMaterial({ map: T.deckTexture('atlas'), roughness: 0.42, metalness: 0.0 });
     this.graphic = graphic;
     const wood = new THREE.MeshStandardMaterial({ map: T.woodTexture(), roughness: 0.7, side: THREE.DoubleSide });
     const deck = new THREE.Group();
@@ -157,9 +157,9 @@ export class BoardModel {
   private buildTrucks() {
     const metal = new THREE.MeshStandardMaterial({ color: 0xd6d3cc, roughness: 0.28, metalness: 0.9 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x2a2826, roughness: 0.6, metalness: 0.4 });
-    const bushing = new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.6 });
+    const bushing = new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.6 });
     const urethane = new THREE.MeshStandardMaterial({ color: 0xfaf9f5, roughness: 0.55 });
-    const core = new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.5 });
+    const core = new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.5 });
     const deckBottom = DECK.deckY - DECK.thick / 2;
     const axleY = DECK.wheelR;
     for (const sx of [-1, 1]) {

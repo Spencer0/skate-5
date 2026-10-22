@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import { buildLayout, parkDecor, SPAWN } from '../park';
-import { Level, rect, tagRails, scoreGoals } from './common';
+import { Level, rect, tagRails, scoreGoals, LETTERS_GOAL } from './common';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 export const parkLevel: Level = {
   id: 'park',
-  name: 'Claude Park',
+  name: 'Brazil Park',
   chapter: 1,
   tagline: 'Chapter 1 · Home turf',
-  blurb: 'The Spark team is scouting. Get footage at the local park and shut Dex up.',
+  blurb: 'The Atlas team is scouting. Get footage at the local park and shut Dex up.',
   sky: '#EFE7DA',
   fog: [45, 150],
   ground: true,
@@ -19,7 +19,7 @@ export const parkLevel: Level = {
   objectNoun: 'No Skating signs',
   goals: [
     ...scoreGoals(5000, 15000, 40000),
-    { id: 'let', kind: 'letters', text: 'Collect C-L-A-U-D-E', hint: 'All six letters in one run. Orange dots on the minimap.' },
+    { id: 'let', kind: 'letters', text: LETTERS_GOAL, hint: 'All six letters in one run. Red dots on the minimap.' },
     { id: 'tape', kind: 'tape', text: 'Find the secret tape', hint: 'Way up high. Hold up on the left stick at a lip to carry onto the deck.', view: { cam: [-10, 5, -66], look: [-15, 2.8, -74.3] } },
     { id: 'signs', kind: 'objects', count: 5, text: 'Knock over 5 No Skating signs', hint: 'Skate, grind or air right through them. All five in one run.' },
     { id: 'jb', kind: 'gap', gap: 'jumpbox', text: 'Clear the Jump Box gap', hint: 'Pop at the lip of the kicker and clear the table.' },
@@ -38,11 +38,11 @@ export const parkLevel: Level = {
         cam2: [0, 24, 48],
         look: [0, 0, 0],
         dur: 4,
-        title: 'Claude Park',
+        title: 'Brazil Park',
         subtitle: 'Chapter 1 · Home turf',
         lines: [
           { who: 'mara', text: "So you're the kid everyone keeps talking about. The one with the flick." },
-          { who: 'mara', text: "I'm Mara. I run the crew here. Welcome to Claude Park." },
+          { who: 'mara', text: "I'm Mara. I run the crew here. Welcome to Brazil Park." },
         ],
       },
       {
@@ -51,7 +51,7 @@ export const parkLevel: Level = {
         look: [-34, 1, 24],
         dur: 4,
         lines: [
-          { who: 'mara', text: "Here's the deal: the Spark team is scouting this summer. They want footage, not talk." },
+          { who: 'mara', text: "Here's the deal: the Atlas team is scouting this summer. They want footage, not talk." },
           { who: 'mara', text: 'Every session is two minutes. Land a goal and it stays landed, so chip away at them.' },
         ],
       },
@@ -72,7 +72,7 @@ export const parkLevel: Level = {
         look: [52, 2, 20],
         dur: 3.5,
         lines: [
-          { who: 'mara', text: 'Somebody hid letters all over the park. C-L-A-U-D-E. Grab all six in one run.' },
+          { who: 'mara', text: 'Somebody hid letters all over the park. N-A-T-I-O-N. Grab all six in one run.' },
           { who: 'mara', text: "And the city put up No Skating signs. Five of them. You know what to do." },
         ],
       },
@@ -105,7 +105,7 @@ export const parkLevel: Level = {
         look: [0, 2, -20],
         dur: 4,
         lines: [
-          { who: 'mara', text: "Fountain Plaza. There's a gap over the fountain nobody has ever flipped." },
+          { who: 'mara', text: "Plaza de España. There's a gap over the fountain nobody has ever flipped." },
           { who: 'mara', text: 'Security is a guy named Pete. He takes long lunches. Let\'s go.' },
         ],
       },
@@ -127,12 +127,12 @@ export const parkLevel: Level = {
         { id: 'kinkdrop', name: 'Kinked Drop', points: 250, from: rect(-68, -9, -60, 5), to: rect(-58, -9, -48, 5) },
       ],
       letters: [
-        V(-34, 2.4, 25.6), // C: over the jump box
-        V(38, 1.6, -38.6), // L: down the 6-stair
-        V(0, 3.6, -73.3), // A: vert air on the big QP (pop at the lip)
-        V(-42, -1.9, -40), // U: bottom of the bowl
-        V(14, 1.05, 9), // D: end of the long rail
-        V(52, 1.9, 20), // E: top of the pyramid
+        V(-34, 2.4, 25.6), // N: over the jump box
+        V(38, 1.6, -38.6), // A: down the 6-stair
+        V(0, 3.6, -73.3), // T: vert air on the big QP (pop at the lip)
+        V(-42, -1.9, -40), // I: bottom of the bowl
+        V(14, 1.05, 9), // O: end of the long rail
+        V(52, 1.9, 20), // N: top of the pyramid
       ],
       tape: V(-15, 3.2, -74.3),
       props: [

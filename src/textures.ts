@@ -1,8 +1,11 @@
 import * as THREE from 'three';
+import { FLAGS, flagDef } from './flags';
 
 export const PALETTE = {
-  clay: '#D97757',
-  clayDark: '#B85C3E',
+  accent: '#E04A3B',
+  accentDark: '#B23427',
+  navy: '#1D2F5C',
+  gold: '#E8B547',
   cream: '#F0EEE6',
   ivory: '#FAF9F5',
   slate: '#141413',
@@ -162,99 +165,79 @@ export function gripTexture() {
   return tex(c);
 }
 
-/** The Claude spark: a hand-drawn-feeling starburst of rounded rays. */
-export function drawSpark(g: CanvasRenderingContext2D, x: number, y: number, R: number, color: string, seed = 7, rot = 0) {
-  const r = rng(seed);
-  const rays = 12;
+/** The Atlas globe: a ring with a meridian grid. Line weight scales with R. */
+export function drawGlobe(g: CanvasRenderingContext2D, x: number, y: number, R: number, color: string, rot = 0) {
   g.save();
   g.translate(x, y);
   g.rotate(rot);
   g.strokeStyle = color;
-  g.lineCap = 'round';
-  for (let i = 0; i < rays; i++) {
-    const a = (i / rays) * Math.PI * 2 + (r() - 0.5) * 0.18;
-    const len = R * (0.72 + r() * 0.28);
-    const w = R * (0.13 + r() * 0.05);
-    g.lineWidth = w;
+  g.lineWidth = R * 0.09;
+  g.beginPath();
+  g.arc(0, 0, R, 0, Math.PI * 2);
+  g.stroke();
+  g.lineWidth = R * 0.06;
+  // meridians: ellipses squeezed toward the axis
+  for (const k of [0.38, 0.75]) {
     g.beginPath();
-    g.moveTo(Math.cos(a) * R * 0.1, Math.sin(a) * R * 0.1);
-    g.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+    g.ellipse(0, 0, R * k, R, 0, 0, Math.PI * 2);
+    g.stroke();
+  }
+  g.beginPath();
+  g.moveTo(0, -R);
+  g.lineTo(0, R);
+  g.stroke();
+  // parallels
+  for (const t of [-0.5, 0, 0.5]) {
+    const yy = t * R;
+    const hw = Math.sqrt(R * R - yy * yy);
+    g.beginPath();
+    g.moveTo(-hw, yy);
+    g.lineTo(hw, yy);
     g.stroke();
   }
   g.restore();
 }
 
-/**
- * Bottom graphic of the deck. Canvas x = board length (tail -> nose),
- * canvas y = board width.
- */
-export function boardBottomTexture() {
-  const W = 1024;
-  const H = 256;
-  const { c, g } = canvas(W, H);
-  // base clay with a soft sheen toward the middle
-  const grd = g.createLinearGradient(0, 0, W, 0);
-  grd.addColorStop(0, PALETTE.clayDark);
-  grd.addColorStop(0.5, PALETTE.clay);
-  grd.addColorStop(1, PALETTE.clayDark);
-  g.fillStyle = grd;
-  g.fillRect(0, 0, W, H);
-
-  // cream band between the trucks
-  const b0 = W * 0.285;
-  const b1 = W * 0.715;
-  g.fillStyle = PALETTE.cream;
-  g.fillRect(b0, 0, b1 - b0, H);
-  g.fillStyle = PALETTE.slate;
-  g.fillRect(b0 - 9, 0, 4, H);
-  g.fillRect(b1 + 5, 0, 4, H);
-
-  // spark + wordmark, reading tail -> nose
-  drawSpark(g, W * 0.36, H * 0.5, H * 0.3, PALETTE.clay, 7, 0.2);
+/** Eight-point compass rose, north up (or along `rot`). */
+export function drawCompass(g: CanvasRenderingContext2D, x: number, y: number, R: number, main: string, light: string, rot = 0, label = true) {
   g.save();
-  g.fillStyle = PALETTE.slate;
-  g.font = 'bold 78px Georgia, "Times New Roman", serif';
-  g.textAlign = 'left';
-  g.textBaseline = 'middle';
-  g.fillText('Claude', W * 0.43, H * 0.53);
-  g.restore();
-
-  // nose: a big faded spark bleeding off the edge
-  g.save();
-  g.beginPath();
-  g.rect(b1 + 9, 0, W - b1, H);
-  g.clip();
-  drawSpark(g, W * 0.9, H * 0.5, H * 0.55, 'rgba(250,249,245,0.22)', 3, 0.5);
-  drawSpark(g, W * 0.86, H * 0.5, 30, PALETTE.cream, 10);
-  g.restore();
-
-  // tail: lettering clear of the truck
-  g.save();
-  g.fillStyle = PALETTE.ivory;
-  g.font = '700 25px "Helvetica Neue", Arial, sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  const text = 'ANTHROPIC';
-  const spaced = text.split('').join(String.fromCharCode(8202));
-  g.fillText(spaced, W * 0.125, H * 0.5);
-  g.restore();
-  drawSpark(g, W * 0.035, H * 0.5, 16, PALETTE.cream, 9);
-
-  // subtle wear scratches
-  const r = rng(77);
-  g.strokeStyle = 'rgba(255,255,255,0.12)';
-  g.lineWidth = 1.5;
-  for (let i = 0; i < 40; i++) {
-    const x = r() * W;
-    const y = r() * H;
+  g.translate(x, y);
+  g.rotate(rot);
+  const point = (a: number, len: number, wid: number, colL: string, colR: string) => {
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const tip = [c * len, s * len];
+    const l = [-s * wid, c * wid];
+    g.fillStyle = colL;
     g.beginPath();
-    g.moveTo(x, y);
-    g.lineTo(x + (r() - 0.5) * 60, y + (r() - 0.5) * 8);
-    g.stroke();
+    g.moveTo(0, 0);
+    g.lineTo(tip[0], tip[1]);
+    g.lineTo(l[0], l[1]);
+    g.closePath();
+    g.fill();
+    g.fillStyle = colR;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(tip[0], tip[1]);
+    g.lineTo(-l[0], -l[1]);
+    g.closePath();
+    g.fill();
+  };
+  g.strokeStyle = main;
+  g.lineWidth = R * 0.03;
+  g.beginPath();
+  g.arc(0, 0, R * 0.78, 0, Math.PI * 2);
+  g.stroke();
+  for (let i = 0; i < 4; i++) point(Math.PI / 4 + (i * Math.PI) / 2, R * 0.6, R * 0.1, light, main);
+  for (let i = 0; i < 4; i++) point(-Math.PI / 2 + (i * Math.PI) / 2, R, R * 0.16, main, light);
+  if (label) {
+    g.fillStyle = main;
+    g.font = `bold ${R * 0.2}px Georgia, serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('N', 0, -R * 1.14);
   }
-  const t = tex(c, false);
-  t.anisotropy = 16;
-  return t;
+  g.restore();
 }
 
 export function boardTopTexture() {
@@ -262,8 +245,8 @@ export function boardTopTexture() {
   const H = 256;
   const { c, g } = canvas(W, H);
   noiseFill(g, W, H, [32, 31, 30], 30, 51);
-  // a subtle spark cut into the griptape near the tail
-  drawSpark(g, W * 0.16, H * 0.5, H * 0.3, 'rgba(217,119,87,0.9)', 7, 0.6);
+  // a small globe cut into the griptape near the tail
+  drawGlobe(g, W * 0.16, H * 0.5, H * 0.24, 'rgba(224,74,59,0.9)', 0.3);
   const r = rng(52);
   for (let i = 0; i < 6000; i++) {
     g.fillStyle = `rgba(255,255,255,${0.03 + r() * 0.07})`;
@@ -280,13 +263,14 @@ export function woodTexture() {
   const W = 256;
   const H = 32;
   const { c, g } = canvas(W, H);
-  const plies = ['#e9d3a8', '#d97757', '#e9d3a8', '#2d2a26', '#e9d3a8', '#d97757', '#e9d3a8'];
+  const plies = ['#e9d3a8', PALETTE.accent, '#e9d3a8', '#2d2a26', '#e9d3a8', PALETTE.navy, '#e9d3a8'];
   for (let i = 0; i < plies.length; i++) {
     g.fillStyle = plies[i];
     g.fillRect(0, (i * H) / plies.length, W, H / plies.length + 1);
   }
   return tex(c);
 }
+
 
 /** Radial blob for the contact shadow. */
 export function shadowTexture() {
@@ -301,12 +285,12 @@ export function shadowTexture() {
   return tex(c, false);
 }
 
-/** Large painted spark for the plaza floor. */
-export function groundSparkTexture() {
+/** Large painted compass rose for the park floor. */
+export function groundCompassTexture() {
   const S = 1024;
   const { c, g } = canvas(S, S);
   g.clearRect(0, 0, S, S);
-  drawSpark(g, S / 2, S / 2, S * 0.46, 'rgba(217,119,87,0.85)', 7, 0.3);
+  drawCompass(g, S / 2, S / 2 + S * 0.03, S * 0.4, 'rgba(224,74,59,0.88)', 'rgba(250,249,245,0.8)', 0.3);
   // weathering: knock out speckles
   g.globalCompositeOperation = 'destination-out';
   const r = rng(91);
@@ -317,6 +301,7 @@ export function groundSparkTexture() {
   const t = tex(c, false);
   return t;
 }
+
 
 export function textTexture(text: string, color: string, bg: string, w = 1024, h = 256, font = 'bold 150px Georgia, serif') {
   const { c, g } = canvas(w, h);
@@ -330,23 +315,27 @@ export function textTexture(text: string, color: string, bg: string, w = 1024, h
   return tex(c, false);
 }
 
-export function sparkBillboardTexture() {
+/** The Atlas Skateboards billboard: navy, globe and wordmark. */
+export function atlasBillboardTexture() {
   const W = 1024;
   const H = 512;
   const { c, g } = canvas(W, H);
-  g.fillStyle = PALETTE.clay;
+  g.fillStyle = PALETTE.navy;
   g.fillRect(0, 0, W, H);
-  drawSpark(g, H * 0.5, H * 0.5, H * 0.36, PALETTE.cream, 7, 0.2);
+  g.fillStyle = PALETTE.accent;
+  g.fillRect(0, H - 34, W, 34);
+  drawGlobe(g, H * 0.5, H * 0.47, H * 0.3, PALETTE.cream, 0.25);
   g.fillStyle = PALETTE.cream;
-  g.font = 'bold 190px Georgia, serif';
+  g.font = 'bold 150px Georgia, serif';
   g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.fillText('Claude', H * 0.95, H * 0.47);
-  g.font = '600 44px "Helvetica Neue", Arial, sans-serif';
-  g.fillStyle = PALETTE.slate;
-  g.fillText('S K A T E   P A R K', H * 0.98, H * 0.78);
+  g.fillText('ATLAS', H * 0.95, H * 0.44);
+  g.font = '600 40px "Helvetica Neue", Arial, sans-serif';
+  g.fillStyle = PALETTE.accent;
+  g.fillText('S K A T E B O A R D S', H * 0.98, H * 0.72);
   return tex(c, false);
 }
+
 
 /** Weathered boardwalk planks running along u. 1 tile = 3m. */
 export function plankTexture() {
@@ -471,17 +460,18 @@ export function facadeTexture() {
   return tex(c);
 }
 
-/** A collectible letter: clay disc with a cream serif letter. */
+
+/** A collectible letter: red disc with a cream serif letter. */
 export function letterTexture(ch: string) {
   const S = 256;
   const { c, g } = canvas(S, S);
   const grd = g.createRadialGradient(S / 2, S / 2, S * 0.2, S / 2, S / 2, S / 2);
   grd.addColorStop(0, 'rgba(255,214,170,0.9)');
-  grd.addColorStop(0.7, 'rgba(217,119,87,0.55)');
-  grd.addColorStop(1, 'rgba(217,119,87,0)');
+  grd.addColorStop(0.7, 'rgba(224,74,59,0.55)');
+  grd.addColorStop(1, 'rgba(224,74,59,0)');
   g.fillStyle = grd;
   g.fillRect(0, 0, S, S);
-  g.fillStyle = PALETTE.clay;
+  g.fillStyle = PALETTE.accent;
   g.beginPath();
   g.arc(S / 2, S / 2, S * 0.34, 0, Math.PI * 2);
   g.fill();
@@ -497,12 +487,64 @@ export function letterTexture(ch: string) {
   return t;
 }
 
-/** Unlockable deck bottoms. Canvas x = tail -> nose, y = width. */
-export function deckTexture(id: string): THREE.CanvasTexture {
-  if (id === 'claude') return boardBottomTexture();
-  const W = 1024;
-  const H = 256;
-  const { c, g } = canvas(W, H);
+type Ctx = CanvasRenderingContext2D;
+
+/** Airmail envelope border: red and blue slanted dashes. */
+function airmailBorder(g: Ctx, W: number, H: number, band: number) {
+  g.save();
+  g.beginPath();
+  g.rect(0, 0, W, H);
+  g.rect(band, band, W - band * 2, H - band * 2);
+  g.clip('evenodd');
+  const step = band * 1.6;
+  for (let i = -4, k = 0; i * step < W + H; i++, k++) {
+    g.fillStyle = k % 2 === 0 ? '#C8312B' : k % 4 === 1 ? '#FAF9F5' : '#21468B';
+    g.beginPath();
+    const x = i * step;
+    g.moveTo(x, 0);
+    g.lineTo(x + step, 0);
+    g.lineTo(x + step - H, H);
+    g.lineTo(x - H, H);
+    g.closePath();
+    g.fill();
+  }
+  g.restore();
+}
+
+/** A round passport stamp with a word round the rim. */
+function stamp(g: Ctx, x: number, y: number, R: number, word: string, inner: string, col: string, rot: number) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(rot);
+  g.strokeStyle = col;
+  g.fillStyle = col;
+  g.lineWidth = R * 0.06;
+  g.beginPath();
+  g.arc(0, 0, R, 0, Math.PI * 2);
+  g.stroke();
+  g.lineWidth = R * 0.03;
+  g.beginPath();
+  g.arc(0, 0, R * 0.68, 0, Math.PI * 2);
+  g.stroke();
+  g.font = `bold ${R * 0.22}px "Helvetica Neue", Arial, sans-serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const span = Math.min(Math.PI * 1.6, word.length * 0.32);
+  for (let i = 0; i < word.length; i++) {
+    const a = -Math.PI / 2 - span / 2 + (span * (i + 0.5)) / word.length;
+    g.save();
+    g.translate(Math.cos(a) * R * 0.84, Math.sin(a) * R * 0.84);
+    g.rotate(a + Math.PI / 2);
+    g.fillText(word[i], 0, 0);
+    g.restore();
+  }
+  g.font = `bold ${R * 0.34}px Georgia, serif`;
+  g.fillText(inner, 0, R * 0.04);
+  g.restore();
+}
+
+/** Unlockable art decks. Canvas x = tail -> nose, y = width. */
+function drawProDeck(g: Ctx, id: string, W: number, H: number) {
   const serif = (size: number) => `bold ${size}px Georgia, "Times New Roman", serif`;
   const word = (t: string, x: number, y: number, size: number, col: string, align: CanvasTextAlign = 'center') => {
     g.fillStyle = col;
@@ -511,70 +553,155 @@ export function deckTexture(id: string): THREE.CanvasTexture {
     g.textBaseline = 'middle';
     g.fillText(t, x, y);
   };
-  if (id === 'haiku') {
-    g.fillStyle = '#e9ede1';
-    g.fillRect(0, 0, W, H);
-    g.fillStyle = '#788C5D';
-    g.fillRect(0, H * 0.82, W, H * 0.18);
-    // ensō brush circle
-    g.strokeStyle = '#2f3a24';
-    g.lineCap = 'round';
-    for (let i = 0; i < 3; i++) {
-      g.lineWidth = 16 - i * 4;
-      g.beginPath();
-      g.arc(W * 0.5, H * 0.45, H * 0.3 + i * 2, 0.3 + i * 0.05, Math.PI * 1.85);
-      g.stroke();
-    }
-    word('Haiku', W * 0.82, H * 0.45, 56, '#2f3a24');
-    g.font = 'italic 22px Georgia, serif';
-    g.fillStyle = '#2f3a24';
-    g.textAlign = 'center';
-    g.fillText('small and quick · lands clean', W * 0.17, H * 0.45);
-  } else if (id === 'sonnet') {
-    g.fillStyle = '#1f2a44';
-    g.fillRect(0, 0, W, H);
-    g.strokeStyle = 'rgba(240,238,230,0.25)';
-    g.lineWidth = 2;
-    for (let i = 1; i < 14; i++) {
-      g.beginPath();
-      g.moveTo(W * 0.08, (H * i) / 14);
-      g.lineTo(W * 0.92, (H * i) / 14);
-      g.stroke();
-    }
-    word('Sonnet', W * 0.5, H * 0.5, 96, '#F0EEE6');
-    drawSpark(g, W * 0.18, H * 0.5, 50, '#6A9BCC', 3);
-    drawSpark(g, W * 0.82, H * 0.5, 50, '#6A9BCC', 4);
-  } else if (id === 'opus') {
-    const grd = g.createLinearGradient(0, 0, W, H);
-    grd.addColorStop(0, '#121110');
-    grd.addColorStop(1, '#2b2722');
+  if (id === 'atlas') {
+    // house deck: navy, a red band between the trucks, the globe and wordmark
+    const grd = g.createLinearGradient(0, 0, W, 0);
+    grd.addColorStop(0, '#16244a');
+    grd.addColorStop(0.5, PALETTE.navy);
+    grd.addColorStop(1, '#16244a');
     g.fillStyle = grd;
     g.fillRect(0, 0, W, H);
-    g.strokeStyle = '#c9a45c';
-    g.lineWidth = 4;
-    g.strokeRect(W * 0.06, H * 0.12, W * 0.88, H * 0.76);
-    g.lineWidth = 1.5;
-    g.strokeRect(W * 0.07, H * 0.16, W * 0.86, H * 0.68);
-    word('OPUS', W * 0.5, H * 0.52, 110, '#c9a45c');
-    drawSpark(g, W * 0.16, H * 0.5, 44, '#c9a45c', 5);
-    drawSpark(g, W * 0.84, H * 0.5, 44, '#c9a45c', 6);
-  } else if (id === 'spark') {
-    g.fillStyle = PALETTE.clay;
-    g.fillRect(0, 0, W, H);
-    for (let i = 0; i < 9; i++) drawSpark(g, (W * (i + 0.5)) / 9, H * (i % 2 ? 0.3 : 0.7), 70, i % 3 === 0 ? PALETTE.ivory : 'rgba(250,249,245,0.35)', 20 + i, i);
-    word('SPARK', W * 0.5, H * 0.52, 100, PALETTE.slate);
-  } else if (id === 'constitution') {
+    const b0 = W * 0.285;
+    const b1 = W * 0.715;
+    g.fillStyle = PALETTE.cream;
+    g.fillRect(b0, 0, b1 - b0, H);
+    g.fillStyle = PALETTE.accent;
+    g.fillRect(b0 - 9, 0, 5, H);
+    g.fillRect(b1 + 4, 0, 5, H);
+    drawGlobe(g, W * 0.35, H * 0.5, H * 0.26, PALETTE.accent, 0.25);
+    word('ATLAS', W * 0.43, H * 0.53, 82, PALETTE.navy, 'left');
+    // nose: a big faded globe bleeding off the edge
+    g.save();
+    g.beginPath();
+    g.rect(b1 + 9, 0, W - b1, H);
+    g.clip();
+    drawGlobe(g, W * 0.9, H * 0.5, H * 0.6, 'rgba(250,249,245,0.16)', 0.4);
+    drawCompass(g, W * 0.86, H * 0.5, 34, PALETTE.cream, 'rgba(250,249,245,0.4)', 0, false);
+    g.restore();
+    // tail lettering clear of the truck
+    g.fillStyle = PALETTE.ivory;
+    g.font = '700 24px "Helvetica Neue", Arial, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('SKATEBOARDS'.split('').join(String.fromCharCode(8202)), W * 0.135, H * 0.5);
+  } else if (id === 'compass') {
     g.fillStyle = '#efe4c8';
     g.fillRect(0, 0, W, H);
     blotches(g, W, H, 30, 'rgba(140,110,60,0.08)', 90, 99);
-    g.fillStyle = 'rgba(60,45,25,0.55)';
-    g.font = 'italic 15px Georgia, serif';
-    g.textAlign = 'left';
-    const words = 'be helpful be honest be harmless land your tricks catch the board respect the locals share the spot '.repeat(6);
-    for (let row = 0; row < 11; row++) g.fillText(words.slice(row * 31, row * 31 + 150), W * 0.05, 26 + row * 20);
-    g.fillStyle = 'rgba(239,228,200,0.85)';
-    g.fillRect(W * 0.3, H * 0.28, W * 0.4, H * 0.44);
-    word('Constitution', W * 0.5, H * 0.5, 54, '#5a3d1e');
+    // map grid
+    g.strokeStyle = 'rgba(90,61,30,0.18)';
+    g.lineWidth = 1.5;
+    for (let x = 32; x < W; x += 64) {
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x, H);
+      g.stroke();
+    }
+    for (let y = 32; y < H; y += 64) {
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(W, y);
+      g.stroke();
+    }
+    drawCompass(g, W * 0.5, H * 0.52, H * 0.4, '#5a3d1e', '#c9a45c', 0);
+    word('NORTH', W * 0.18, H * 0.5, 50, '#5a3d1e');
+    word('SOUTH', W * 0.82, H * 0.5, 50, '#5a3d1e');
+  } else if (id === 'airmail') {
+    g.fillStyle = '#f6f1e3';
+    g.fillRect(0, 0, W, H);
+    airmailBorder(g, W, H, 26);
+    word('PAR AVION', W * 0.5, H * 0.43, 72, '#21468B');
+    g.font = 'italic 24px Georgia, serif';
+    g.fillStyle = '#C8312B';
+    g.textAlign = 'center';
+    g.fillText('by air mail · por avión · mit Luftpost', W * 0.5, H * 0.7);
+    // a postage stamp at the nose
+    g.fillStyle = '#FAF9F5';
+    g.fillRect(W * 0.84, H * 0.22, 92, 112);
+    g.fillStyle = PALETTE.accent;
+    g.fillRect(W * 0.84 + 8, H * 0.22 + 8, 76, 96);
+    drawGlobe(g, W * 0.84 + 46, H * 0.22 + 56, 28, PALETTE.cream);
+  } else if (id === 'passport') {
+    g.fillStyle = '#5a1f2a';
+    g.fillRect(0, 0, W, H);
+    blotches(g, W, H, 24, 'rgba(0,0,0,0.12)', 120, 41);
+    g.strokeStyle = '#d9b45a';
+    g.lineWidth = 3;
+    g.strokeRect(W * 0.05, H * 0.1, W * 0.9, H * 0.8);
+    drawGlobe(g, W * 0.5, H * 0.5, H * 0.3, '#d9b45a', 0);
+    word('PASSPORT', W * 0.23, H * 0.5, 54, '#d9b45a');
+    word('SKATE NATIONS', W * 0.77, H * 0.5, 40, '#d9b45a');
+    stamp(g, W * 0.37, H * 0.74, 40, 'BRAZIL', '✓', 'rgba(140,215,160,0.85)', -0.3);
+    stamp(g, W * 0.64, H * 0.27, 38, 'JAPAN', '★', 'rgba(160,190,240,0.85)', 0.4);
+  } else if (id === 'jetstream') {
+    const grd = g.createLinearGradient(0, 0, W, 0);
+    grd.addColorStop(0, '#1b2a55');
+    grd.addColorStop(0.55, '#c75b6a');
+    grd.addColorStop(1, '#f2b45e');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, W, H);
+    const r = rng(303);
+    for (let i = 0; i < 70; i++) {
+      g.fillStyle = `rgba(255,255,255,${0.3 + r() * 0.6})`;
+      g.fillRect(r() * W * 0.45, r() * H, 2, 2);
+    }
+    // contrail and a little jet
+    g.strokeStyle = 'rgba(255,255,255,0.75)';
+    g.lineCap = 'round';
+    g.lineWidth = 6;
+    g.beginPath();
+    g.moveTo(W * 0.04, H * 0.85);
+    g.bezierCurveTo(W * 0.3, H * 0.95, W * 0.55, H * 0.2, W * 0.78, H * 0.3);
+    g.stroke();
+    g.save();
+    g.translate(W * 0.8, H * 0.3);
+    g.rotate(0.08);
+    g.fillStyle = '#FAF9F5';
+    g.beginPath();
+    g.ellipse(0, 0, 34, 7, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.moveTo(-4, 0);
+    g.lineTo(-16, -30);
+    g.lineTo(6, -2);
+    g.lineTo(6, 2);
+    g.lineTo(-16, 30);
+    g.closePath();
+    g.fill();
+    g.restore();
+    word('JET STREAM', W * 0.3, H * 0.36, 66, 'rgba(250,249,245,0.95)');
+  } else if (id === 'mosaic') {
+    // every flag in the game, tiled
+    const cols = 10;
+    const rows = 4;
+    const cw = W / cols;
+    const ch = H / rows;
+    for (let i = 0; i < cols * rows; i++) {
+      const f = FLAGS[i % FLAGS.length];
+      const x = (i % cols) * cw;
+      const y = Math.floor(i / cols) * ch;
+      g.save();
+      g.translate(x, y);
+      g.beginPath();
+      g.rect(0, 0, cw, ch);
+      g.clip();
+      f.draw(g, cw, ch);
+      g.restore();
+    }
+    g.strokeStyle = 'rgba(20,20,19,0.35)';
+    g.lineWidth = 2;
+    for (let i = 1; i < cols; i++) {
+      g.beginPath();
+      g.moveTo(i * cw, 0);
+      g.lineTo(i * cw, H);
+      g.stroke();
+    }
+    for (let j = 1; j < rows; j++) {
+      g.beginPath();
+      g.moveTo(0, j * ch);
+      g.lineTo(W, j * ch);
+      g.stroke();
+    }
   } else if (id === 'gold') {
     const grd = g.createLinearGradient(0, 0, W, 0);
     grd.addColorStop(0, '#a37b2c');
@@ -582,11 +709,51 @@ export function deckTexture(id: string): THREE.CanvasTexture {
     grd.addColorStop(1, '#a37b2c');
     g.fillStyle = grd;
     g.fillRect(0, 0, W, H);
-    drawSpark(g, W * 0.5, H * 0.5, H * 0.42, 'rgba(255,255,255,0.7)', 7, 0.2);
-    word('CLASSIC', W * 0.2, H * 0.52, 60, '#4a3510');
-    word('CHAMPION', W * 0.8, H * 0.52, 52, '#4a3510');
+    drawGlobe(g, W * 0.5, H * 0.5, H * 0.4, 'rgba(255,255,255,0.7)', 0.2);
+    word('NATIONS', W * 0.2, H * 0.52, 60, '#4a3510');
+    word('CUP GOLD', W * 0.8, H * 0.52, 56, '#4a3510');
+  }
+}
+
+/** Unlockable deck bottoms. Canvas x = tail -> nose, y = width. */
+export function deckTexture(id: string): THREE.CanvasTexture {
+  const W = 1024;
+  const H = 256;
+  const { c, g } = canvas(W, H);
+  const flag = flagDef(id);
+  if (flag) {
+    flag.draw(g, W, H);
+    // a soft sheen down the middle so it reads as a printed deck
+    const grd = g.createLinearGradient(0, 0, 0, H);
+    grd.addColorStop(0, 'rgba(0,0,0,0.1)');
+    grd.addColorStop(0.5, 'rgba(255,255,255,0.08)');
+    grd.addColorStop(1, 'rgba(0,0,0,0.1)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, W, H);
+  } else drawProDeck(g, id, W, H);
+  // subtle wear scratches
+  const r = rng(77);
+  g.strokeStyle = 'rgba(255,255,255,0.12)';
+  g.lineWidth = 1.5;
+  for (let i = 0; i < 40; i++) {
+    const x = r() * W;
+    const y = r() * H;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + (r() - 0.5) * 60, y + (r() - 0.5) * 8);
+    g.stroke();
   }
   const t = tex(c, false);
   t.anisotropy = 16;
   return t;
+}
+
+/** A flag at its natural proportions, for flagpoles. */
+export function flagTexture(id: string): THREE.CanvasTexture {
+  const f = flagDef(id) ?? FLAGS[0];
+  const W = 512;
+  const H = Math.round(W / f.ratio);
+  const { c, g } = canvas(W, H);
+  f.draw(g, W, H);
+  return tex(c, false);
 }

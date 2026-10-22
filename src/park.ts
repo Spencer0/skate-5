@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Terrain, Element, Material, transitionRun, transitionHeight, radiusFor, bowlProfile } from './terrain';
 import * as T from './textures';
+import { flagpole } from './levels/common';
 
 /* ------------------------------------------------------------------ */
 /* Element constructors                                                */
@@ -430,7 +431,7 @@ export interface ParkMaterials {
   box: THREE.MeshStandardMaterial;
   wall: THREE.MeshStandardMaterial;
   metal: THREE.MeshStandardMaterial;
-  clay: THREE.MeshStandardMaterial;
+  accent: THREE.MeshStandardMaterial;
   wood: THREE.MeshStandardMaterial;
   stone: THREE.MeshStandardMaterial;
   water: THREE.MeshStandardMaterial;
@@ -448,7 +449,7 @@ export function makeMaterials(): ParkMaterials {
     box: new THREE.MeshStandardMaterial({ map: boxTex, roughness: 0.85, side: THREE.DoubleSide }),
     wall: new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.95, side: THREE.DoubleSide }),
     metal: new THREE.MeshStandardMaterial({ color: 0xc9c6c0, roughness: 0.3, metalness: 0.85 }),
-    clay: new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.55, metalness: 0.2 }),
+    accent: new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.55, metalness: 0.2 }),
     wood: new THREE.MeshStandardMaterial({ map: T.plankTexture(), roughness: 0.85, side: THREE.DoubleSide }),
     stone: new THREE.MeshStandardMaterial({ map: T.paverTexture(), roughness: 0.9, side: THREE.DoubleSide }),
     water: new THREE.MeshStandardMaterial({ map: T.waterTexture(), color: 0xffffff, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.9 }),
@@ -662,7 +663,7 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, o
     // painted rim tiles
     const rimGeo = new THREE.RingGeometry(b.radius, b.radius + 0.35, 96);
     rimGeo.rotateX(-Math.PI / 2);
-    const rim = new THREE.Mesh(rimGeo, new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.8 }));
+    const rim = new THREE.Mesh(rimGeo, new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.8 }));
     rim.position.set(b.cx, 0.004, b.cz);
     rim.receiveShadow = true;
     group.add(rim);
@@ -689,7 +690,7 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, o
     group.add(m);
   }
 
-  // Grind edges: metal for rails, clay angle iron for ledges
+  // Grind edges: metal for rails, painted angle iron for ledges
   const railGeos: THREE.BufferGeometry[] = [];
   const edgeGeos: THREE.BufferGeometry[] = [];
   const up = new THREE.Vector3(0, 1, 0);
@@ -736,14 +737,14 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, o
     group.add(m);
   }
   if (edgeGeos.length) {
-    const m = new THREE.Mesh(mergeGeometries(edgeGeos.map((g) => g.toNonIndexed()), false)!, mats.clay);
+    const m = new THREE.Mesh(mergeGeometries(edgeGeos.map((g) => g.toNonIndexed()), false)!, mats.accent);
     m.castShadow = true;
     group.add(m);
   }
   return group;
 }
 
-/** Claude Park set dressing: painted zones, the floor spark, billboard, trees. */
+/** Brazil Park set dressing: painted zones, the floor compass, billboard, flags, trees. */
 export function parkDecor(group: THREE.Group, mats: ParkMaterials) {
   // Ground zones: tinted concrete pads with painted borders break up the plaza
   const zones: [number, number, number, number, number][] = [
@@ -753,7 +754,7 @@ export function parkDecor(group: THREE.Group, mats: ParkMaterials) {
     [-12, -42, 30, -22, 0xefe6d6],
     [-44, 44, -8, 70, 0xddd5c8],
   ];
-  const lineMat = new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -3 });
+  const lineMat = new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -3 });
   for (const [x0, z0, x1, z1, tint] of zones) {
     const w = x1 - x0;
     const d = z1 - z0;
@@ -784,16 +785,16 @@ export function parkDecor(group: THREE.Group, mats: ParkMaterials) {
     }
   }
 
-  // Decor: painted spark on the plaza near spawn
-  const sparkMat = new THREE.MeshStandardMaterial({ map: T.groundSparkTexture(), transparent: true, roughness: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
-  const spark = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), sparkMat);
-  spark.rotation.x = -Math.PI / 2;
-  spark.position.set(0, 0.01, 31);
-  spark.receiveShadow = true;
-  group.add(spark);
+  // Decor: painted compass rose on the plaza near spawn
+  const compassMat = new THREE.MeshStandardMaterial({ map: T.groundCompassTexture(), transparent: true, roughness: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const compass = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), compassMat);
+  compass.rotation.x = -Math.PI / 2;
+  compass.position.set(0, 0.01, 31);
+  compass.receiveShadow = true;
+  group.add(compass);
 
   // Billboard above the north wall
-  const bb = new THREE.Mesh(new THREE.PlaneGeometry(22, 11), new THREE.MeshBasicMaterial({ map: T.sparkBillboardTexture() }));
+  const bb = new THREE.Mesh(new THREE.PlaneGeometry(22, 11), new THREE.MeshBasicMaterial({ map: T.atlasBillboardTexture() }));
   bb.position.set(0, 3.6 + 5.8, -77.2);
   group.add(bb);
   const bbBack = new THREE.Mesh(new THREE.BoxGeometry(22.6, 11.6, 0.3), new THREE.MeshStandardMaterial({ color: 0x141413 }));
@@ -805,7 +806,11 @@ export function parkDecor(group: THREE.Group, mats: ParkMaterials) {
     group.add(leg);
   }
 
-  // Wall-top cap stripe in clay
+  // Brazil's flag flies either side of the billboard
+  flagpole(group, mats, -15, -77, 3.6, 'brazil', 8);
+  flagpole(group, mats, 15, -77, 3.6, 'brazil', 8);
+
+  // Wall-top cap stripe in the accent red
   const capGeo = mergeGeometries(
     [
       new THREE.BoxGeometry(2 * 79, 0.12, 4.2).translate(0, 3.66, -77),
@@ -815,7 +820,7 @@ export function parkDecor(group: THREE.Group, mats: ParkMaterials) {
     ],
     false,
   )!;
-  group.add(new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.7 })));
+  group.add(new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.7 })));
 
   // Trees beyond the walls for a sense of place
   const r = T.rng(5);

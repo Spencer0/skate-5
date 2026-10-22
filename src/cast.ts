@@ -10,9 +10,9 @@ export interface Character {
 export const CAST: Record<CharId, Character> = {
   mara: { name: 'Mara', role: 'Crew leader', color: '#788C5D', ink: '#FAF9F5' },
   dex: { name: 'Dex', role: 'Local legend (self-declared)', color: '#6A9BCC', ink: '#FAF9F5' },
-  kai: { name: 'Kai Moreno', role: 'Spark Skateboards team manager', color: '#D97757', ink: '#FAF9F5' },
+  kai: { name: 'Kai Moreno', role: 'Atlas Skateboards team manager', color: '#1D2F5C', ink: '#FAF9F5' },
   pete: { name: 'Officer Pete', role: 'Plaza security', color: '#3D3B36', ink: '#F0EEE6' },
-  announcer: { name: 'Announcer', role: 'The Claude Classic', color: '#B85C3E', ink: '#FAF9F5' },
+  announcer: { name: 'Announcer', role: 'The Nations Cup', color: '#B23427', ink: '#FAF9F5' },
   you: { name: 'You', role: 'The kid with the flick', color: '#F0EEE6', ink: '#141413' },
 };
 

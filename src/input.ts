@@ -286,7 +286,7 @@ export class Input {
     const ring = (x: number, y: number, a: number, accent: boolean) => {
       g.globalAlpha = a;
       g.lineWidth = 2;
-      g.strokeStyle = accent ? 'rgba(217,119,87,0.9)' : 'rgba(250,249,245,0.75)';
+      g.strokeStyle = accent ? 'rgba(224,74,59,0.9)' : 'rgba(250,249,245,0.75)';
       g.fillStyle = 'rgba(20,20,19,0.12)';
       g.beginPath();
       g.arc(x, y, R, 0, Math.PI * 2);
@@ -316,7 +316,7 @@ export class Input {
         const k = age / 0.6;
         g.globalAlpha = 1 - k * k;
         g.lineWidth = 3;
-        g.strokeStyle = 'rgba(217,119,87,0.95)';
+        g.strokeStyle = 'rgba(224,74,59,0.95)';
         g.fillStyle = 'rgba(250,249,245,0.9)';
         g.beginPath();
         g.arc(this.grabFlash.x, this.grabFlash.y, 9 + k * 8, 0, Math.PI * 2);
@@ -341,7 +341,7 @@ export class Input {
     if (this.right) {
       const s = this.right;
       ring(s.ox, s.oy, 0.9, true);
-      knob(s.ox + s.x * R, s.oy - s.y * R, 0.9, 'rgba(217,119,87,0.95)');
+      knob(s.ox + s.x * R, s.oy - s.y * R, 0.9, 'rgba(224,74,59,0.95)');
     }
     // gesture trail
     this.trail = this.trail.filter((p) => now - p.t < 0.45);
@@ -352,7 +352,7 @@ export class Input {
         const p = this.trail[i];
         const q = this.trail[i - 1];
         const a = Math.max(0, 1 - (now - p.t) / 0.45);
-        g.strokeStyle = `rgba(217,119,87,${a * 0.85})`;
+        g.strokeStyle = `rgba(224,74,59,${a * 0.85})`;
         g.lineWidth = 3 + a * 7;
         g.beginPath();
         g.moveTo(q.x, q.y);

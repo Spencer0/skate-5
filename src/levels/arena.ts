@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ParkVisuals, box, kicker, bank, ledge, stairs, quarterPipe, funbox } from '../park';
-import { Level, N, S, E, W, rect, polyRail } from './common';
-import { textTexture, sparkBillboardTexture, rng } from '../textures';
+import { Level, N, S, E, W, rect, polyRail, flagpole } from './common';
+import { textTexture, atlasBillboardTexture, rng } from '../textures';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 export const arenaLevel: Level = {
   id: 'arena',
-  name: 'The Claude Classic',
+  name: 'The Nations Cup',
   chapter: 4,
   tagline: 'Chapter 4 · The contest',
-  blurb: 'Three heats, sixty seconds each. Medal and you are on the Spark team.',
+  blurb: 'Three heats, sixty seconds each. Medal and you are on the Atlas team.',
   sky: '#E6DED2',
   fog: [40, 120],
   ground: true,
@@ -34,10 +34,10 @@ export const arenaLevel: Level = {
         cam2: [0, 15, 26],
         look: [0, 0, 0],
         dur: 4.5,
-        title: 'The Claude Classic',
+        title: 'The Nations Cup',
         subtitle: 'Chapter 4 · The contest',
         lines: [
-          { who: 'announcer', text: 'Ladies and gentlemen, welcome to the CLAUDE CLASSIC!' },
+          { who: 'announcer', text: 'Ladies and gentlemen, live from Japan Arena: welcome to the NATIONS CUP!' },
           { who: 'announcer', text: 'Three heats. Sixty seconds each. Your best two heats are averaged for the final score.' },
         ],
       },
@@ -73,8 +73,8 @@ export const arenaLevel: Level = {
         dur: 5,
         title: 'Champion',
         lines: [
-          { who: 'announcer', text: 'What a finish! Your new medalist at the Claude Classic!' },
-          { who: 'kai', text: "That's it. Welcome to Spark Skateboards." },
+          { who: 'announcer', text: 'What a finish! Your new medalist at the Nations Cup!' },
+          { who: 'kai', text: "That's it. Welcome to Atlas Skateboards." },
           { who: 'mara', text: 'Told you. The kid with the flick.' },
           { who: 'dex', text: '...Rematch next year. And I want a copy of that clip.' },
         ],
@@ -140,7 +140,7 @@ export const arenaLevel: Level = {
       spawn: { x: 0, z: 28, heading: -Math.PI / 2 },
       gaps: [
         { id: 'biggap', name: 'The Big Gap', points: 800, from: rect(-27, 11.5, -23.6, 16.5), to: rect(-19.3, 11.5, -12, 16.5) },
-        { id: 'stairset', name: 'Classic 5-Stair', points: 450, from: rect(22, -17, 26, -3), to: rect(12, -17, 19.8, -3) },
+        { id: 'stairset', name: 'Cup 5-Stair', points: 450, from: rect(22, -17, 26, -3), to: rect(12, -17, 19.8, -3) },
       ],
       letters: [],
       tape: V(0, -10, 0),
@@ -153,7 +153,8 @@ export const arenaLevel: Level = {
     const seats: THREE.BufferGeometry[] = [];
     const crowd: THREE.BufferGeometry[] = [];
     const colors: number[] = [];
-    const palette = [0xd97757, 0x6a9bcc, 0x788c5d, 0xfaf9f5, 0x141413, 0xe3dacc, 0xbfb8aa];
+    // a crowd in national colours
+    const palette = [0xe04a3b, 0x1d2f5c, 0x3a6fb0, 0x009c3b, 0xffdf00, 0xfaf9f5, 0x141413, 0xbc002d, 0xff9933];
     for (const side of [-1, 1]) {
       for (let row = 0; row < 6; row++) {
         const z = side * (42 + row * 1.6);
@@ -173,7 +174,7 @@ export const arenaLevel: Level = {
     cg.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     group.add(new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })));
     // banners on the walls
-    const banner = new THREE.MeshBasicMaterial({ map: textTexture('THE CLAUDE CLASSIC', '#FAF9F5', '#D97757', 1024, 128, 'bold 76px Georgia, serif') });
+    const banner = new THREE.MeshBasicMaterial({ map: textTexture('THE NATIONS CUP', '#FAF9F5', '#1D2F5C', 1024, 128, 'bold 76px Georgia, serif') });
     for (const [x, z, ry] of [
       [0, -39.9, 0],
       [0, 39.9, Math.PI],
@@ -185,9 +186,18 @@ export const arenaLevel: Level = {
       m.rotation.y = ry;
       group.add(m);
     }
-    const bb = new THREE.Mesh(new THREE.PlaneGeometry(18, 9), new THREE.MeshBasicMaterial({ map: sparkBillboardTexture() }));
+    const bb = new THREE.Mesh(new THREE.PlaneGeometry(18, 9), new THREE.MeshBasicMaterial({ map: atlasBillboardTexture() }));
     bb.position.set(0, 13, -49);
     group.add(bb);
+    // the nations line the side walls; the host flies over the billboard
+    const nations = ['brazil', 'usa', 'uk', 'france', 'germany', 'southkorea', 'canada', 'australia', 'spain', 'southafrica', 'sweden', 'argentina', 'italy', 'jamaica'];
+    nations.forEach((f, i) => {
+      const side = i % 2 ? 1 : -1;
+      const z = -30 + Math.floor(i / 2) * 10;
+      flagpole(group, mats, side * 44, z, 0, f, 11, side > 0 ? Math.PI : 0);
+    });
+    flagpole(group, mats, -11, -49, 0, 'japan', 18);
+    flagpole(group, mats, 11, -49, 0, 'japan', 18);
     // light towers
     for (const [x, z] of [
       [-40, -40],

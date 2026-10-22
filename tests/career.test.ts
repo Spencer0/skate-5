@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Career, GoalTracker, applyStats, SPECIALS } from '../src/career';
+import { Career, GoalTracker, applyStats, SPECIALS, DECKS } from '../src/career';
 import { LEVELS } from '../src/levels';
 import { TUNE } from '../src/skater';
 
@@ -78,4 +78,27 @@ test('specials unlock as goals pile up', () => {
   assert.equal(c.equippedSpecial(), null);
   for (const g of park.goals.slice(0, SPECIALS[0].needs)) c.complete(park, g.id);
   assert.equal(c.equippedSpecial()?.id, SPECIALS[0].id);
+});
+
+test('saves from before the rebrand keep their deck and special', () => {
+  const store = new Map<string, string>();
+  const g = globalThis as { localStorage?: unknown };
+  const prev = g.localStorage;
+  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+  try {
+    store.set('skate5.career.v1', JSON.stringify({ deck: 'sonnet', special: 'context' }));
+    let c = new Career();
+    assert.equal(c.data.deck, 'airmail');
+    assert.equal(c.data.special, 'bullet');
+    store.set('skate5.career.v1', JSON.stringify({ deck: 'nope' }));
+    c = new Career();
+    assert.equal(c.data.deck, 'atlas');
+  } finally {
+    g.localStorage = prev;
+  }
+});
+
+test('every deck id is unique', () => {
+  const ids = DECKS.map((d) => d.id);
+  assert.equal(new Set(ids).size, ids.length);
 });

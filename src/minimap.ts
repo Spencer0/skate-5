@@ -101,7 +101,7 @@ export class Minimap {
     // uncollected letters
     for (const d of dots) {
       const [dx, dz] = this.toMap(d.x, d.z);
-      g.fillStyle = '#D97757';
+      g.fillStyle = '#E04A3B';
       g.strokeStyle = '#FAF9F5';
       g.lineWidth = 1.5;
       g.beginPath();
@@ -113,7 +113,7 @@ export class Minimap {
     g.save();
     g.translate(px, pz);
     g.rotate(yaw);
-    g.fillStyle = '#D97757';
+    g.fillStyle = '#E04A3B';
     g.strokeStyle = '#141413';
     g.lineWidth = 1;
     g.beginPath();

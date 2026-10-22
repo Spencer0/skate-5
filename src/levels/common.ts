@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Terrain } from '../terrain';
 import type { ParkMaterials, ParkVisuals } from '../park';
-import { rng } from '../textures';
+import { rng, flagTexture } from '../textures';
+import { flagDef } from '../flags';
+
+/** The collectible letters hidden in every street spot, in order. */
+export const LETTERS = 'NATION';
+export const LETTERS_GOAL = `Collect ${LETTERS.split('').join('-')}`;
 
 export interface Rect {
   x0: number;
@@ -79,7 +84,7 @@ export interface LevelData {
   vis: ParkVisuals;
   spawn: { x: number; z: number; heading: number };
   gaps: GapDef[];
-  letters: THREE.Vector3[]; // C, L, A, U, D, E
+  letters: THREE.Vector3[]; // one per letter of LETTERS
   tape: THREE.Vector3;
   props: PropDef[];
 }
@@ -191,6 +196,44 @@ export function lamps(group: THREE.Group, mats: ParkMaterials, spots: [number, n
   if (!spots.length) return;
   group.add(new THREE.Mesh(mergeGeometries(poles, false)!, mats.metal));
   group.add(new THREE.Mesh(mergeGeometries(heads, false)!, new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffd9a0, emissiveIntensity: 0.6 })));
+}
+
+const flagMats = new Map<string, THREE.MeshStandardMaterial>();
+
+/**
+ * A flagpole flying a country flag, rippled into a frozen wave. Decor only
+ * (non-colliding), so keep it off skate lines. `face` turns the flag about the pole.
+ */
+export function flagpole(group: THREE.Group, mats: ParkMaterials, x: number, z: number, base: number, flag: string, height = 9, face = 0) {
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, height, 8), mats.metal);
+  pole.position.set(x, base + height / 2, z);
+  pole.castShadow = true;
+  group.add(pole);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), mats.metal);
+  knob.position.set(x, base + height + 0.08, z);
+  group.add(knob);
+  const ratio = flagDef(flag)?.ratio ?? 1.5;
+  const fh = 1.5;
+  const fw = fh * ratio;
+  const geo = new THREE.PlaneGeometry(fw, fh, 24, 4);
+  const p = geo.getAttribute('position');
+  for (let i = 0; i < p.count; i++) {
+    const u = p.getX(i) / fw + 0.5; // 0 at the pole
+    p.setX(i, u * fw);
+    p.setZ(i, Math.sin(u * 7 + 0.6) * 0.16 * u);
+    p.setY(i, p.getY(i) - u * u * 0.12);
+  }
+  geo.computeVertexNormals();
+  let mat = flagMats.get(flag);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ map: flagTexture(flag), roughness: 0.8, side: THREE.DoubleSide });
+    flagMats.set(flag, mat);
+  }
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x + 0.06, base + height - fh / 2 - 0.15, z);
+  m.rotation.y = face;
+  m.castShadow = true;
+  group.add(m);
 }
 
 /** Simple box buildings around a plaza (decor, beyond the walls). */

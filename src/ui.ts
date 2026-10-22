@@ -148,7 +148,7 @@ export class UI {
 
   showTitle() {
     this.reset('title');
-    el('div', 'menu-title', this.card, 'Claude Skate');
+    el('div', 'menu-title', this.card, 'Skate Nations');
     el('div', 'menu-sub', this.card, 'flick-stick skateboarding');
     const btns = el('div', 'menu-btns', this.card);
     // the tutorial leads the menu and glows until it's been played once
@@ -333,7 +333,7 @@ export class UI {
       if (confirm('Erase all career progress?')) {
         this.career.reset();
         this.hooks.statsChanged();
-        this.hooks.deckChanged('claude');
+        this.hooks.deckChanged('atlas');
         this.showTitle();
       }
     });
@@ -351,15 +351,24 @@ export class UI {
   }
 
   private decksTab(back: () => void) {
-    el('p', 'menu-p', this.card, 'Unlock graphics as you complete goals. Flip a trick to see them.');
+    el('p', 'menu-p', this.card, 'Rep your country, or unlock pro graphics as you complete goals. Flip a trick to see them.');
+    for (const [set, title] of [
+      ['pro', 'Pro decks'],
+      ['flag', 'Flags'],
+    ] as const)
+      this.deckSet(set, title, back);
+  }
+
+  private deckSet(set: 'pro' | 'flag', title: string, back: () => void) {
+    el('div', 'deck-set', this.card, title);
     const grid = el('div', 'deck-grid', this.card);
-    for (const d of DECKS) {
+    for (const d of DECKS.filter((x) => x.set === set)) {
       const ok = this.career.deckUnlocked(d);
       const item = el('button', 'deck' + (ok ? '' : ' locked') + (this.career.data.deck === d.id ? ' on' : ''), grid) as HTMLButtonElement;
       const img = el('img', 'deck-img', item) as HTMLImageElement;
       img.src = this.thumb(d.id);
       el('div', 'deck-name', item, d.name);
-      el('div', 'deck-need', item, ok ? (this.career.data.deck === d.id ? 'Riding' : 'Tap to ride') : d.needs === 'gold' ? 'Win gold at the Classic' : `${d.needs} goals`);
+      el('div', 'deck-need', item, ok ? (this.career.data.deck === d.id ? 'Riding' : 'Tap to ride') : d.needs === 'gold' ? 'Win gold at the Nations Cup' : `${d.needs} goals`);
       if (ok)
         item.addEventListener('click', () => {
           this.career.data.deck = d.id;
@@ -610,7 +619,7 @@ export class UI {
 
   showStandings(title: string, standings: Standing[], heat: number, final: boolean, onNext: () => void, medal: Medal | null) {
     this.reset('summary');
-    el('div', 'menu-tag', this.card, 'The Claude Classic');
+    el('div', 'menu-tag', this.card, 'The Nations Cup');
     el('div', 'menu-title small', this.card, title);
     if (final) {
       el('div', 'medal ' + (medal ?? 'none'), this.card, medal ? medal.toUpperCase() : 'NO MEDAL');
@@ -639,11 +648,10 @@ export class UI {
     this.reset('credits');
     const roll = el('div', 'credits-roll', this.card);
     const lines: [string, string][] = [
-      ['', 'Claude Skate'],
+      ['', 'Skate Nations'],
       ['Starring', 'You — the kid with the flick'],
       ['', 'Mara · Dex · Kai Moreno · Officer Pete'],
-      ['Spots', 'Claude Park · Fountain Plaza · The Pier · Spark Arena'],
-      ['Physics, tricks & feel', 'Built with Claude'],
+      ['Spots', 'Brazil Park · Plaza de España · Australia Pier · Japan Arena'],
       ['Characters', 'MakeHuman · MPFB (CC0)'],
       ['Outfits', `${EXTRA_AUTHORS.join(' · ')} (CC BY)`],
       ['Rendering', 'three.js'],

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import { Terrain } from './terrain';
 import { buildMeshes, makeMaterials } from './park';
-import { LEVELS, LevelData, GapDef, GoalDef, inRect, V3 } from './levels';
+import { LEVELS, LevelData, GapDef, GoalDef, inRect, V3, LETTERS } from './levels';
 import { BoardModel, DECK } from './board';
 import { Skater, SkaterEvent, TrickRecord, Quality, GRAB_LIFT } from './skater';
 import { Input } from './input';
@@ -278,7 +278,7 @@ const tut = new Tutorial(app, {
   },
 });
 
-/** A no-clock ride in Claude Park with the coach on top. */
+/** A no-clock ride in the first park with the coach on top. */
 function startTutorial() {
   startRun(0, 'free');
   tut.start();
@@ -908,12 +908,12 @@ function handleProps(dt: number, t: number) {
       }
     } else if (h.kind === 'letter') {
       const got = props.lettersGot;
-      hud.toast(`Letter ${'CLAUDE'[h.idx]}`, `${got.size}/6 · ${'CLAUDE'.split('').map((c, i) => (got.has(i) ? c : '·')).join(' ')}`, 'letter');
+      hud.toast(`Letter ${LETTERS[h.idx]}`, `${got.size}/${LETTERS.length} · ${LETTERS.split('').map((c, i) => (got.has(i) ? c : '·')).join(' ')}`, 'letter');
       audio.letter();
       buzz(12);
       tracker?.letters(got.size);
     } else if (h.kind === 'tape') {
-      hud.toast('Secret tape!', 'You found the Spark team tape', 'goal');
+      hud.toast('Secret tape!', 'You found the Atlas team tape', 'goal');
       audio.letter();
       tracker?.tape();
     }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ParkVisuals, box, kicker, bank, ledge, stairs, quarterPipe, funbox } from '../park';
-import { Level, N, S, rect, polyRail, lamps, scoreGoals } from './common';
+import { Level, N, S, rect, polyRail, lamps, scoreGoals, flagpole, LETTERS_GOAL } from './common';
 
 const SEA = -0.9;
 
@@ -25,7 +25,7 @@ const PIER_RAIL: [number, number][] = [
 
 export const pierLevel: Level = {
   id: 'pier',
-  name: 'The Pier',
+  name: 'Australia Pier',
   chapter: 3,
   tagline: 'Chapter 3 · Saturday at the beach',
   blurb: 'Kai Moreno wants to see someone ride the 250m pier rail. The water is cold.',
@@ -38,7 +38,7 @@ export const pierLevel: Level = {
   objectNoun: 'beach balls',
   goals: [
     ...scoreGoals(15000, 45000, 100000),
-    { id: 'let', kind: 'letters', text: 'Collect C-L-A-U-D-E', hint: 'All six in one run. Two of them are on the pier rail.' },
+    { id: 'let', kind: 'letters', text: LETTERS_GOAL, hint: 'All six in one run. Two of them are on the pier rail.' },
     { id: 'tape', kind: 'tape', text: 'Find the secret tape', hint: 'On the deck of the pier-head quarter pipe. Hold up at the lip.', view: { cam: [14, 5, -82], look: [8, 2, -92.9] } },
     { id: 'balls', kind: 'objects', count: 5, text: 'Pop 5 beach balls', hint: 'The tourists left them everywhere. Promenade, boardwalk, pier head.' },
     { id: 'pg', kind: 'gap', gap: 'piergap', text: 'Ollie the Pier Gap', hint: 'Kickers on both sides of the rotten planks. Pop at the lip.' },
@@ -56,7 +56,7 @@ export const pierLevel: Level = {
         cam2: [16, 14, 18],
         look: [0, 0, -30],
         dur: 4.5,
-        title: 'The Pier',
+        title: 'Australia Pier',
         subtitle: 'Chapter 3 · Saturday at the beach',
         lines: [
           { who: 'kai', text: 'You came. Good. See that rail?' },
@@ -79,7 +79,7 @@ export const pierLevel: Level = {
         look: [0, 1, -88],
         dur: 4,
         lines: [
-          { who: 'dex', text: "Thought I'd come watch. Heard the Spark team only has one spot." },
+          { who: 'dex', text: "Thought I'd come watch. Heard the Atlas team only has one spot." },
           { who: 'kai', text: 'It does.' },
         ],
       },
@@ -103,8 +103,8 @@ export const pierLevel: Level = {
         title: 'Chapter 3 complete',
         lines: [
           { who: 'kai', text: 'Alright. I have seen enough.' },
-          { who: 'kai', text: 'One spot on the team. One contest: the Claude Classic.' },
-          { who: 'kai', text: 'You, Dex, and the best riders on the coast. Medal and you are on Spark.' },
+          { who: 'kai', text: 'One spot on the team. One contest: the Nations Cup.' },
+          { who: 'kai', text: 'You, Dex, and the best riders on the coast. Medal and you are on Atlas.' },
           { who: 'dex', text: 'See you there, rookie.' },
         ],
       },
@@ -185,12 +185,12 @@ export const pierLevel: Level = {
         { kind: 'ball', pos: new THREE.Vector3(12, 0, -75) },
       ],
       letters: [
-        new THREE.Vector3(0, 2.2, -28), // C: over the pier gap
-        new THREE.Vector3(17.5, 1.0, -82), // L: east side of the pier-head rail
-        new THREE.Vector3(0, 2.5, -92.1), // A: quarter pipe air
-        new THREE.Vector3(-6, 1.3, 28.6), // U: promenade handrail
-        new THREE.Vector3(-4.6, 1.0, -12), // D: west pier rail
-        new THREE.Vector3(-27, 2.0, 36), // E: promenade flat rail
+        new THREE.Vector3(0, 2.2, -28), // N: over the pier gap
+        new THREE.Vector3(17.5, 1.0, -82), // A: east side of the pier-head rail
+        new THREE.Vector3(0, 2.5, -92.1), // T: quarter pipe air
+        new THREE.Vector3(-6, 1.3, 28.6), // I: promenade handrail
+        new THREE.Vector3(-4.6, 1.0, -12), // O: west pier rail
+        new THREE.Vector3(-27, 2.0, 36), // N: promenade flat rail
       ],
     };
   },
@@ -221,7 +221,7 @@ export const pierLevel: Level = {
     const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2, 14, 16), new THREE.MeshStandardMaterial({ color: 0xfaf9f5 }));
     tower.position.set(22, 6, -112);
     group.add(tower);
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(1.62, 1.8, 2.2, 16), mats.clay);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(1.62, 1.8, 2.2, 16), mats.accent);
     band.position.set(22, 6, -112);
     group.add(band);
     const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 2, 12), new THREE.MeshStandardMaterial({ color: 0xffe2b0, emissive: 0xffc070, emissiveIntensity: 0.8 }));
@@ -245,5 +245,7 @@ export const pierLevel: Level = {
       [20, 45, 1.2],
       [0, 50, 1.2],
     ]);
+    flagpole(group, mats, -12, 56, 1.2, 'australia', 10);
+    flagpole(group, mats, 12, 56, 1.2, 'australia', 10);
   },
 };

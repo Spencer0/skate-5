@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Terrain } from './terrain';
-import type { PropDef, PropKind } from './levels';
+import { LETTERS, type PropDef, type PropKind } from './levels';
 import { letterTexture } from './textures';
 
 /**
@@ -23,8 +23,6 @@ interface Pickup {
   obj: THREE.Object3D;
   base: THREE.Vector3;
 }
-
-const LETTERS = 'CLAUDE';
 
 function signMesh() {
   const g = new THREE.Group();
@@ -81,7 +79,7 @@ function ballMesh() {
   c.width = 256;
   c.height = 128;
   const x = c.getContext('2d')!;
-  const cols = ['#d97757', '#faf9f5', '#6a9bcc', '#faf9f5', '#e8c547', '#faf9f5'];
+  const cols = ['#e04a3b', '#faf9f5', '#3a6fb0', '#faf9f5', '#e8c547', '#faf9f5'];
   cols.forEach((col, i) => {
     x.fillStyle = col;
     x.fillRect((i * 256) / cols.length, 0, 256 / cols.length + 1, 128);
@@ -105,13 +103,13 @@ function tapeMesh() {
   x.fillRect(0, 0, 256, 160);
   x.fillStyle = '#faf9f5';
   x.fillRect(20, 18, 216, 64);
-  x.fillStyle = '#d97757';
+  x.fillStyle = '#e04a3b';
   x.font = 'bold 30px Georgia, serif';
   x.textAlign = 'center';
   x.fillText('SECRET', 128, 52);
   x.font = 'bold 16px sans-serif';
   x.fillStyle = '#141413';
-  x.fillText('SPARK TEAM — DO NOT ERASE', 128, 74);
+  x.fillText('ATLAS TEAM — DO NOT ERASE', 128, 74);
   x.fillStyle = '#2b2a27';
   x.beginPath();
   x.arc(84, 118, 22, 0, Math.PI * 2);

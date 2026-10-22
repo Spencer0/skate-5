@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Terrain } from '../terrain';
 import { ParkVisuals, box, kicker, bank, ledge, stairs, hubba, quarterPipe } from '../park';
-import { Level, N, S, W, rect, ringRail, polyRail, buildings, lamps, scatterTrees, scoreGoals } from './common';
+import { Level, N, S, W, rect, ringRail, polyRail, buildings, lamps, scatterTrees, scoreGoals, flagpole, LETTERS_GOAL } from './common';
 
 const FOUNTAIN = { r: 2.2, inner: 1.8, rim: 0.5, ped: 0.35, pedH: 1.1, water: 0.3 };
 
@@ -52,7 +52,7 @@ function fountain(t: Terrain, cx: number, cz: number) {
 
 export const plazaLevel: Level = {
   id: 'plaza',
-  name: 'Fountain Plaza',
+  name: 'Plaza de España',
   chapter: 2,
   tagline: 'Chapter 2 · Downtown',
   blurb: 'A legendary fountain gap, a 7-stair Dex claims as his, and a security guard on a long lunch.',
@@ -65,7 +65,7 @@ export const plazaLevel: Level = {
   objectNoun: 'traffic cones',
   goals: [
     ...scoreGoals(10000, 30000, 70000),
-    { id: 'let', kind: 'letters', text: 'Collect C-L-A-U-D-E', hint: 'All six in one run. One of them is floating over the fountain.' },
+    { id: 'let', kind: 'letters', text: LETTERS_GOAL, hint: 'All six in one run. One of them is floating over the fountain.' },
     { id: 'tape', kind: 'tape', text: 'Find the secret tape', hint: 'Ride up the big west bank and pop off the very top.', view: { cam: [-38, 4, 8], look: [-49.3, 2.4, 0] } },
     { id: 'cones', kind: 'objects', count: 5, text: "Knock over Pete's 5 traffic cones", hint: 'Five cones scattered around the plaza. One is up on the terrace.' },
     { id: 'fg', kind: 'gap', gap: 'fountain', text: 'Gap over the fountain', hint: 'Push hard, ride up the kicker and pop right at the lip.' },
@@ -84,7 +84,7 @@ export const plazaLevel: Level = {
         cam2: [12, 16, 26],
         look: [0, 0, -4],
         dur: 4,
-        title: 'Fountain Plaza',
+        title: 'Plaza de España',
         subtitle: 'Chapter 2 · Downtown',
         lines: [
           { who: 'pete', text: 'Hey! HEY! This is a public plaza, not a skatepark!' },
@@ -134,7 +134,7 @@ export const plazaLevel: Level = {
         title: 'Chapter 2 complete',
         lines: [
           { who: 'kai', text: 'Saw the fountain clip. That catch was clean.' },
-          { who: 'mara', text: "That's Kai Moreno. Spark team manager. Do not freak out." },
+          { who: 'mara', text: "That's Kai Moreno. Atlas team manager. Do not freak out." },
           { who: 'kai', text: "There's a rail at the pier I want to see someone ride end to end. Saturday." },
           { who: 'dex', text: "Wait — he didn't invite me?" },
         ],
@@ -222,12 +222,12 @@ export const plazaLevel: Level = {
         { kind: 'cone', pos: new THREE.Vector3(6, 0, -45) },
       ],
       letters: [
-        new THREE.Vector3(0, 3.0, -0.4), // C: over the fountain
-        new THREE.Vector3(2.6, 1.35, -28.4), // L: on the 7-stair handrail
-        new THREE.Vector3(25, 1.9, 8.2), // A: over the planter gap
-        new THREE.Vector3(40, 1.0, -13.5), // U: end of the long ledge
-        new THREE.Vector3(-2.0, 0.95, 0), // D: on the fountain rim
-        new THREE.Vector3(0, 2.3, -44), // E: above the terrace ledge
+        new THREE.Vector3(0, 3.0, -0.4), // N: over the fountain
+        new THREE.Vector3(2.6, 1.35, -28.4), // A: on the 7-stair handrail
+        new THREE.Vector3(25, 1.9, 8.2), // T: over the planter gap
+        new THREE.Vector3(40, 1.0, -13.5), // I: end of the long ledge
+        new THREE.Vector3(-2.0, 0.95, 0), // O: on the fountain rim
+        new THREE.Vector3(0, 2.3, -44), // N: above the terrace ledge
       ],
     };
   },
@@ -244,6 +244,8 @@ export const plazaLevel: Level = {
       [32, 20, 0],
       [-36, 30, 0],
     ]);
+    flagpole(group, mats, -32, -56, 0, 'spain', 11);
+    flagpole(group, mats, 32, -56, 0, 'spain', 11);
     // plaza paving under everything
     const g = new THREE.PlaneGeometry(120, 120);
     g.rotateX(-Math.PI / 2);
