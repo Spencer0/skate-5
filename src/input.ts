@@ -40,7 +40,7 @@ const finePointer = typeof matchMedia === 'function' ? matchMedia('(pointer: fin
 export const trickAnywhere = () => finePointer?.matches ?? false;
 
 /**
- * Two floating thumb sticks:
+ * Two thumb sticks, anchored where each touch lands:
  *  - left half: steer (drag), push (tap), hold up = keep pushing, hold down = powerslide
  *  - right half: the flick trick stick. Tap in the air to catch.
  *  - fine pointer: the trick stick takes any press, so there is no steer side to pick.
@@ -163,17 +163,6 @@ export class Input {
       const t = this.now();
       s.samples.push({ t, x, y, rx, ry });
       if (s === this.right) this.trail.push({ x: ev.clientX, y: ev.clientY, t });
-    }
-    // left stick follows the thumb if it drifts far away (floating stick)
-    if (s === this.left) {
-      const dx = e.clientX - s.ox;
-      const dy = e.clientY - s.oy;
-      const d = Math.hypot(dx, dy);
-      const lim = this.R * 1.6;
-      if (d > lim) {
-        s.ox += (dx / d) * (d - lim);
-        s.oy += (dy / d) * (d - lim);
-      }
     }
   }
 
