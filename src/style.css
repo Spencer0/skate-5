@@ -55,9 +55,16 @@ body {
   top: max(10px, env(safe-area-inset-top));
   left: max(12px, env(safe-area-inset-left));
   right: max(12px, env(safe-area-inset-right));
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 8px;
+}
+.hud-mid {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 .score {
   font-family: var(--serif);
@@ -76,8 +83,20 @@ body {
 }
 .hud-btns {
   display: flex;
+  justify-content: flex-end;
   gap: 6px;
   pointer-events: auto;
+}
+.hud-btn.icon {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.hud.timed .best,
+.hud.timed .speedo {
+  display: none;
 }
 .hud-btn {
   pointer-events: auto;
@@ -105,7 +124,7 @@ body {
 
 .combo {
   position: absolute;
-  top: max(58px, calc(env(safe-area-inset-top) + 50px));
+  bottom: max(62px, calc(env(safe-area-inset-bottom) + 54px));
   left: 50%;
   transform: translateX(-50%) translateY(-6px);
   text-align: center;
@@ -137,7 +156,7 @@ body {
 }
 .combo-result {
   position: absolute;
-  top: max(58px, calc(env(safe-area-inset-top) + 48px));
+  bottom: max(70px, calc(env(safe-area-inset-bottom) + 62px));
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--serif);
@@ -240,7 +259,7 @@ body {
 .balance {
   position: absolute;
   left: 50%;
-  bottom: 22%;
+  bottom: max(22%, 130px);
   width: 120px;
   height: 64px;
   transform: translateX(-50%);
@@ -376,12 +395,12 @@ body {
 
 .minimap {
   position: absolute;
-  top: max(52px, calc(env(safe-area-inset-top) + 44px));
+  top: max(56px, calc(env(safe-area-inset-top) + 48px));
   right: max(12px, env(safe-area-inset-right));
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(20, 20, 19, 0.12);
 }
-@media (max-height: 420px) {
+@media (max-height: 420px), (max-width: 480px) {
   .minimap {
     width: 76px !important;
     height: 76px !important;
@@ -390,9 +409,20 @@ body {
 
 /* Goal chip + toasts */
 .goals-chip {
-  background: rgba(217, 119, 87, 0.92);
-  color: var(--ivory);
-  border-color: transparent;
+  pointer-events: auto;
+  font: 700 11px var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(20, 20, 19, 0.6);
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.goals-chip b {
+  color: var(--clay-dark);
+  margin-left: 2px;
 }
 .toasts {
   position: absolute;
@@ -1193,11 +1223,9 @@ body {
 
 /* ---------- run HUD ---------- */
 .timer {
-  position: absolute;
-  top: max(8px, env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  font: 800 26px var(--sans);
+  font: 800 24px var(--sans);
+  line-height: 1;
+  padding-top: 2px;
   font-variant-numeric: tabular-nums;
   color: var(--slate);
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -1223,16 +1251,28 @@ body {
 .tracker {
   position: absolute;
   left: max(12px, env(safe-area-inset-left));
-  top: max(58px, calc(env(safe-area-inset-top) + 50px));
-  display: flex;
+  top: max(56px, calc(env(safe-area-inset-top) + 48px));
+  display: none;
   flex-direction: column;
   gap: 4px;
-  max-width: 44vw;
+  max-width: min(46vw, 220px);
+  background: rgba(250, 249, 245, 0.78);
+  backdrop-filter: blur(6px);
+  border-radius: 12px;
+  padding: 7px 10px 8px;
+}
+.tracker.on {
+  display: flex;
+}
+.track-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.track-rows:empty {
+  display: none;
 }
 .track {
-  background: rgba(250, 249, 245, 0.85);
-  border-radius: 10px;
-  padding: 5px 9px;
   font: 600 12px var(--sans);
   color: var(--slate);
   display: flex;
@@ -1263,11 +1303,7 @@ body {
   color: var(--ivory);
 }
 .special {
-  position: absolute;
-  left: 50%;
-  top: max(42px, calc(env(safe-area-inset-top) + 36px));
-  transform: translateX(-50%);
-  width: 120px;
+  width: 96px;
   height: 8px;
   border-radius: 4px;
   background: rgba(20, 20, 19, 0.18);
@@ -1741,4 +1777,579 @@ body {
     transform: none;
     box-shadow: none;
   }
+}
+
+/* ---------- tutorial ---------- */
+.tut {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  display: none;
+}
+.tut.on {
+  display: block;
+}
+.tut.paused {
+  visibility: hidden;
+}
+.hud.tutorial .score-box,
+.hud.tutorial .special {
+  visibility: hidden;
+}
+.hud.tutorial .minimap,
+.hud.tutorial .speedo,
+.hud.tutorial .hint {
+  display: none;
+}
+.tut-card {
+  position: absolute;
+  top: max(58px, calc(env(safe-area-inset-top) + 50px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(360px, calc(100vw - 24px));
+  background: rgba(250, 249, 245, 0.94);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  padding: 12px 16px 14px;
+  box-shadow: 0 10px 32px rgba(20, 20, 19, 0.16);
+  text-align: center;
+}
+.tut-card.ok {
+  animation: tut-ok 0.45s ease;
+}
+@keyframes tut-ok {
+  40% {
+    transform: translateX(-50%) scale(1.05);
+    box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.5), 0 10px 32px rgba(20, 20, 19, 0.16);
+  }
+}
+.tut-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 22px;
+}
+.tut-dots {
+  display: flex;
+  gap: 6px;
+}
+.tut-dots span {
+  width: 22px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(20, 20, 19, 0.14);
+  transition: background 0.3s;
+}
+.tut-dots span.on {
+  background: var(--clay);
+}
+.tut-dots span.done {
+  background: var(--slate);
+}
+.tut-skip {
+  position: absolute;
+  right: -6px;
+  top: -4px;
+  pointer-events: auto;
+  font: 700 11px var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(20, 20, 19, 0.5);
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+}
+.tut-title {
+  font: 700 26px var(--serif);
+  margin-top: 4px;
+}
+.tut-text {
+  font-size: 15px;
+  line-height: 1.35;
+  color: #3d3b36;
+  margin-top: 2px;
+}
+.tut-progress {
+  font: 800 13px var(--sans);
+  color: var(--clay-dark);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.tut-progress:empty {
+  display: none;
+}
+.tut-progress.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(20, 20, 19, 0.1);
+  overflow: hidden;
+  margin: 8px auto 0;
+  width: 70%;
+}
+.tut-progress.bar i {
+  display: block;
+  height: 100%;
+  background: var(--clay);
+}
+.tut-note {
+  font: 600 13px var(--sans);
+  color: var(--ivory);
+  background: var(--slate);
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-top: 8px;
+  display: none;
+}
+.tut-note.on {
+  display: block;
+  animation: tut-in 0.25s ease;
+}
+@keyframes tut-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* the animated coach: an anchor point with a hand, ripples and a trail around it */
+.tut-coach {
+  position: absolute;
+  top: 66%;
+  width: 0;
+  height: 0;
+  display: none;
+}
+.tut-coach.on {
+  display: block;
+}
+.tut-coach.at-left {
+  left: 25%;
+}
+.tut-coach.at-right {
+  left: 75%;
+}
+.tut-coach.at-center {
+  left: 50%;
+}
+.tut-trail {
+  position: absolute;
+  left: -100px;
+  top: -100px;
+  width: 200px;
+  height: 200px;
+  overflow: visible;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tut-trail .tut-line {
+  stroke: rgba(250, 249, 245, 0.8);
+  stroke-width: 6;
+  stroke-dasharray: 2 12;
+}
+.tut-trail .tut-load {
+  stroke: rgba(250, 249, 245, 0.85);
+  stroke-width: 6;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tut-load 2.2s infinite;
+}
+.tut-trail .tut-flick {
+  stroke: var(--clay);
+  stroke-width: 8;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 2px 3px rgba(20, 20, 19, 0.25));
+  animation: tut-flick 2.2s infinite;
+}
+.tut-trail .tut-head {
+  stroke: var(--clay);
+  stroke-width: 8;
+  opacity: 0;
+  animation: tut-arrow 2.2s infinite;
+}
+.g-drag .tut-trail .tut-head {
+  stroke: rgba(250, 249, 245, 0.85);
+  stroke-width: 6;
+  opacity: 1;
+  animation: none;
+}
+@keyframes tut-load {
+  0%,
+  12% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  38% {
+    stroke-dashoffset: 0;
+  }
+  80% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  95%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes tut-flick {
+  0%,
+  48% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  62% {
+    stroke-dashoffset: 0;
+  }
+  80% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  95%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes tut-arrow {
+  0%,
+  58% {
+    opacity: 0;
+  }
+  64%,
+  80% {
+    opacity: 1;
+  }
+  95%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.tut-hand {
+  position: absolute;
+  left: -14px;
+  top: -1px;
+  transform-origin: 14px 1px;
+  scale: 1.3;
+  rotate: 14deg;
+  filter: drop-shadow(0 6px 8px rgba(20, 20, 19, 0.3));
+}
+.tut-hand-shape rect {
+  fill: var(--ivory);
+  stroke: var(--slate);
+  stroke-width: 2.2;
+  paint-order: stroke;
+}
+.tut-ripple,
+.tut-tap {
+  position: absolute;
+  opacity: 0;
+}
+.tut-ripple {
+  left: -26px;
+  top: -26px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 3px solid rgba(250, 249, 245, 0.95);
+  background: rgba(217, 119, 87, 0.35);
+}
+
+/* tap: press, release, repeat */
+.g-tap .tut-hand {
+  animation: tut-hand-tap 1.1s infinite;
+}
+.g-tap .tut-ripple {
+  animation: tut-ripple 1.1s infinite;
+}
+.g-tap .tut-ripple.r2 {
+  animation-delay: 0.12s;
+}
+@keyframes tut-hand-tap {
+  0%,
+  100% {
+    transform: translate(10px, 14px) scale(1.08);
+  }
+  30% {
+    transform: translate(0, 0) scale(0.94);
+  }
+  45% {
+    transform: translate(0, 0) scale(0.94);
+  }
+}
+@keyframes tut-ripple {
+  0%,
+  28% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  32% {
+    opacity: 1;
+  }
+  85%,
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+/* drag: thumb down, then sweep left and right */
+.g-drag .tut-hand {
+  animation: tut-hand-drag 2.4s ease-in-out infinite;
+}
+.g-drag .tut-ripple:not(.r2) {
+  opacity: 0.8;
+  transform: scale(0.5);
+  animation: tut-dot-drag 2.4s ease-in-out infinite;
+}
+@keyframes tut-hand-drag {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-48px, 0);
+  }
+  75% {
+    transform: translate(48px, 0);
+  }
+}
+@keyframes tut-dot-drag {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(0.5);
+  }
+  25% {
+    transform: translate(-48px, 0) scale(0.5);
+  }
+  75% {
+    transform: translate(48px, 0) scale(0.5);
+  }
+}
+
+/* ollie / kickflip: touch, pull down slowly, flick fast */
+.g-ollie .tut-hand {
+  animation: tut-hand-ollie 2.2s infinite;
+}
+.g-kickflip .tut-hand {
+  animation: tut-hand-kick 2.2s infinite;
+}
+.g-ollie .tut-ripple:not(.r2),
+.g-kickflip .tut-ripple:not(.r2) {
+  animation: tut-ripple-down 2.2s infinite;
+}
+@keyframes tut-hand-ollie {
+  0% {
+    opacity: 0;
+    transform: translate(8px, 12px) scale(1.1);
+  }
+  8% {
+    opacity: 1;
+    transform: translate(8px, 12px) scale(1.1);
+  }
+  14% {
+    transform: translate(0, 0) scale(0.95);
+    animation-timing-function: ease-in-out;
+  }
+  40%,
+  48% {
+    transform: translate(0, 40px) scale(0.95);
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  62% {
+    opacity: 1;
+    transform: translate(0, -66px) scale(0.95);
+  }
+  78%,
+  100% {
+    opacity: 0;
+    transform: translate(0, -76px) scale(1.05);
+  }
+}
+@keyframes tut-hand-kick {
+  0% {
+    opacity: 0;
+    transform: translate(8px, 12px) scale(1.1);
+  }
+  8% {
+    opacity: 1;
+    transform: translate(8px, 12px) scale(1.1);
+  }
+  14% {
+    transform: translate(0, 0) scale(0.95);
+    animation-timing-function: ease-in-out;
+  }
+  40%,
+  48% {
+    transform: translate(0, 40px) scale(0.95);
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  62% {
+    opacity: 1;
+    transform: translate(-58px, -54px) scale(0.95);
+  }
+  78%,
+  100% {
+    opacity: 0;
+    transform: translate(-64px, -64px) scale(1.05);
+  }
+}
+@keyframes tut-ripple-down {
+  0%,
+  12% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  16% {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  40%,
+  48% {
+    opacity: 0.9;
+    transform: translate(0, 40px) scale(0.6);
+  }
+  58%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 40px) scale(1.4);
+  }
+}
+
+/* catch: big pulsing TAP target in the middle of the screen */
+.tut-coach.g-catch {
+  top: 58%;
+}
+.g-catch .tut-ripple {
+  animation: tut-ripple 0.7s infinite;
+  border-width: 4px;
+}
+.g-catch .tut-ripple.r2 {
+  animation-delay: 0.2s;
+}
+.g-catch .tut-hand {
+  animation: tut-hand-tap 0.7s infinite;
+}
+.g-catch .tut-tap {
+  left: -60px;
+  top: -86px;
+  width: 120px;
+  text-align: center;
+  font: 800 34px var(--serif);
+  color: var(--ivory);
+  text-shadow: 0 2px 0 var(--clay-dark), 0 4px 16px rgba(20, 20, 19, 0.35);
+  opacity: 1;
+  animation: pulse 0.35s ease-in-out infinite;
+}
+
+/* keyboard hints for mouse players */
+.tut-keys {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, calc(env(safe-area-inset-bottom) + 20px));
+  transform: translateX(-50%);
+  display: none;
+  gap: 10px;
+}
+.tut-keys.on {
+  display: flex;
+}
+.tut-keys.big {
+  bottom: auto;
+  top: 76%;
+}
+.tut-keys kbd {
+  min-width: 48px;
+  height: 48px;
+  padding: 0 12px;
+  display: grid;
+  place-items: center;
+  font: 800 20px var(--sans);
+  color: var(--slate);
+  background: var(--ivory);
+  border: 2px solid var(--slate);
+  border-radius: 10px;
+  box-shadow: 0 5px 0 var(--slate);
+  animation: tut-key 1.1s infinite;
+}
+.tut-keys kbd.wide {
+  min-width: 120px;
+  font-size: 15px;
+}
+.tut-keys kbd:nth-child(2) {
+  animation-delay: 0.55s;
+}
+@keyframes tut-key {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 5px 0 var(--slate);
+  }
+  25%,
+  40% {
+    transform: translateY(4px);
+    box-shadow: 0 1px 0 var(--slate);
+    background: #f6dccf;
+  }
+}
+
+.tut-done {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(380px, calc(100vw - 24px));
+  background: var(--ivory);
+  border-radius: 20px;
+  padding: 20px 18px 16px;
+  box-shadow: 0 20px 60px rgba(20, 20, 19, 0.28);
+  text-align: center;
+  display: none;
+  pointer-events: auto;
+}
+.tut-done.on {
+  display: block;
+  animation: tut-in 0.3s ease;
+}
+.tut-done-title {
+  font: 700 30px var(--serif);
+  color: var(--clay-dark);
+}
+.tut-done-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* title menu: the tutorial glows until it's been played */
+.menu-btn.tut-new {
+  position: relative;
+  animation: tut-glow 1.8s ease-in-out infinite;
+}
+@keyframes tut-glow {
+  50% {
+    box-shadow: 0 0 0 6px rgba(217, 119, 87, 0.28);
+  }
+}
+.menu-badge {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  font: 800 10px var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--slate);
+  color: var(--ivory);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.tut-hand svg {
+  overflow: visible;
 }

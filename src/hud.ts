@@ -28,23 +28,38 @@ export class Hud {
   private toasts: HTMLElement;
   private timer: HTMLElement;
   private tracker: HTMLElement;
+  private trackRows: HTMLElement;
   private special: HTMLElement;
   private specialFill: HTMLElement;
   private lastTracker = '';
+  private goalsOn = false;
+  private rowsOn = false;
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'hud', parent);
+    // three columns so the clock can never run into the score or the buttons
     const top = el('div', 'hud-top', this.root);
     const scoreBox = el('div', 'score-box', top);
     this.score = el('div', 'score', scoreBox, '0');
     this.best = el('div', 'best', scoreBox, 'best combo 0');
+    const mid = el('div', 'hud-mid', top);
+    this.timer = el('div', 'timer', mid);
+    this.special = el('div', 'special', mid);
+    this.specialFill = el('div', 'special-fill', this.special);
     const btns = el('div', 'hud-btns', top);
-    this.goalsBtn = el('button', 'hud-btn goals-chip', btns, 'Goals') as HTMLButtonElement;
-    this.camBtn = el('button', 'hud-btn cam-btn', btns) as HTMLButtonElement;
+    this.camBtn = el('button', 'hud-btn icon cam-btn', btns) as HTMLButtonElement;
     this.camBtn.setAttribute('aria-label', 'Change camera');
     this.camBtn.innerHTML =
       '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-    this.menuBtn = el('button', 'hud-btn', btns, 'Menu') as HTMLButtonElement;
+    this.menuBtn = el('button', 'hud-btn icon', btns) as HTMLButtonElement;
+    this.menuBtn.setAttribute('aria-label', 'Menu');
+    this.menuBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+    // goal panel: goal count, the next goal's progress and the letters, all in one card
+    this.tracker = el('div', 'tracker', this.root);
+    this.goalsBtn = el('button', 'goals-chip', this.tracker, 'Goals') as HTMLButtonElement;
+    this.trackRows = el('div', 'track-rows', this.tracker);
     for (const b of [this.goalsBtn, this.camBtn, this.menuBtn]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
 
     this.combo = el('div', 'combo', this.root);
@@ -52,10 +67,6 @@ export class Hud {
     this.comboPts = el('div', 'combo-pts', this.combo);
     this.popups = el('div', 'popups', this.root);
     this.toasts = el('div', 'toasts', this.root);
-    this.timer = el('div', 'timer', this.root);
-    this.tracker = el('div', 'tracker', this.root);
-    this.special = el('div', 'special', this.root);
-    this.specialFill = el('div', 'special-fill', this.special);
     this.starBtn = el('button', 'star-btn', this.root, '★') as HTMLButtonElement;
     this.starBtn.setAttribute('aria-label', 'Special trick');
 
@@ -77,17 +88,21 @@ export class Hud {
 
   setGoals(done: number, total: number | null) {
     this.goalsBtn.style.display = total === null ? 'none' : '';
-    if (total !== null) this.goalsBtn.textContent = `Goals ${done}/${total}`;
+    if (total !== null) this.goalsBtn.innerHTML = `Goals <b>${done}/${total}</b>`;
+    this.goalsOn = total !== null;
+    this.tracker.classList.toggle('on', this.goalsOn || this.rowsOn);
   }
 
   /** Run clock; null hides it. */
   setTimer(sec: number | null) {
     if (sec === null) {
       this.timer.classList.remove('on');
+      this.root.classList.remove('timed');
       return;
     }
     const s = Math.max(0, Math.ceil(sec));
     this.timer.classList.add('on');
+    this.root.classList.add('timed');
     this.timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     this.timer.classList.toggle('low', sec <= 10);
   }
@@ -102,14 +117,16 @@ export class Hud {
     const key = JSON.stringify([rows, letters]);
     if (key === this.lastTracker) return;
     this.lastTracker = key;
-    this.tracker.replaceChildren();
+    this.trackRows.replaceChildren();
+    this.rowsOn = rows.length > 0 || !!letters;
+    this.tracker.classList.toggle('on', this.goalsOn || this.rowsOn);
     for (const r of rows) {
-      const d = el('div', 'track', this.tracker);
+      const d = el('div', 'track', this.trackRows);
       el('span', '', d, r.label);
       if (r.value) el('b', '', d, r.value);
     }
     if (letters) {
-      const strip = el('div', 'track letters-strip', this.tracker);
+      const strip = el('div', 'track letters-strip', this.trackRows);
       'CLAUDE'.split('').forEach((c, i) => el('span', letters[i] ? 'on' : '', strip, c));
     }
   }

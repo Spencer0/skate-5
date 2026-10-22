@@ -21,6 +21,9 @@ export interface UIHooks {
   isMuted(): boolean;
   showTricks(): void;
   firstTap(): void;
+  startTutorial(): void;
+  tutorialPlayed(): boolean;
+  inTutorial(): boolean;
   deckChanged(id: string): void;
   statsChanged(): void;
   riderChanged(): void;
@@ -148,7 +151,11 @@ export class UI {
     el('div', 'menu-title', this.card, 'Claude Skate');
     el('div', 'menu-sub', this.card, 'flick-stick skateboarding');
     const btns = el('div', 'menu-btns', this.card);
-    this.button(btns, 'Career', () => this.showCareer(), 'primary');
+    // the tutorial leads the menu and glows until it's been played once
+    const fresh = !this.hooks.tutorialPlayed();
+    const tut = this.button(btns, 'Tutorial', () => this.hooks.startTutorial(), fresh ? 'primary tut-new' : '');
+    if (fresh) el('span', 'menu-badge', tut, 'New');
+    this.button(btns, 'Career', () => this.showCareer(), fresh ? '' : 'primary');
     this.button(btns, 'Free Skate', () => this.showFree());
     this.button(btns, 'Skater', () => this.showSkater('rider', () => this.showTitle()));
     this.button(btns, 'Options', () => this.showOptions(() => this.showTitle()));
@@ -544,10 +551,16 @@ export class UI {
   showPause(i: number, mode: RunMode) {
     const L = LEVELS[i];
     this.reset();
-    this.header(mode === 'free' ? `${L.name} · Free Skate` : L.name, null);
+    const tut = this.hooks.inTutorial();
+    this.header(tut ? 'Tutorial' : mode === 'free' ? `${L.name} · Free Skate` : L.name, null);
     if (mode !== 'free') this.goalList(this.card, L, i, false);
     const btns = el('div', 'menu-btns', this.card);
     this.button(btns, 'Resume', () => this.hooks.resume(), 'primary');
+    if (tut) {
+      this.button(btns, 'Restart tutorial', () => this.hooks.restartRun());
+      this.button(btns, 'Quit tutorial', () => this.hooks.quit());
+      return;
+    }
     if (mode === 'career') this.button(btns, 'Restart run', () => this.hooks.restartRun());
     if (mode === 'career') this.button(btns, 'End run', () => this.hooks.endRun());
     if (mode === 'free') this.button(btns, 'Back to start', () => this.hooks.restartRun());

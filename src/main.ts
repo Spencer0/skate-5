@@ -18,6 +18,7 @@ import { CutscenePlayer, previewScene } from './cutscene';
 import { Props } from './props';
 import { HumanRider } from './humanrider';
 import { CAMERAS, loadOptions, saveOptions } from './settings';
+import { Tutorial, tutorialPlayed } from './tutorial';
 
 /* ------------------------------------------------------------------ */
 /* Setup                                                               */
@@ -162,7 +163,6 @@ function begin() {
       /* not allowed: fine */
     }
   }
-  if (tutorial.step < 0) tutorial.step = 0;
 }
 input.onFirstInput = () => audio.start();
 
@@ -171,7 +171,8 @@ const ui = new UI(app, career, {
   resume,
   restartRun() {
     if (!session) return;
-    if (session.mode === 'free') {
+    if (tut.active) startTutorial();
+    else if (session.mode === 'free') {
       respawnAtStart();
       resume();
     } else startRun(session.level, session.mode);
@@ -184,6 +185,7 @@ const ui = new UI(app, career, {
     const s = session;
     session = null;
     hud.setTimer(null);
+    stopTutorial();
     if (s && s.mode !== 'free') ui.showLevel(s.level);
     else ui.showTitle();
   },
@@ -215,6 +217,9 @@ const ui = new UI(app, career, {
     hud.guide.classList.add('on');
   },
   firstTap: begin,
+  startTutorial,
+  tutorialPlayed,
+  inTutorial: () => tut.active,
   deckChanged(id) {
     board.setDeck(id);
   },
@@ -244,6 +249,45 @@ const ui = new UI(app, career, {
     applyStats(career.effectiveStats());
   },
 });
+
+/* ------------------------------------------------------------------ */
+/* Tutorial                                                            */
+/* ------------------------------------------------------------------ */
+
+const tut = new Tutorial(app, {
+  stepDone() {
+    audio.goal();
+    buzz([15, 30, 15]);
+  },
+  finish(next) {
+    if (next === 'again') {
+      stopTutorial();
+      return;
+    }
+    playing = false;
+    session = null;
+    stopTutorial();
+    if (next === 'career') ui.showCareer();
+    else ui.showTitle();
+  },
+  skip() {
+    playing = false;
+    session = null;
+    stopTutorial();
+    ui.showTitle();
+  },
+});
+
+/** A no-clock ride in Claude Park with the coach on top. */
+function startTutorial() {
+  startRun(0, 'free');
+  tut.start();
+  hud.root.classList.add('tutorial');
+}
+function stopTutorial() {
+  tut.stop();
+  hud.root.classList.remove('tutorial');
+}
 
 function resume() {
   ui.hide();
@@ -385,6 +429,7 @@ function respawnAtStart() {
 }
 
 function startRun(i: number, mode: RunMode) {
+  stopTutorial();
   loadLevel(i);
   const L = LEVELS[i];
   const prev = session;
@@ -544,50 +589,6 @@ function fireSpecial() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Tutorial hints                                                      */
-/* ------------------------------------------------------------------ */
-
-const tutorial = {
-  step: -1,
-  pushes: 0,
-  done: (() => {
-    try {
-      return localStorage.getItem('skate5.tut') === '1';
-    } catch {
-      return false;
-    }
-  })(),
-};
-function tutorialHint(): string | null {
-  if (tutorial.done || tutorial.step < 0) return null;
-  switch (tutorial.step) {
-    case 0:
-      return 'Left thumb: tap to push · drag to steer';
-    case 1:
-      return 'Right thumb: pull down, then flick up to ollie';
-    case 2:
-      return 'Flick up-left for a kickflip — then TAP to catch before you land';
-    case 3:
-      return 'Nice! Ollie onto a rail to grind. Menu ↗ shows your goals';
-  }
-  return null;
-}
-function tutorialAdvance(ev: 'push' | 'pop' | 'catch' | 'grind') {
-  if (tutorial.done) return;
-  if (tutorial.step === 0 && ev === 'push' && ++tutorial.pushes >= 2) tutorial.step = 1;
-  else if (tutorial.step === 1 && ev === 'pop') tutorial.step = 2;
-  else if (tutorial.step === 2 && ev === 'catch') tutorial.step = 3;
-  else if (tutorial.step === 3 && ev === 'grind') {
-    tutorial.done = true;
-    try {
-      localStorage.setItem('skate5.tut', '1');
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
-/* ------------------------------------------------------------------ */
 /* Combo + score                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -695,7 +696,7 @@ function handle(ev: SkaterEvent) {
     case 'push':
       act.pushStart = now();
       audio.push();
-      tutorialAdvance('push');
+      tut.push();
       break;
     case 'pop':
       act.popAt = now();
@@ -703,7 +704,6 @@ function handle(ev: SkaterEvent) {
       act.nollie = ev.nollie;
       audio.pop();
       buzz(8);
-      tutorialAdvance('pop');
       dustBurst(5, 0.8);
       combo.groundT = 0;
       break;
@@ -713,7 +713,6 @@ function handle(ev: SkaterEvent) {
       buzz(ev.quality === 'perfect' ? [6, 30, 6] : 6);
       hud.popup(ev.name, ev.quality === 'perfect' ? 'perfect catch' : ev.quality === 'sketchy' ? 'late catch' : undefined, ev.quality);
       if (ev.quality === 'perfect') hitStop = 0.045;
-      tutorialAdvance('catch');
       break;
     case 'land': {
       act.landAt = now();
@@ -738,6 +737,7 @@ function handle(ev: SkaterEvent) {
         if (gaps.length) audio.gap();
       }
       tracker?.landed(ev.tricks, gaps, skater.maxAirY - skater.takeoff.y);
+      tut.land(ev.tricks.map((r) => r.name));
       break;
     }
     case 'touchdown':
@@ -779,6 +779,7 @@ function handle(ev: SkaterEvent) {
       }
       combo.lose();
       liveGrind = null;
+      tut.bail(ev.reason);
       break;
     }
     case 'grindStart':
@@ -786,7 +787,6 @@ function handle(ev: SkaterEvent) {
       buzz(10);
       for (const r of ev.tricks) combo.add(r);
       liveGrind = ev.name;
-      tutorialAdvance('grind');
       break;
     case 'grindChange':
       liveGrind = ev.name;
@@ -1250,7 +1250,8 @@ function frame(now: number) {
   hud.balance(skater.mode === 'grind' && skater.grind ? skater.grind.balance : null);
   hud.setSpeed(skater.speed * 3.6);
   const uncaught = skater.mode === 'air' && skater.trick.active && !skater.trick.caught;
-  hud.setHint(playing ? (uncaught && !tutorial.done ? 'TAP to catch it!' : tutorialHint()) : null);
+  hud.setHint(playing && uncaught && !tutorialPlayed() && !tut.active ? 'TAP to catch it!' : null);
+  tut.update(dt, { playing, steer: input.steer, uncaught });
   updateTracker();
   minimap?.draw(bx, bz, cam.yaw, props?.letterDots ?? []);
   hud.root.classList.toggle('dim', !playing);
@@ -1369,4 +1370,5 @@ requestAnimationFrame(frame);
   startRun,
   finishRun,
   loadLevel,
+  tut,
 };
