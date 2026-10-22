@@ -53,7 +53,7 @@ async function frame() {
   const t0 = Date.now();
   for (let tries = 0; ; tries++) {
     try {
-      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 }), 20000));
+      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: W, height: H, scale: SCALE } }), 20000));
       if (Date.now() - t0 > 3000) console.log('slow screenshot', Date.now() - t0, 'ms at frame', n);
       break;
     } catch (e) {
