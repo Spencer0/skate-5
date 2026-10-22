@@ -15,49 +15,15 @@ export class Audio {
   private slideGain!: GainNode;
   muted = false;
 
-  /**
-   * iOS routes Web Audio through the "ambient" category, which the hardware
-   * silent switch mutes (the speaker icon shows but nothing plays). Switching
-   * the session to "playback" (iOS 16.4+) or playing a looping silent <audio>
-   * element (older iOS) moves it to the media channel.
-   */
-  private unlockIOS() {
-    const nav = navigator as Navigator & { audioSession?: { type: string } };
-    if (nav.audioSession) {
-      try {
-        nav.audioSession.type = 'playback';
-      } catch {
-        /* ignore */
-      }
-    }
-    if (this.silent) return;
-    // 44-byte WAV header + a few samples of silence
-    const wav = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
-    const el = document.createElement('audio');
-    el.setAttribute('playsinline', '');
-    el.src = wav;
-    el.loop = true;
-    el.volume = 0.01;
-    this.silent = el;
-    el.play().catch(() => {
-      this.silent = null;
-    });
-  }
-  private silent: HTMLAudioElement | null = null;
-
   start() {
-    this.unlockIOS();
     if (this.ctx) {
-      if (this.ctx.state !== 'running') this.ctx.resume();
+      if (this.ctx.state === 'suspended') this.ctx.resume();
       return;
     }
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
     const ctx = new AC();
     this.ctx = ctx;
-    // iOS also suspends/interrupts the context; keep nudging it awake on taps
-    for (const ev of ['touchend', 'click', 'keydown'])
-      window.addEventListener(ev, () => this.ctx && this.ctx.state !== 'running' && this.ctx.resume());
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.8;
     const comp = ctx.createDynamicsCompressor();
