@@ -214,10 +214,15 @@ test('lifts drop you on flat, solid ground', () => {
 
 test('pumping a transition gains speed on the way down', () => {
   const { t } = level('mega');
+  let pumped = false;
   const speed = (pump: boolean) => {
     const r = rig(t, -72, 40, 6, 0);
-    r.run(0.9, { pushHold: pump });
+    for (let i = 0; i < 0.9 * 240; i++) {
+      r.run(1 / 240, { pushHold: pump });
+      pumped ||= r.sk.pumping;
+    }
     return r.sk.vel.length();
   };
-  assert.ok(speed(true) > speed(false) + 0.3);
+  assert.ok(speed(false) + 0.3 < speed(true));
+  assert.ok(pumped, 'the rider should know it is pumping');
 });

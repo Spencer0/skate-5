@@ -122,6 +122,8 @@ export class Skater {
   pushCd = 0;
   pushQueued = -1; // >= 0: a push waiting for a push-revert pivot to finish
   braking = false;
+  /** gaining speed from a pump this step (drives the rider's crouch pulse) */
+  pumping = false;
   slideYaw = 0; // visual powerslide yaw
 
   airTime = 0;
@@ -216,6 +218,7 @@ export class Skater {
   step(dt: number, inp: SkaterInput) {
     this.time += dt;
     this.carry = inp.pushHold;
+    this.pumping = false;
     this.steerS += (inp.steer - this.steerS) * Math.min(1, dt * 14);
     this.updateSprings(dt);
     if (this.grab) this.grab.t += dt;
@@ -278,7 +281,10 @@ export class Skater {
     // pumping: hold push on a transition and you gain speed on the way down it
     if (inp.pushHold && !inp.brake && n.y < 0.97) {
       const s = this.vel.length();
-      if (s > 0.5 && this.vel.y < 0) this.vel.multiplyScalar(1 + (TUNE.pumpAccel * Math.min(1, -this.vel.y / s) * dt) / s);
+      if (s > 0.5 && this.vel.y < 0) {
+        this.vel.multiplyScalar(1 + (TUNE.pumpAccel * Math.min(1, -this.vel.y / s) * dt) / s);
+        this.pumping = true;
+      }
     }
 
     // wheels: kill lateral velocity, keep speed (carving)

@@ -829,6 +829,8 @@ function handle(ev: SkaterEvent) {
 
 /** Timeline of the last pop / catch / landing / push, for the rider's choreography. */
 const act = { popAt: -1, catchAt: -1, landAt: -10, pushStart: -10, nollie: false };
+/** Crouch pulse while pumping: `amt` eases in and out, `phase` drives the in-and-out. */
+const pump = { amt: 0, phase: 0 };
 const now = () => skater.time;
 const PUSH_CYCLE = 0.66;
 const riderQ = new THREE.Quaternion();
@@ -876,6 +878,10 @@ function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
   crouch += Math.max(0, -skater.squash * 8);
   if (grinding) crouch += 0.3;
   if (skater.braking) crouch += 0.25;
+  pump.amt += ((skater.pumping ? 1 : 0) - pump.amt) * Math.min(1, dt * 6);
+  if (pump.amt > 0.02) pump.phase += dt * Math.PI * 2 * 2.2;
+  else pump.phase = 0;
+  crouch += pump.amt * 0.4 * (0.5 - 0.5 * Math.cos(pump.phase));
   rider.update(dt, {
     crouch: Math.min(1, crouch),
     tuck,
