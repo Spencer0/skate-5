@@ -39,7 +39,8 @@ await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'pause' });
 async function frame() {
   const expired = new Promise((r) => cdp.once('Emulation.virtualTimeBudgetExpired', r));
   await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'advance', budget: DT });
-  await expired;
+  // a missed budget event would stall the run forever: give up after 15s and carry on
+  await Promise.race([expired, new Promise((r) => setTimeout(r, 15000))]);
   await p.evaluate((dt) => window.__step(dt), DT);
   const { data } = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 });
   fs.writeFileSync(`${out}/f${String(n++).padStart(5, '0')}.jpg`, Buffer.from(data, 'base64'));
