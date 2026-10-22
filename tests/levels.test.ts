@@ -189,13 +189,29 @@ test('Mega Park: drop in from the tower, pop the kicker and clear the Mega Gap',
   }
 });
 
-test('Mega Park: rolling the kicker without a pop lands on the knuckle table', () => {
+test('Mega Park: however you ride the kicker, you land clean on the downslope', () => {
   const { t, data } = level('mega');
   const M = megaLine();
-  const r = rig(t, data.spawn.x, data.spawn.z - 9, 0, -3);
-  r.run(9);
-  assert.ok(!r.events.some((e) => e.type === 'bail'), r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(','));
-  assert.ok(r.sk.pos.z < M.landToe, `z=${r.sk.pos.z.toFixed(1)}`);
+  const gap = data.gaps.find((g) => g.id === 'megagap')!;
+  // pop late, early or not at all; hold push (pumping) or not
+  for (const popAt of [Infinity, 0.5, 1.6, 2.4]) {
+    for (const hold of [false, true]) {
+      const r = rig(t, data.spawn.x, data.spawn.z - 9, 0, -5);
+      let popped = false;
+      let landing: { z: number; impact: number } | null = null;
+      for (let i = 0; i < 9 * 240 && !landing && r.sk.mode !== 'bail'; i++) {
+        r.run(1 / 240, { pushHold: hold });
+        if (!popped && r.sk.mode === 'ground' && r.sk.pos.z < M.kickToe && r.sk.pos.y > popAt) popped = r.sk.flick(spec(0, 0));
+        const e = r.events.find((x) => x.type === 'land');
+        if (e && e.type === 'land' && r.sk.pos.z < M.lip) landing = { z: r.sk.pos.z, impact: e.impact };
+        if (!landing) r.events.length = 0;
+      }
+      const desc = `popAt=${popAt} hold=${hold} ` + r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(',');
+      assert.ok(landing, desc);
+      assert.ok(inRect(gap.to, 0, landing.z), `${desc} landed at z=${landing.z.toFixed(1)}`);
+      assert.ok(landing.impact < 8, `${desc} impact ${landing.impact.toFixed(1)}`);
+    }
+  }
 });
 
 test('lifts drop you on flat, solid ground', () => {

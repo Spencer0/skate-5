@@ -73,18 +73,33 @@ export function kicker(t: Terrain, tx: number, tz: number, rot: number, width: n
   return el;
 }
 
+/** Run length of a roll-in (see rollIn). */
+export function rollInRun(H: number, deg: number, R: number, knuckleR = 0) {
+  const th = (deg * Math.PI) / 180;
+  const lin = (H - (R + knuckleR) * (1 - Math.cos(th))) / Math.tan(th);
+  return (R + knuckleR) * Math.sin(th) + lin;
+}
+
 /**
  * Roll-in: a curved transition of radius R off the flat at (tx,tz) that
  * straightens into a slope of `deg` degrees, up to height H, then a flat deck.
- * Ride it down from the deck for mega-ramp speed.
+ * Ride it down from the deck for mega-ramp speed. A `knuckleR` rounds the top
+ * over (convex), which makes it a mega-ramp landing: gentle at the top, steep
+ * lower down where the long airs come in.
  */
-export function rollIn(t: Terrain, tx: number, tz: number, rot: number, width: number, H: number, deg: number, R: number, deck = 0) {
+export function rollIn(t: Terrain, tx: number, tz: number, rot: number, width: number, H: number, deg: number, R: number, deck = 0, knuckleR = 0) {
   const th = (deg * Math.PI) / 180;
   const s1 = R * Math.sin(th);
   const h1 = R * (1 - Math.cos(th));
-  const s2 = s1 + (H - h1) / Math.tan(th);
-  const prof = (s: number) => (s <= s1 ? transitionHeight(s, R) : s >= s2 ? H : h1 + (s - s1) * Math.tan(th));
-  const hx = (s2 + deck) / 2;
+  const s3 = rollInRun(H, deg, R, knuckleR); // top of the slope
+  const s2 = s3 - knuckleR * Math.sin(th); // start of the knuckle
+  const prof = (s: number) => {
+    if (s <= s1) return transitionHeight(s, R);
+    if (s >= s3) return H;
+    if (s >= s2) return H - transitionHeight(s3 - s, knuckleR);
+    return h1 + (s - s1) * Math.tan(th);
+  };
+  const hx = (s3 + deck) / 2;
   const d = dirOf(rot);
   const el = t.addElement({
     kind: 'rollin',
@@ -100,10 +115,11 @@ export function rollIn(t: Terrain, tx: number, tz: number, rot: number, width: n
     skirt: true,
   });
   const uK = lin(-hx, -hx + s1, 16);
-  uK.push(-hx + s2);
+  if (knuckleR > 0) uK.push(...lin(-hx + s2, -hx + s3, 16));
+  else uK.push(-hx + s3);
   if (deck > 0) uK.push(hx);
   knots.set(el, { uK, vK: [-width / 2, width / 2], arcU: true });
-  return { el, run: s2, H };
+  return { el, run: s3, H };
 }
 
 /** Flat bank: rises linearly over L to H, then a flat deck. */

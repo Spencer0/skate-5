@@ -30,6 +30,7 @@ export const TUNE = {
   catchSettle: 26,
   balance: 1, // grind instability multiplier (Rail Balance stat lowers it)
   pumpAccel: 3.5, // holding push on a transition pumps: extra speed while dropping down it
+  pumpMaxSpeed: 16, // pumping fades out over the 4 m/s below this
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -279,10 +280,12 @@ export class Skater {
     projectOnPlane(this.vel, n);
 
     // pumping: hold push on a transition and you gain speed on the way down it
+    // (it fades out at mega-ramp speeds, where gravity does all the work)
     if (inp.pushHold && !inp.brake && n.y < 0.97) {
       const s = this.vel.length();
-      if (s > 0.5 && this.vel.y < 0) {
-        this.vel.multiplyScalar(1 + (TUNE.pumpAccel * Math.min(1, -this.vel.y / s) * dt) / s);
+      const fade = Math.min(1, Math.max(0, (TUNE.pumpMaxSpeed - s) / 4));
+      if (s > 0.5 && this.vel.y < 0 && fade > 0) {
+        this.vel.multiplyScalar(1 + (TUNE.pumpAccel * fade * Math.min(1, -this.vel.y / s) * dt) / s);
         this.pumping = true;
       }
     }
