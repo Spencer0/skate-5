@@ -129,7 +129,7 @@ export class Creator {
     this.panel.scrollTop = keep;
   }
 
-  /** Changing body can leave an option the other body can't wear (shirtless). */
+  /** Changing body can leave an option the other body can't wear. */
   private switchBody(body: CustomLook['body']): Partial<CustomLook> {
     const ok = (items: Option[], id: string) => forBody(items, body).some((o) => o.id === id);
     return { body, ...(ok(TOPS, this.look.top) ? {} : { top: defaultLook().top }) };

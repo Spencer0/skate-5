@@ -191,7 +191,8 @@
       "label": "Chest",
       "lo": "Flat",
       "hi": "Full",
-      "macro": "cupsize"
+      "macro": "cupsize",
+      "strength": 0.4
     },
     {
       "id": "waist",
@@ -259,15 +260,6 @@
     ],
     "tops": [
       {
-        "id": "bikini",
-        "src": "punkduck_bandeau_bikini_bra",
-        "single": true,
-        "label": "Bikini top",
-        "theme": "beach",
-        "author": "punkduck",
-        "color": "#e3a83a"
-      },
-      {
         "id": "western",
         "src": "elvs_male_shirt_untucked_bd1",
         "single": true,
@@ -286,15 +278,6 @@
         "theme": "beach",
         "author": "Mindfront",
         "color": "#3fa7a0"
-      },
-      {
-        "id": "bikinibottom",
-        "src": "punkduck_bandeau_bikini_slip",
-        "single": true,
-        "label": "Bikini bottom",
-        "theme": "beach",
-        "author": "punkduck",
-        "color": "#e3a83a"
       }
     ],
     "shoes": [

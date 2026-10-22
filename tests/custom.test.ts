@@ -60,14 +60,8 @@ test('shape sliders blend the lo / hi morph targets around the average', () => {
   assert.deepEqual([at(0)[id + '-lo'], at(0)[id + '-hi']], [1, 0]);
   assert.deepEqual([at(1)[id + '-lo'], at(1)[id + '-hi']], [0, 1]);
   assert.equal(at(0.75)[id + '-hi'], 0.5);
-});
-
-test('shirtless is a masculine-body option and repairs to a shirt on the feminine body', () => {
-  assert.ok(forBody(TOPS, 'm').some((o) => o.id === 'none'));
-  assert.ok(!forBody(TOPS, 'f').some((o) => o.id === 'none'));
-  assert.equal(sanitizeLook({ top: 'none' }).top, 'none');
-  assert.equal(sanitizeLook({ top: 'none', body: 'f' }).top, defaultLook().top);
-  assert.ok(!('top_none' in partColors({ ...defaultLook(), top: 'none' })));
+  const chest = (v: number) => shapeInfluences({ ...defaultLook(), shape: { ...defaultLook().shape, chest: v } });
+  assert.equal(chest(1)['chest-hi'], 0.4);
 });
 
 test('themed parts are flagged for the on-demand model', () => {

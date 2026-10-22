@@ -40,6 +40,8 @@ export interface Option {
 export interface ShapeDef extends Option {
   lo: string;
   hi: string;
+  /** scales the morph influence (1 when omitted) */
+  strength?: number;
 }
 
 export const SHAPES: ShapeDef[] = OPT.shape;
@@ -48,8 +50,7 @@ const themed = (items: { id: string; label: string; theme: string; color: string
 
 export const HAIR: Option[] = OPT.hair;
 export const HATS: Option[] = [...OPT.hats, ...themed(OPT.extras.hats)];
-// no shirt at all is not a garment, so it isn't in the JSON
-export const TOPS: Option[] = [...OPT.tops, { id: 'none', label: 'Shirtless', only: 'm' }, ...themed(OPT.extras.tops)];
+export const TOPS: Option[] = [...OPT.tops, ...themed(OPT.extras.tops)];
 export const BOTTOMS: Option[] = [...OPT.bottoms, ...themed(OPT.extras.bottoms)];
 export const SHOES: Option[] = [...OPT.shoes, ...themed(OPT.extras.shoes)];
 
@@ -103,8 +104,9 @@ export function shapeInfluences(look: CustomLook): Record<string, number> {
   const out: Record<string, number> = {};
   for (const d of SHAPES) {
     const v = look.shape[d.id] ?? 0.5;
-    out[d.id + '-lo'] = Math.max(0, 1 - v * 2);
-    out[d.id + '-hi'] = Math.max(0, v * 2 - 1);
+    const k = d.strength ?? 1;
+    out[d.id + '-lo'] = Math.max(0, 1 - v * 2) * k;
+    out[d.id + '-hi'] = Math.max(0, v * 2 - 1) * k;
   }
   return out;
 }
@@ -146,7 +148,7 @@ export function partColors(look: CustomLook): Record<string, string> {
     ['bottom_' + look.bottom]: look.bottomColor,
     ['shoes_' + look.shoes]: look.shoesColor,
   };
-  if (look.top !== 'none') out['top_' + look.top] = look.topColor;
+  out['top_' + look.top] = look.topColor;
   if (look.hair) out['hair_' + look.hair] = look.hairColor;
   if (look.hat) out['hat_' + look.hat] = look.hatColor;
   return out;

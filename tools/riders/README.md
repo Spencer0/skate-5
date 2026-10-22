@@ -85,5 +85,4 @@ $MH_WORK/venv/bin/python repack_custom.py extras_m extras_f
 An item with `"single": true` is a stand-alone garment (not a suit to split);
 `"proc"` builds a hat MakeHuman doesn't have (party, cowboy) from the body's own
 head measurements and skins it to the head bone; `"color"` is the colour it
-starts in. `"author"` feeds the credits (all CC BY). "Shirtless" needs no asset:
-it is simply no top, offered for the masculine body only.
+starts in. `"author"` feeds the credits (all CC BY).
