@@ -19,6 +19,16 @@ const W = 540, H = 960;
 const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const ctx = await b.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: SCALE, isMobile: true, hasTouch: true });
 const p = await ctx.newPage();
+// The game takes its time step from the requestAnimationFrame timestamp, which the virtual clock
+// doesn't govern. So the page gets a manual frame loop: each captured frame runs exactly one game
+// frame at a timestamp we choose (performance.now follows it, so gesture timing matches).
+await p.addInitScript(() => {
+  let T = 0, id = 0, q = new Map();
+  performance.now = () => T;
+  window.requestAnimationFrame = (cb) => { q.set(++id, cb); return id; };
+  window.cancelAnimationFrame = (i) => q.delete(i);
+  window.__step = (dt) => { T += dt; const cbs = [...q.values()]; q.clear(); for (const cb of cbs) cb(T); };
+});
 await p.goto('http://127.0.0.1:5173/');
 await p.waitForTimeout(2500);
 const cdp = await ctx.newCDPSession(p);
@@ -30,6 +40,7 @@ async function frame() {
   const expired = new Promise((r) => cdp.once('Emulation.virtualTimeBudgetExpired', r));
   await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'advance', budget: DT });
   await expired;
+  await p.evaluate((dt) => window.__step(dt), DT);
   const { data } = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 });
   fs.writeFileSync(`${out}/f${String(n++).padStart(5, '0')}.jpg`, Buffer.from(data, 'base64'));
   clock += DT;
