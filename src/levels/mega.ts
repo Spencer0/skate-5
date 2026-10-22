@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { ParkVisuals, box, kicker, bank, ledge, stairs, hubba, quarterPipe, rollIn } from '../park';
+import { ParkVisuals, box, kicker, bank, ledge, stairs, hubba, quarterPipe, rollIn, rollInRun } from '../park';
 import { radiusFor, transitionRun, transitionHeight } from '../terrain';
 import { Level, N, S, E, W, rect, polyRail, flagpole } from './common';
 import { textTexture, rng } from '../textures';
@@ -18,22 +18,17 @@ export const MEGA = {
   kickH: 2.6,
   kickL: 7.5,
   gap: 17, // kicker lip to knuckle
-  landH: 7,
-  landDeg: 25,
+  landH: 7.5,
+  landDeg: 26,
   landR: 14,
-  landDeck: 10, // a long knuckle deck: come up short and you land on the table
+  landKnuckle: 50, // a big rounded knuckle: gentle where short airs land, steep where long ones do
+  landDeck: 1,
   qpH: 8,
   qpR: 8.08, // just shy of true vert, so airs come straight back down
 };
 
 /** Superpipe: 6.5 m walls, fed by its own drop-in. */
 export const PIPE = { x: -72, flat: 16, H: 6.5, R: 6.56, z0: -64, z1: 56, dropH: 11 };
-
-/** Run length of a roll-in (see park.rollIn). */
-export function rollRun(H: number, deg: number, R: number) {
-  const th = (deg * Math.PI) / 180;
-  return R * Math.sin(th) + (H - R * (1 - Math.cos(th))) / Math.tan(th);
-}
 
 /** Height of a roll-in's surface `s` metres from its toe. */
 function rollProfile(H: number, deg: number, R: number, s: number) {
@@ -47,11 +42,11 @@ function rollProfile(H: number, deg: number, R: number, s: number) {
 /** Where the mega line's pieces sit along z (derived from MEGA). */
 export function megaLine() {
   const M = MEGA;
-  const rollToe = M.deckZ - rollRun(M.deckH, M.rollDeg, M.rollR);
+  const rollToe = M.deckZ - rollInRun(M.deckH, M.rollDeg, M.rollR);
   const kickToe = rollToe - 12;
   const lip = kickToe - M.kickL;
   const knuckle = lip - M.gap; // the landing deck runs north from here
-  const landToe = knuckle - M.landDeck - rollRun(M.landH, M.landDeg, M.landR);
+  const landToe = knuckle - M.landDeck - rollInRun(M.landH, M.landDeg, M.landR, M.landKnuckle);
   const qpToe = landToe - 26;
   return { rollToe, kickToe, lip, knuckle, landToe, qpToe };
 }
@@ -118,8 +113,7 @@ export const megaLevel: Level = {
     }
     kicker(t, 0, L.kickToe, N, 8, M.kickH, M.kickL);
     // landing: a knuckle deck, then a long curved landing ramp down to the flat
-    box(t, 0, L.knuckle - M.landDeck / 2, 0, hw + 2, M.landDeck / 2, M.landH);
-    rollIn(t, 0, L.landToe, S, M.width + 4, M.landH, M.landDeg, M.landR);
+    rollIn(t, 0, L.landToe, S, M.width + 4, M.landH, M.landDeg, M.landR, M.landDeck, M.landKnuckle);
     // the gap's face is banked, so coming up short is a step-up, not a wall
     bank(t, 0, L.knuckle + 6, N, M.width + 4, M.landH, 6);
     // the giant quarter pipe at the end of the line
@@ -128,7 +122,7 @@ export const megaLevel: Level = {
     {
       const back = L.qpToe - transitionRun(M.qpH, M.qpR) - 6;
       box(t, 0, back - 8, 0, 22, 8, M.qpH);
-      rollIn(t, 0, back - 16 - rollRun(M.qpH, 30, 10), S, 44, M.qpH, 30, 10);
+      rollIn(t, 0, back - 16 - rollInRun(M.qpH, 30, 10), S, 44, M.qpH, 30, 10);
     }
 
     /* --- superpipe (west) with its own drop-in from the south --- */
@@ -208,7 +202,7 @@ export const megaLevel: Level = {
     coping(quarterPipe(t, -B + transitionRun(3, 3.6) + 1.4, -96, W, 40, 3, 3.6));
 
     const tower = { x: 0, z: M.deckZ + 10, heading: N };
-    const pipeTop = { x: PIPE.x, z: PIPE.z1 + rollRun(PIPE.dropH, 32, 12) + 6, heading: N };
+    const pipeTop = { x: PIPE.x, z: PIPE.z1 + rollInRun(PIPE.dropH, 32, 12) + 6, heading: N };
     return {
       vis,
       spawn: tower,
@@ -219,7 +213,6 @@ export const megaLevel: Level = {
       ],
       gaps: [
         { id: 'megagap', name: 'MEGA GAP', points: 3000, from: rect(-4, L.lip, 4, L.kickToe), to: rect(-9, L.landToe - 4, 9, L.knuckle - M.landDeck) },
-        { id: 'megaknuckle', name: 'Mega Gap (knuckle)', points: 1200, from: rect(-4, L.lip, 4, L.kickToe), to: rect(-9, L.knuckle - M.landDeck, 9, L.knuckle) },
         { id: 'spine', name: 'Big Spine Transfer', points: 600, from: rect(-30, -26, -24.05, 14), to: rect(-23.95, -26, -18, 14) },
         { id: 'spine', name: 'Big Spine Transfer', points: 600, from: rect(-23.95, -26, -18, 14), to: rect(-30, -26, -24.05, 14) },
         { id: 'stairs', name: 'Mega 16-Stair', points: 1500, from: rect(69, -65, 95, -47), to: rect(69, -39, 95, -20) },

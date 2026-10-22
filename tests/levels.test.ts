@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Terrain } from '../src/terrain';
@@ -96,12 +97,40 @@ test('pier gap: kicker pop clears the rotten planks', () => {
   assert.ok(r.sk.pos.z < -30, desc);
 });
 
-test('pier: riding off the edge splashes into the sea', () => {
+test('pier: ollie the edge rail and you splash into the sea', () => {
   const { t } = level('pier');
   const r = rig(t, 0, -40, 6, 0);
+  while (r.sk.pos.x < 2.6) r.run(1 / 240);
+  r.sk.flick(spec(0, 0));
   r.run(2);
   const bail = r.events.find((e) => e.type === 'bail');
-  assert.ok(bail && bail.type === 'bail' && bail.reason === 'water');
+  assert.ok(bail && bail.type === 'bail' && bail.reason === 'water', r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(','));
+});
+
+test('rails are solid: rolling into one bumps you off it instead of through it', () => {
+  const { t } = level('pier');
+  // straight at the pier's edge rail, slowly: a bump, not a bail
+  let r = rig(t, 0, -40, 3, 0);
+  r.run(2);
+  assert.ok(r.sk.pos.x < 4.6, `went through to x=${r.sk.pos.x.toFixed(2)}`);
+  assert.ok(r.events.some((e) => e.type === 'wall') && !r.events.some((e) => e.type === 'bail'));
+  // at a glancing angle it turns you along the rail
+  r = rig(t, 0, -40, 3, -6);
+  r.run(1.5);
+  assert.ok(r.sk.pos.x < 4.6 && !r.events.some((e) => e.type === 'bail'));
+  // hard into it and you go down
+  r = rig(t, 0, -40, 7, 0);
+  r.run(1.5);
+  const bail = r.events.find((e) => e.type === 'bail');
+  assert.ok(bail && bail.type === 'bail' && bail.reason === 'wall');
+});
+
+test('high rails pass overhead', () => {
+  const t = new Terrain();
+  t.addRail(new THREE.Vector3(5, 2.2, -10), new THREE.Vector3(5, 2.2, 10), 'rail');
+  const r = rig(t, 0, 0, 5, 0);
+  r.run(2);
+  assert.ok(r.sk.pos.x > 8, `stopped at x=${r.sk.pos.x.toFixed(2)}`);
 });
 
 test('pier rail: 100m in one grind is possible', () => {
@@ -189,13 +218,29 @@ test('Mega Park: drop in from the tower, pop the kicker and clear the Mega Gap',
   }
 });
 
-test('Mega Park: rolling the kicker without a pop lands on the knuckle table', () => {
+test('Mega Park: however you ride the kicker, you land clean on the downslope', () => {
   const { t, data } = level('mega');
   const M = megaLine();
-  const r = rig(t, data.spawn.x, data.spawn.z - 9, 0, -3);
-  r.run(9);
-  assert.ok(!r.events.some((e) => e.type === 'bail'), r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(','));
-  assert.ok(r.sk.pos.z < M.landToe, `z=${r.sk.pos.z.toFixed(1)}`);
+  const gap = data.gaps.find((g) => g.id === 'megagap')!;
+  // pop late, early or not at all; hold push (pumping) or not
+  for (const popAt of [Infinity, 0.5, 1.6, 2.4]) {
+    for (const hold of [false, true]) {
+      const r = rig(t, data.spawn.x, data.spawn.z - 9, 0, -5);
+      let popped = false;
+      let landing: { z: number; impact: number } | null = null;
+      for (let i = 0; i < 9 * 240 && !landing && r.sk.mode !== 'bail'; i++) {
+        r.run(1 / 240, { pushHold: hold });
+        if (!popped && r.sk.mode === 'ground' && r.sk.pos.z < M.kickToe && r.sk.pos.y > popAt) popped = r.sk.flick(spec(0, 0));
+        const e = r.events.find((x) => x.type === 'land');
+        if (e && e.type === 'land' && r.sk.pos.z < M.lip) landing = { z: r.sk.pos.z, impact: e.impact };
+        if (!landing) r.events.length = 0;
+      }
+      const desc = `popAt=${popAt} hold=${hold} ` + r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(',');
+      assert.ok(landing, desc);
+      assert.ok(inRect(gap.to, 0, landing.z), `${desc} landed at z=${landing.z.toFixed(1)}`);
+      assert.ok(landing.impact < 8, `${desc} impact ${landing.impact.toFixed(1)}`);
+    }
+  }
 });
 
 test('lifts drop you on flat, solid ground', () => {
@@ -214,10 +259,17 @@ test('lifts drop you on flat, solid ground', () => {
 
 test('pumping a transition gains speed on the way down', () => {
   const { t } = level('mega');
+  let pumped = false;
+  // start high on the superpipe's east wall, rolling down it
   const speed = (pump: boolean) => {
-    const r = rig(t, -72, 40, 6, 0);
-    r.run(0.9, { pushHold: pump });
+    const r = rig(t, -59, 0, -2, 0);
+    for (let i = 0; i < 0.35 * 240; i++) {
+      r.run(1 / 240, { pushHold: pump });
+      pumped ||= r.sk.pumping;
+    }
+    assert.ok(r.sk.groundN.y < 0.94, 'still on the wall: no flat-ground push');
     return r.sk.vel.length();
   };
-  assert.ok(speed(true) > speed(false) + 0.3);
+  assert.ok(speed(false) + 0.3 < speed(true));
+  assert.ok(pumped, 'the rider should know it is pumping');
 });
