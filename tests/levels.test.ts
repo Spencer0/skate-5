@@ -215,12 +215,14 @@ test('lifts drop you on flat, solid ground', () => {
 test('pumping a transition gains speed on the way down', () => {
   const { t } = level('mega');
   let pumped = false;
+  // start high on the superpipe's east wall, rolling down it
   const speed = (pump: boolean) => {
-    const r = rig(t, -72, 40, 6, 0);
-    for (let i = 0; i < 0.9 * 240; i++) {
+    const r = rig(t, -59, 0, -2, 0);
+    for (let i = 0; i < 0.35 * 240; i++) {
       r.run(1 / 240, { pushHold: pump });
       pumped ||= r.sk.pumping;
     }
+    assert.ok(r.sk.groundN.y < 0.94, 'still on the wall: no flat-ground push');
     return r.sk.vel.length();
   };
   assert.ok(speed(false) + 0.3 < speed(true));
