@@ -79,6 +79,21 @@ export async function open({ w = 540, h = 960, scale = 2, state = {} } = {}) {
         el.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: id === 1 }));
       }, [type, id, x, y]);
     },
+    /** a translucent fingertip dot, so a held touch reads on camera */
+    async finger(on, x = 0, y = 0) {
+      await page.evaluate(([on, x, y]) => {
+        let d = document.getElementById('__finger');
+        if (!d) {
+          d = document.createElement('div');
+          d.id = '__finger';
+          d.style.cssText = 'position:fixed;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;background:rgba(255,255,255,.3);border:4px solid rgba(255,255,255,.9);box-shadow:0 0 18px rgba(0,0,0,.25);pointer-events:none;z-index:9999;display:none';
+          document.body.appendChild(d);
+        }
+        d.style.display = on ? 'block' : 'none';
+        d.style.left = x + 'px';
+        d.style.top = y + 'px';
+      }, [on, x, y]);
+    },
     async key(type, k) {
       await page.evaluate(([type, k]) => window.dispatchEvent(new KeyboardEvent(type, { key: k, bubbles: true })), [type, k]);
     },

@@ -31,3 +31,18 @@ export const arc = (a0, a1, n = 10, rad = 1.4) => Array.from({ length: n + 1 }, 
   return [Math.cos(a) * rad, Math.sin(a) * rad];
 });
 export const tap = async (g, x = 300, y = 500) => { await g.touch('pointerdown', 3, x, y); await g.tick(); await g.touch('pointerup', 3, x, y); };
+
+/** a press position inside the grab zone that the game reads as grab `idx` (searched, so it holds whatever the camera does) */
+export const grabPoint = (g, idx) => g.sk((idx) => {
+  const z = window.__skate.input.grabZone;
+  if (!z) return null;
+  const s = z.spot(idx);
+  let best = null;
+  for (let dx = -z.r; dx <= z.r; dx += z.r / 12) for (let dy = -z.r; dy <= z.r; dy += z.r / 12) {
+    const x = z.x + dx, y = z.y + dy;
+    if (Math.hypot(dx, dy) > z.r * 0.95 || z.pick(x, y) !== idx) continue;
+    const d = Math.hypot(x - s.x, y - s.y);
+    if (!best || d < best.d) best = { x, y, d };
+  }
+  return best ?? { x: s.x, y: s.y };
+}, idx);

@@ -20,25 +20,28 @@ def marks(n):
     return json.load(open(os.path.join(frames_dir, n, 'marks.json')))
 
 M = {n: marks(n) for n in ('grind', 'laser', 'mega', 'bail')}
+# `anchor` = (frame, fraction): start the voice so that fraction of the line has been
+# spoken when that frame arrives (so "grab" lands on the grab, "land it" on the crash)
 SHOTS = [
-    dict(name='grind', a=4, b=128, voice=0.15,
+    dict(name='grind', a=6, b=118, voice=0.1,
          text='I build a skate game... can you do a sick line?',
          chunks=[('I build', []), ('a skate game...', [1, 2]), ('can you do', []), ('a sick line?', [1])]),
-    dict(name='laser', a=14, b=118, voice=0.15,
+    dict(name='laser', a=8, b=M['laser']['marks']['land'] + 22, voice=0.0,
          text='Use thumbs to flick tricks.',
+         anchor=(M['laser']['marks']['flick'], 0.62),
          chunks=[('Use thumbs', [1]), ('to flick tricks', [1, 2])]),
-    dict(name='mega', a=8, b=132,
-         voice=(M['mega']['marks']['grab'] - 8) / FPS - 0.95,
+    dict(name='mega', a=15, b=M['mega']['marks']['land'] + 20, voice=0.0,
          text='Tap the board to grab.',
+         anchor=(M['mega']['marks']['grab'], 0.9),
          chunks=[('Tap the board', [2]), ('to grab', [1])]),
-    dict(name='bail', a=18, b=M['bail']['marks']['bail'] + 58,
-         voice=(M['bail']['marks']['bail'] - 18) / FPS - 1.05,
+    dict(name='bail', a=20, b=M['bail']['marks']['bail'] + 58, voice=0.0,
          text="Don't forget to land it.",
+         anchor=(M['bail']['marks']['bail'], 0.97),
          chunks=[("Don't forget", []), ('to land it', [1])]),
 ]
 
 voice = PiperVoice.load(model)
-cfg = SynthesisConfig(length_scale=0.9)
+cfg = SynthesisConfig(length_scale=1.15, noise_scale=0.5)
 
 def speak(text, path):
     with wave.open(path, 'wb') as w:
@@ -80,6 +83,8 @@ def endcard_png(path):
         d.text((x, y), txt, font=f, fill=col, stroke_width=int(px * 0.1), stroke_fill=(15, 12, 10, 255))
     img.save(path)
 
+FX = 'highpass=f=70,equalizer=f=110:t=q:w=1:g=4,equalizer=f=3200:t=q:w=1.2:g=2.5,acompressor=threshold=-20dB:ratio=3:attack=5:release=120,aecho=0.8:0.35:70:0.16,volume=1.6'
+
 # --- timeline -----------------------------------------------------------
 t = 0.0
 inputs, vf, audio = [], [], []
@@ -92,6 +97,8 @@ for k, s in enumerate(SHOTS):
     speak(s['text'], wav)
     sr, v0, v1, dur = speech_span(wav)
     s['wav'] = wav
+    if 'anchor' in s:
+        s['voice'] = (s['anchor'][0] - s['a']) / FPS - (v1 - v0) * s['anchor'][1]
     start = max(0.0, s['voice'])
     s['v0'] = v0  # leading silence in the wav, trimmed by the delay
     # spread the chunks over the spoken span by letter count
@@ -122,7 +129,7 @@ for i, (words, hi, a, b) in enumerate(overlays):
         pngs.append((p, a + (0 if j == 0 else 2 * j / FPS), (a + 2 * (j + 1) / FPS) if j < 2 else b))
 end_png = os.path.join(work, 'end.png')
 endcard_png(end_png)
-end_a = total - 2.3
+end_a = total - 1.9
 pngs.append((end_png, end_a, total, 'end'))
 
 n0 = len(SHOTS)
@@ -141,7 +148,7 @@ for s in SHOTS:
 achain = ''
 for i, s in enumerate(SHOTS):
     ms = int(max(0.0, s['t0'] + max(0.0, s['voice']) - s['v0']) * 1000)
-    achain += f'[{base + i}:a]adelay={ms}|{ms},volume=1.0[a{i}];'
+    achain += f'[{base + i}:a]{FX},adelay={ms}|{ms}[a{i}];'
 achain += ''.join(f'[a{i}]' for i in range(len(SHOTS))) + f'amix=inputs={len(SHOTS)}:normalize=0,apad=whole_dur={total:.3f},loudnorm=I=-14:TP=-1.5[aout]'
 
 fc = trims + chain + achain
