@@ -49,9 +49,11 @@ async function frame() {
   await Promise.race([expired, new Promise((r) => setTimeout(r, 15000))]);
   await guard('__step', p.evaluate((dt) => window.__step(dt), DT));
   let data;
+  const t0 = Date.now();
   for (let tries = 0; ; tries++) {
     try {
-      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 }), 10000));
+      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 }), 420000));
+      if (Date.now() - t0 > 3000) console.log('slow screenshot', Date.now() - t0, 'ms at frame', n);
       break;
     } catch (e) {
       if (tries >= 3) throw e;
