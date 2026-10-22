@@ -100,6 +100,8 @@ await tap(tb.x + tb.width / 2, tb.y + tb.height / 2);
 await wait(1500);
 
 let last = '';
+// Software GL can wedge on a frame; keep everything captured up to that point rather than losing the run.
+try {
 while (clock / 1000 < MAX) {
   const s = await state();
   if (s.done) break;
@@ -120,6 +122,10 @@ while (clock / 1000 < MAX) {
   else await wait(200);
 }
 await wait(3000);
+} catch (e) {
+  console.log('stopped early:', e.message);
+}
 fs.writeFileSync(`${out}/stamps.json`, JSON.stringify({ fps: FPS, frames: n, stamp }));
 console.log('frames', n, 'seconds', (clock / 1000).toFixed(1));
-await b.close();
+await Promise.race([b.close(), new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
+process.exit(0);
