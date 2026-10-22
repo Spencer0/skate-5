@@ -34,7 +34,10 @@ Moreno (Atlas Skateboards team manager) and Officer Pete (plaza security).
 | 3 | **Australia Pier** | Pier Gap over rotten planks, 100 m on the 250 m pier rail, splash zones |
 | 4 | **The Nations Cup** (Japan Arena) | Contest: 3 heats × 60 s vs CPU riders, best two count, medals, ending + credits |
 
-**Free Skate** rides any unlocked spot with no clock.
+**Free Skate** rides any spot with no clock, and every spot is open from the
+start. It also has a free-skate-only spot, **The Mega Park**: an 8 m roll-in
+tower into a mega kicker gap and a giant quarter pipe, a vert half pipe, a big
+bowl, a spine, a 12-stair with handrail and hubba, and rails up to 70 m long.
 
 ## Skaters, camera and options
 

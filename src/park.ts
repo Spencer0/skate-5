@@ -73,6 +73,39 @@ export function kicker(t: Terrain, tx: number, tz: number, rot: number, width: n
   return el;
 }
 
+/**
+ * Roll-in: a curved transition of radius R off the flat at (tx,tz) that
+ * straightens into a slope of `deg` degrees, up to height H, then a flat deck.
+ * Ride it down from the deck for mega-ramp speed.
+ */
+export function rollIn(t: Terrain, tx: number, tz: number, rot: number, width: number, H: number, deg: number, R: number, deck = 0) {
+  const th = (deg * Math.PI) / 180;
+  const s1 = R * Math.sin(th);
+  const h1 = R * (1 - Math.cos(th));
+  const s2 = s1 + (H - h1) / Math.tan(th);
+  const prof = (s: number) => (s <= s1 ? transitionHeight(s, R) : s >= s2 ? H : h1 + (s - s1) * Math.tan(th));
+  const hx = (s2 + deck) / 2;
+  const d = dirOf(rot);
+  const el = t.addElement({
+    kind: 'rollin',
+    cx: tx + d.x * hx,
+    cz: tz + d.z * hx,
+    rot,
+    hx,
+    hz: width / 2,
+    h: (u) => prof(u + hx),
+    resU: 0,
+    resV: 0,
+    mat: 'ramp',
+    skirt: true,
+  });
+  const uK = lin(-hx, -hx + s1, 16);
+  uK.push(-hx + s2);
+  if (deck > 0) uK.push(hx);
+  knots.set(el, { uK, vK: [-width / 2, width / 2], arcU: true });
+  return { el, run: s2, H };
+}
+
 /** Flat bank: rises linearly over L to H, then a flat deck. */
 export function bank(t: Terrain, tx: number, tz: number, rot: number, width: number, H: number, L: number, deck = 0) {
   const hx = (L + deck) / 2;

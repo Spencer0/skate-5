@@ -98,7 +98,8 @@ export interface Level {
   sky: string;
   fog: [number, number];
   ground: boolean;
-  kind: 'street' | 'comp';
+  /** 'free' parks are free-skate only: no goals, never in the career */
+  kind: 'street' | 'comp' | 'free';
   /** seconds per run */
   runTime: number;
   /** goals needed here to unlock the next chapter */

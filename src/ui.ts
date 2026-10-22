@@ -1,4 +1,4 @@
-import { LEVELS, Level, GoalDef } from './levels';
+import { LEVELS, PARKS, Level, GoalDef } from './levels';
 import { Career, STATS, STAT_MAX, DECKS, SPECIALS, Medal } from './career';
 import { deckTexture } from './textures';
 import { RIDERS, RiderId, RiderStyle } from './rider';
@@ -270,15 +270,13 @@ export class UI {
   showFree() {
     this.reset();
     this.header('Free Skate', () => this.showTitle());
-    el('p', 'menu-p', this.card, 'No clock, no goals. Spots unlock in Career mode.');
+    el('p', 'menu-p', this.card, 'No clock, no goals. Every spot is open.');
     const list = el('div', 'chapter-list', this.card);
-    LEVELS.forEach((L, i) => {
-      const unlocked = this.career.isUnlocked(i);
-      const item = el('button', 'chapter' + (unlocked ? '' : ' locked'), list) as HTMLButtonElement;
+    PARKS.forEach((L, i) => {
+      const item = el('button', 'chapter', list) as HTMLButtonElement;
       el('div', 'chapter-name', item, L.name);
-      el('div', 'chapter-meta', item, unlocked ? `Best run: ${fmt(this.career.bestScore(L))}` : 'Locked');
-      if (unlocked) item.addEventListener('click', () => this.hooks.startRun(i, 'free'));
-      else item.disabled = true;
+      el('div', 'chapter-meta', item, L.kind === 'free' ? L.tagline : `Best run: ${fmt(this.career.bestScore(L))}`);
+      item.addEventListener('click', () => this.hooks.startRun(i, 'free'));
     });
   }
 
@@ -558,7 +556,7 @@ export class UI {
   }
 
   showPause(i: number, mode: RunMode) {
-    const L = LEVELS[i];
+    const L = PARKS[i];
     this.reset();
     const tut = this.hooks.inTutorial();
     this.header(tut ? 'Tutorial' : mode === 'free' ? `${L.name} · Free Skate` : L.name, null);

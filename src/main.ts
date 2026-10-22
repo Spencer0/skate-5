@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import { Terrain } from './terrain';
 import { buildMeshes, makeMaterials } from './park';
-import { LEVELS, LevelData, GapDef, GoalDef, inRect, V3, LETTERS } from './levels';
+import { LEVELS, PARKS, LevelData, GapDef, GoalDef, inRect, V3, LETTERS } from './levels';
 import { BoardModel, DECK } from './board';
 import { Skater, SkaterEvent, TrickRecord, Quality, GRAB_LIFT } from './skater';
 import { Input } from './input';
@@ -115,7 +115,7 @@ fade.className = 'fade';
 app.appendChild(fade);
 
 // gap checklist names for every level
-for (const L of LEVELS) {
+for (const L of PARKS) {
   const d = L.build(new Terrain());
   GAP_NAMES[L.id] = d.gaps.map((g) => [g.id, g.name, g.points]);
 }
@@ -392,7 +392,7 @@ function disposeGroup(g: THREE.Group) {
 
 function loadLevel(i: number) {
   if (i === levelIndex) return;
-  const L = LEVELS[i];
+  const L = PARKS[i];
   levelIndex = i;
   if (levelGroup) {
     scene.remove(levelGroup);
@@ -431,7 +431,7 @@ function respawnAtStart() {
 function startRun(i: number, mode: RunMode) {
   stopTutorial();
   loadLevel(i);
-  const L = LEVELS[i];
+  const L = PARKS[i];
   const prev = session;
   const heat = mode === 'comp' && prev?.mode === 'comp' && prev.level === i && prev.heats.length < 3 ? prev.heats.length + 1 : 1;
   session = {
@@ -467,7 +467,7 @@ function finishRun(timeUp: boolean) {
   playing = false;
   hud.setTimer(null);
   combo.bank();
-  const L = LEVELS[s.level];
+  const L = PARKS[s.level];
   const score = combo.total;
   if (s.mode === 'comp') {
     s.heats.push(score);
@@ -550,7 +550,7 @@ function finishRun(timeUp: boolean) {
 }
 
 function updateGoalChip() {
-  const L = LEVELS[levelIndex];
+  const L = PARKS[levelIndex];
   hud.setGoals(career.doneCount(L), session && session.mode !== 'free' ? L.goals.length : null);
 }
 
@@ -724,7 +724,7 @@ function handle(ev: SkaterEvent) {
       dustBurst(8 + Math.round(ev.impact * 2), 1.2);
       for (const r of ev.tricks) combo.add(r);
       const gaps = gapsCleared();
-      const L = LEVELS[levelIndex];
+      const L = PARKS[levelIndex];
       for (const g of gaps) {
         combo.add({ name: g.name, points: g.points, kind: 'trick' });
         if (session && session.mode !== 'free' && career.foundGap(L, g.id)) hud.toast('New gap found', g.name, 'letter');
@@ -896,7 +896,7 @@ function handleProps(dt: number, t: number) {
   if (!props) return;
   const collect = !!session && session.mode === 'career' && playing;
   const hits = props.update(dt, t, skater.pos, skater.vel, playing && skater.mode !== 'bail', collect);
-  const L = LEVELS[levelIndex];
+  const L = PARKS[levelIndex];
   for (const h of hits) {
     if (h.kind === 'object') {
       audio.knock(h.noun === 'ball');
@@ -1068,7 +1068,7 @@ function updateTracker() {
     hud.setTracker([], null);
     return;
   }
-  const L = LEVELS[s.level];
+  const L = PARKS[s.level];
   const rows: { label: string; value: string }[] = [];
   if (s.mode === 'comp') {
     rows.push({ label: `Heat ${s.heat}/3`, value: (combo.total + (combo.active ? combo.points * combo.mult : 0)).toLocaleString('en-US') });

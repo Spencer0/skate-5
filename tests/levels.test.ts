@@ -2,14 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Terrain } from '../src/terrain';
 import { Skater, SkaterEvent, SkaterInput } from '../src/skater';
-import { LEVELS, inRect } from '../src/levels';
+import { LEVELS, PARKS, inRect } from '../src/levels';
+import { MEGA } from '../src/levels/mega';
 import type { TrickSpec } from '../src/tricks';
 
 const idle: SkaterInput = { steer: 0, push: false, pushHold: false, brake: false, grindMod: 'none', crouch: false };
 const spec = (flip: number, shove: number): TrickSpec => ({ flip, shove, wrap: 0, nollie: false, speed: 1, label: '' });
 
 function level(id: string) {
-  const L = LEVELS.find((l) => l.id === id)!;
+  const L = PARKS.find((l) => l.id === id)!;
   const t = new Terrain();
   const data = L.build(t);
   return { L, t, data };
@@ -118,7 +119,7 @@ test('pier rail: 100m in one grind is possible', () => {
 });
 
 test('every level has its collectibles and a spawn on solid ground', () => {
-  for (const L of LEVELS) {
+  for (const L of PARKS) {
     const t = new Terrain();
     const d = L.build(t);
     if (L.kind === 'street') {
@@ -154,4 +155,31 @@ test('secret tapes sit somewhere reachable (on or just above a surface)', () => 
     const h = t.height(d.tape.x, d.tape.z);
     assert.ok(d.tape.y - h < 1.4 || L.id === 'plaza', `${L.id}: tape ${d.tape.y} over ${h}`);
   }
+});
+
+test('the story chapters come first in the park list; free parks have no goals', () => {
+  assert.deepEqual(PARKS.slice(0, LEVELS.length), LEVELS);
+  for (const L of PARKS.slice(LEVELS.length)) {
+    assert.equal(L.kind, 'free', L.id);
+    assert.equal(L.goals.length, 0, L.id);
+  }
+  assert.equal(new Set(PARKS.map((L) => L.id)).size, PARKS.length);
+});
+
+test('Mega Park: drop in from the tower, pop the kicker and clear the Mega Gap', () => {
+  const { t, data } = level('mega');
+  const r = rig(t, data.spawn.x, MEGA.deckZ + 2, 0, -4);
+  // ride down the roll-in, then pop at the kicker lip
+  while (r.sk.pos.z > MEGA.kickToe + 1) r.run(1 / 240);
+  assert.ok(popAtLip(r, spec(0, 0)));
+  const takeoff = r.sk.pos.clone();
+  for (let i = 0; i < 3 * 240 && !r.events.some((e) => e.type === 'land' || e.type === 'bail'); i++) r.run(1 / 240);
+  const desc = r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(',') + ` z=${r.sk.pos.z.toFixed(1)}`;
+  assert.ok(r.events.some((e) => e.type === 'land'), desc);
+  const gap = data.gaps.find((g) => g.id === 'megagap')!;
+  assert.ok(inRect(gap.from, takeoff.x, takeoff.z), `takeoff ${takeoff.z}`);
+  assert.ok(inRect(gap.to, r.sk.pos.x, r.sk.pos.z), desc);
+  assert.ok(r.sk.maxAirY - r.sk.takeoff.y > 3, `air ${(r.sk.maxAirY - r.sk.takeoff.y).toFixed(2)}`);
+  r.run(1.5);
+  assert.ok(!r.events.some((e) => e.type === 'bail'), r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(','));
 });
