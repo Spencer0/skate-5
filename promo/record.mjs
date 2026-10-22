@@ -31,6 +31,9 @@ await p.addInitScript(() => {
 });
 await p.goto('http://127.0.0.1:5173/');
 await p.waitForTimeout(2500);
+p.on('crash', () => console.log('PAGE CRASHED'));
+p.on('pageerror', (e) => console.log('pageerror', e.message));
+p.on('console', (m) => { if (/context|webgl|lost/i.test(m.text())) console.log('console:', m.text()); });
 const cdp = await ctx.newCDPSession(p);
 
 let n = 0;
