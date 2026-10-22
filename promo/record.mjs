@@ -36,6 +36,8 @@ p.on('crash', () => console.log('PAGE CRASHED'));
 p.on('pageerror', (e) => console.log('pageerror', e.message));
 p.on('console', (m) => { if (/context|webgl|lost/i.test(m.text())) console.log('console:', m.text()); });
 const cdp = await ctx.newCDPSession(p);
+// pin the emulated phone so screenshots are exactly W x H css px at SCALE, whatever the headless window is
+await cdp.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: SCALE, mobile: true, screenWidth: W, screenHeight: H });
 
 let n = 0;
 let clock = 0; // virtual ms since recording began
@@ -53,7 +55,7 @@ async function frame() {
   const t0 = Date.now();
   for (let tries = 0; ; tries++) {
     try {
-      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: W, height: H, scale: SCALE } }), 20000));
+      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92 }), 20000));
       if (Date.now() - t0 > 3000) console.log('slow screenshot', Date.now() - t0, 'ms at frame', n);
       break;
     } catch (e) {
