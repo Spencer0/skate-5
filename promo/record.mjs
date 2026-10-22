@@ -107,9 +107,9 @@ while (clock / 1000 < MAX) {
     }
     await touch('touchEnd');
   }
-  else if (s.title === 'Ollie') { await drag([[420, 640], [420, 700], [420, 700], [420, 540]], 330); await wait(500); await tap(300, 500); await wait(1500); }
-  else if (s.title === 'Kickflip') { await drag([[420, 640], [420, 700], [420, 700], [325, 600]], 300); await wait(470); await tap(300, 500); await wait(1500); }
-  else if (s.title === 'Catch it!') { await tap(300, 500); await wait(600); }
+  else if (s.title === 'Ollie') { await drag([[420, 640], [420, 700], [420, 700], [420, 540]], 330); await wait(500); await tap(500, 860); await wait(1500); }
+  else if (s.title === 'Kickflip') { await drag([[420, 640], [420, 700], [420, 700], [325, 600]], 300); await wait(470); await tap(500, 860); await wait(1500); }
+  else if (s.title === 'Catch it!') { await tap(500, 860); await wait(600); }
   else await wait(200);
 }
 await wait(3000);
