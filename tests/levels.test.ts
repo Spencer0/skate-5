@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Terrain } from '../src/terrain';
 import { Skater, SkaterEvent, SkaterInput } from '../src/skater';
 import { LEVELS, PARKS, inRect } from '../src/levels';
-import { MEGA } from '../src/levels/mega';
+import { megaLine } from '../src/levels/mega';
 import type { TrickSpec } from '../src/tricks';
 
 const idle: SkaterInput = { steer: 0, push: false, pushHold: false, brake: false, grindMod: 'none', crouch: false };
@@ -168,18 +168,56 @@ test('the story chapters come first in the park list; free parks have no goals',
 
 test('Mega Park: drop in from the tower, pop the kicker and clear the Mega Gap', () => {
   const { t, data } = level('mega');
-  const r = rig(t, data.spawn.x, MEGA.deckZ + 2, 0, -4);
-  // ride down the roll-in, then pop at the kicker lip
-  while (r.sk.pos.z > MEGA.kickToe + 1) r.run(1 / 240);
-  assert.ok(popAtLip(r, spec(0, 0)));
-  const takeoff = r.sk.pos.clone();
-  for (let i = 0; i < 3 * 240 && !r.events.some((e) => e.type === 'land' || e.type === 'bail'); i++) r.run(1 / 240);
-  const desc = r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(',') + ` z=${r.sk.pos.z.toFixed(1)}`;
-  assert.ok(r.events.some((e) => e.type === 'land'), desc);
-  const gap = data.gaps.find((g) => g.id === 'megagap')!;
-  assert.ok(inRect(gap.from, takeoff.x, takeoff.z), `takeoff ${takeoff.z}`);
-  assert.ok(inRect(gap.to, r.sk.pos.x, r.sk.pos.z), desc);
-  assert.ok(r.sk.maxAirY - r.sk.takeoff.y > 3, `air ${(r.sk.maxAirY - r.sk.takeoff.y).toFixed(2)}`);
-  r.run(1.5);
+  const M = megaLine();
+  for (const v0 of [2, 6]) {
+    const r = rig(t, data.spawn.x, data.spawn.z - 9, 0, -v0);
+    // ride down the 24 m roll-in, then pop at the kicker lip
+    while (r.sk.pos.z > M.kickToe) r.run(1 / 240);
+    assert.ok(popAtLip(r, spec(0, 0)));
+    const takeoff = r.sk.pos.clone();
+    r.events.length = 0;
+    for (let i = 0; i < 4 * 240 && !r.events.some((e) => e.type === 'land' || e.type === 'bail'); i++) r.run(1 / 240);
+    const desc = r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(',') + ` z=${r.sk.pos.z.toFixed(1)}`;
+    assert.ok(r.events.some((e) => e.type === 'land'), desc);
+    const gap = data.gaps.find((g) => g.id === 'megagap')!;
+    assert.ok(inRect(gap.from, takeoff.x, takeoff.z), `takeoff ${takeoff.z}`);
+    assert.ok(inRect(gap.to, r.sk.pos.x, r.sk.pos.z), desc);
+    assert.ok(r.sk.maxAirY - r.sk.takeoff.y > 6, `air ${(r.sk.maxAirY - r.sk.takeoff.y).toFixed(2)}`);
+    // ride it out into the giant quarter pipe and back
+    r.run(4);
+    assert.ok(!r.events.some((e) => e.type === 'bail'), r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(','));
+  }
+});
+
+test('Mega Park: rolling the kicker without a pop lands on the knuckle table', () => {
+  const { t, data } = level('mega');
+  const M = megaLine();
+  const r = rig(t, data.spawn.x, data.spawn.z - 9, 0, -3);
+  r.run(9);
   assert.ok(!r.events.some((e) => e.type === 'bail'), r.events.map((e) => e.type + ('reason' in e ? ':' + e.reason : '')).join(','));
+  assert.ok(r.sk.pos.z < M.landToe, `z=${r.sk.pos.z.toFixed(1)}`);
+});
+
+test('lifts drop you on flat, solid ground', () => {
+  for (const L of PARKS) {
+    const t = new Terrain();
+    const d = L.build(t);
+    for (const l of d.lifts ?? []) {
+      const n = t.normal(l.to.x, l.to.z, d.tape.clone());
+      assert.ok(n.y > 0.999, `${L.id}: ${l.name}`);
+      const cx = (l.area.x0 + l.area.x1) / 2;
+      const cz = (l.area.z0 + l.area.z1) / 2;
+      assert.equal(t.height(cx, cz), 0, `${L.id}: pad for ${l.name} isn't on the ground`);
+    }
+  }
+});
+
+test('pumping a transition gains speed on the way down', () => {
+  const { t } = level('mega');
+  const speed = (pump: boolean) => {
+    const r = rig(t, -72, 40, 6, 0);
+    r.run(0.9, { pushHold: pump });
+    return r.sk.vel.length();
+  };
+  assert.ok(speed(true) > speed(false) + 0.3);
 });

@@ -80,9 +80,17 @@ export interface PropDef {
   pos: THREE.Vector3;
 }
 
+/** Ride onto the pad and you're carried up to `to` (the top of a tower). */
+export interface LiftDef {
+  name: string;
+  area: Rect;
+  to: { x: number; z: number; heading: number };
+}
+
 export interface LevelData {
   vis: ParkVisuals;
   spawn: { x: number; z: number; heading: number };
+  lifts?: LiftDef[];
   gaps: GapDef[];
   letters: THREE.Vector3[]; // one per letter of LETTERS
   tape: THREE.Vector3;

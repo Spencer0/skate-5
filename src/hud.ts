@@ -217,7 +217,7 @@ export class Hud {
       'p',
       'guide-p',
       card,
-      'Left thumb: tap to push, drag sideways to carve (push it hard in the air to spin, use it to balance on rails). Hold up to keep pushing — and to carry over a lip onto the deck or out of a bowl. Hold down to powerslide.',
+      'Left thumb: tap to push, drag sideways to carve (push it hard in the air to spin, use it to balance on rails). Hold up to keep pushing, to pump for speed dropping down a ramp, and to carry over a lip onto the deck or out of a bowl. Hold down to powerslide.',
     );
     el(
       'p',

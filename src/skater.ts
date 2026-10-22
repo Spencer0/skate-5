@@ -29,6 +29,7 @@ export const TUNE = {
   coyote: 0.12,
   catchSettle: 26,
   balance: 1, // grind instability multiplier (Rail Balance stat lowers it)
+  pumpAccel: 3.5, // holding push on a transition pumps: extra speed while dropping down it
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -273,6 +274,12 @@ export class Skater {
     projectOnPlane(tmp, n);
     this.vel.addScaledVector(tmp, dt);
     projectOnPlane(this.vel, n);
+
+    // pumping: hold push on a transition and you gain speed on the way down it
+    if (inp.pushHold && !inp.brake && n.y < 0.97) {
+      const s = this.vel.length();
+      if (s > 0.5 && this.vel.y < 0) this.vel.multiplyScalar(1 + (TUNE.pumpAccel * Math.min(1, -this.vel.y / s) * dt) / s);
+    }
 
     // wheels: kill lateral velocity, keep speed (carving)
     const right = tmp2.crossVectors(this.fwd, n).normalize();

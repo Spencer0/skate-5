@@ -420,6 +420,19 @@ function loadLevel(i: number) {
   cam.init = false;
 }
 
+/** Lift pads carry you back up to the top of the big drop-ins. */
+function rideLifts() {
+  if (skater.mode !== 'ground' || !levelData.lifts) return;
+  for (const l of levelData.lifts) {
+    if (!inRect(l.area, skater.pos.x, skater.pos.z)) continue;
+    combo.bank();
+    skater.spawn(l.to.x, l.to.z, l.to.heading);
+    cam.init = false;
+    hud.toast('Lift', l.name, 'letter');
+    return;
+  }
+}
+
 function respawnAtStart() {
   const sp = levelData.spawn;
   skater.spawn(sp.x, sp.z, sp.heading);
@@ -1149,6 +1162,7 @@ function frame(now: number) {
   skater.events.length = 0;
 
   if (skater.mode === 'bail' && skater.bailT > 1.45) fade.classList.add('on');
+  if (playing) rideLifts();
 
   if (skater.mode === 'ground' && combo.active) {
     combo.groundT += dt;

@@ -16,7 +16,7 @@ export class Minimap {
       if (e.mat === 'wall') continue;
       ext = Math.max(ext, Math.abs(e.minX), Math.abs(e.maxX), Math.abs(e.minZ), Math.abs(e.maxZ));
     }
-    this.half = Math.min(110, ext + 4);
+    this.half = Math.min(130, ext + 4);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'minimap';

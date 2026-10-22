@@ -35,9 +35,14 @@ Moreno (Atlas Skateboards team manager) and Officer Pete (plaza security).
 | 4 | **The Nations Cup** (Japan Arena) | Contest: 3 heats × 60 s vs CPU riders, best two count, medals, ending + credits |
 
 **Free Skate** rides any spot with no clock, and every spot is open from the
-start. It also has a free-skate-only spot, **The Mega Park**: an 8 m roll-in
-tower into a mega kicker gap and a giant quarter pipe, a vert half pipe, a big
-bowl, a spine, a 12-stair with handrail and hubba, and rails up to 70 m long.
+start. It also has a free-skate-only spot, **The Mega Park**: a 24 m mega ramp
+(roll-in tower, 17 m gap over a knuckle table, 8 m quarter pipe with a drop
+off the back), a superpipe with its own 11 m drop-in, a giant bowl, a 4 m
+spine, a 16-stair with handrail and hubbas, rails down the mega roll-in and a
+100 m flat rail. Ride onto a yellow LIFT pad to go back up to the top.
+
+**Pumping:** hold push (left thumb up, or W) while dropping down a transition
+to gain speed — that's how you keep the superpipe and bowls going.
 
 ## Skaters, camera and options
 
