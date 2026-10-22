@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Terrain } from '../terrain';
 import { ParkVisuals, box, kicker, bank, ledge, stairs, hubba, quarterPipe } from '../park';
 import { Level, N, S, W, rect, ringRail, polyRail, buildings, lamps, scatterTrees, scoreGoals, flagpole, LETTERS_GOAL } from './common';
+import { Batch, birds, bunting, grime, palm, perimeter, tileBands, wallBunting, wallCrowd } from './decor';
 
 const FOUNTAIN = { r: 2.2, inner: 1.8, rim: 0.5, ped: 0.35, pedH: 1.1, water: 0.3 };
 
@@ -56,8 +57,9 @@ export const plazaLevel: Level = {
   chapter: 2,
   tagline: 'Chapter 2 · Downtown',
   blurb: 'A legendary fountain gap, a 7-stair Dex claims as his, and a security guard on a long lunch.',
-  sky: '#E9E4DA',
-  fog: [40, 130],
+  sky: '#F2E2C6',
+  zenith: '#5E9FDB',
+  fog: [45, 175],
   ground: true,
   kind: 'street',
   runTime: 120,
@@ -231,8 +233,43 @@ export const plazaLevel: Level = {
       ],
     };
   },
-  decorate(group, mats) {
-    buildings(group, mats, 58, 3);
+  decorate(group, mats, t) {
+    // Seville: ochre, albero, terracotta and whitewash
+    buildings(group, mats, 58, 3, [0xf3c46a, 0xe9b872, 0xe39468, 0xffffff, 0xf7dc8f, 0xf0b4a0, 0xffe8c0]);
+    const walls = perimeter(56, 3.6);
+    tileBands(group, t, walls, 1.2, 13);
+    grime(group, t, rect(-56, -56, 56, 56), 380, 23, {
+      tags: ['#c0392b', '#1f4e9c'],
+      avoid: [{ x: 0, z: 0, r: 3.2 }],
+      mix: { gum: 3, tag: 0.4, drain: 1, wax: 1.5, chalk: 0.6 },
+    });
+    const life = new Batch();
+    wallCrowd(life, t, walls, [0xc60b1e, 0xffc400, 0xfaf9f5, 0x1f4e9c, 0x141413, 0x2a9d8f, 0xf4a3b4], 0.45, 33);
+    const red = 0xc60b1e;
+    const gold = 0xffc400;
+    wallBunting(life, 58, 3.6, 14, [red, gold, red, 0xfaf9f5], 43);
+    // strings across the corners, high over the riding
+    for (const [sx, sz] of [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ]) {
+      bunting(life, new THREE.Vector3(sx * 58, 7.5, sz * 30), new THREE.Vector3(sx * 30, 7.5, sz * 58), 1.6, [red, gold], 90 + sx * 3 + sz);
+    }
+    // palms in the four corners of the plaza
+    for (const [x, z] of [
+      [-51, -51],
+      [51, -51],
+      [-51, 51],
+      [51, 51],
+      [-51, 44],
+      [44, 51],
+    ]) {
+      palm(life, x, 0, z, 9 + ((x * 7 + z * 3) % 3), 200 + x + z);
+    }
+    group.add(life.build({ side: THREE.DoubleSide }));
+    birds(group, 9, 0, 0, 9, 7, 0x8d8f99, 61);
     scatterTrees(group, 24, 62, 80, 9);
     lamps(group, mats, [
       [-10, 12, 0],

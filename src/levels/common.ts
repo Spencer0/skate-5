@@ -4,6 +4,7 @@ import { Terrain } from '../terrain';
 import type { ParkMaterials, ParkVisuals } from '../park';
 import { rng, flagTexture } from '../textures';
 import { flagDef } from '../flags';
+import { ambient } from './decor';
 
 /** The collectible letters hidden in every street spot, in order. */
 export const LETTERS = 'NATION';
@@ -103,7 +104,10 @@ export interface Level {
   chapter: number;
   tagline: string;
   blurb: string;
+  /** horizon colour (also the fog) */
   sky: string;
+  /** top of the sky dome */
+  zenith: string;
   fog: [number, number];
   ground: boolean;
   /** 'free' parks are free-skate only: no goals, never in the career */
@@ -236,6 +240,18 @@ export function flagpole(group: THREE.Group, mats: ParkMaterials, x: number, z: 
   let mat = flagMats.get(flag);
   if (!mat) {
     mat = new THREE.MeshStandardMaterial({ map: flagTexture(flag), roughness: 0.8, side: THREE.DoubleSide });
+    // ripple in the wind: waves run out from the pole, each flag on its own beat
+    mat.onBeforeCompile = (s) => {
+      s.uniforms.uTime = ambient;
+      s.vertexShader = 'uniform float uTime;\n' + s.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        float fu = position.x / ${fw.toFixed(3)};
+        transformed.z += sin(fu * 6.0 - uTime * 5.0 + modelMatrix[3].x * 0.7 + modelMatrix[3].z) * 0.14 * fu;
+        transformed.y += sin(fu * 4.0 - uTime * 3.0 + modelMatrix[3].z) * 0.04 * fu;`,
+      );
+    };
+    mat.customProgramCacheKey = () => 'flag-wave-' + fw.toFixed(3);
     flagMats.set(flag, mat);
   }
   const m = new THREE.Mesh(geo, mat);
@@ -245,9 +261,10 @@ export function flagpole(group: THREE.Group, mats: ParkMaterials, x: number, z: 
   group.add(m);
 }
 
-/** Simple box buildings around a plaza (decor, beyond the walls). */
-export function buildings(group: THREE.Group, mats: ParkMaterials, ring: number, seed: number) {
+/** Simple box buildings around a plaza (decor, beyond the walls), each painted from `palette`. */
+export function buildings(group: THREE.Group, mats: ParkMaterials, ring: number, seed: number, palette: number[] = [0xffffff]) {
   const r = rng(seed);
+  const pr = rng(seed + 1);
   const geos: THREE.BufferGeometry[] = [];
   for (const side of [0, 1, 2, 3]) {
     let along = -ring - 6;
@@ -272,9 +289,27 @@ export function buildings(group: THREE.Group, mats: ParkMaterials, ring: number,
       else if (side === 1) g.translate(c, 0, -out);
       else if (side === 2) g.rotateY(Math.PI / 2).translate(out, 0, c);
       else g.rotateY(Math.PI / 2).translate(-out, 0, c);
+      tint(g, palette[Math.floor(pr() * palette.length)]);
       geos.push(g);
       along += w + 0.5;
     }
   }
-  group.add(new THREE.Mesh(mergeGeometries(geos, false)!, mats.facade));
+  group.add(new THREE.Mesh(mergeGeometries(geos, false)!, paintedFacade(mats)));
+}
+
+/** Give every vertex of `g` one colour (for vertex-coloured materials). */
+export function tint(g: THREE.BufferGeometry, color: THREE.ColorRepresentation) {
+  const c = new THREE.Color(color);
+  const n = g.getAttribute('position').count;
+  const a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return g;
+}
+
+/** The facade material, tinted per building by vertex colour. */
+export function paintedFacade(mats: ParkMaterials) {
+  const m = mats.facade.clone();
+  m.vertexColors = true;
+  return m;
 }

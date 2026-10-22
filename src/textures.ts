@@ -757,3 +757,403 @@ export function flagTexture(id: string): THREE.CanvasTexture {
   f.draw(g, W, H);
   return tex(c, false);
 }
+
+/* ------------------------------------------------------------------ */
+/* Ambience: sky, grime, graffiti, tiles                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Equirectangular sky for a dome: the horizon colour (matches the fog) fading
+ * up to `zenith`, with a band of soft clouds.
+ */
+export function skyTexture(horizon: string, zenith: string, seed: number) {
+  const W = 1024;
+  const H = 512;
+  const { c, g } = canvas(W, H);
+  const grd = g.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, zenith);
+  grd.addColorStop(0.32, zenith);
+  grd.addColorStop(0.5, horizon);
+  grd.addColorStop(1, horizon);
+  g.fillStyle = grd;
+  g.fillRect(0, 0, W, H);
+  // clouds: clusters of soft puffs, flatter and denser near the horizon
+  const r = rng(seed);
+  for (let i = 0; i < 26; i++) {
+    const cx = r() * W;
+    const cy = H * (0.22 + r() * 0.24);
+    const near = (cy / H - 0.22) / 0.24; // 0 high .. 1 at the horizon
+    const s = 30 + r() * 50 * (1 - near * 0.5);
+    for (let k = 0; k < 9; k++) {
+      const x = cx + (r() - 0.5) * s * 3.2;
+      const y = cy + (r() - 0.5) * s * 0.5;
+      const rad = s * (0.5 + r() * 0.6);
+      for (const ox of [-W, 0, W]) {
+        const pg = g.createRadialGradient(x + ox, y, 0, x + ox, y, rad);
+        pg.addColorStop(0, `rgba(255,255,255,${0.32 - near * 0.12})`);
+        pg.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = pg;
+        g.save();
+        g.translate(x + ox, y);
+        g.scale(1, 0.45);
+        g.translate(-(x + ox), -y);
+        g.fillRect(x + ox - rad, y - rad, rad * 2, rad * 2);
+        g.restore();
+      }
+    }
+  }
+  const t = tex(c, false);
+  t.wrapS = THREE.RepeatWrapping;
+  return t;
+}
+
+/** Cells of the grime atlas (4 × 4). */
+export const GRIME = { oil: [0, 1, 2], dirt: [3], skid: [4, 5], crack: [6, 7], wax: [8], gum: [9], stain: [10], leaves: [11], tag: [12, 13], drain: [14], chalk: [15] };
+
+/**
+ * Street wear for the ground, in a 4×4 atlas: oil, dirt, skid marks, cracks,
+ * wax, gum, water stains, leaves, spray tags, a drain and chalk doodles.
+ */
+export function grimeAtlas(tagColors: string[], seed: number) {
+  const C = 256;
+  const { c, g } = canvas(C * 4, C * 4);
+  const r = rng(seed);
+  const cell = (i: number, draw: () => void) => {
+    g.save();
+    g.translate((i % 4) * C, Math.floor(i / 4) * C);
+    g.beginPath();
+    g.rect(0, 0, C, C);
+    g.clip();
+    draw();
+    g.restore();
+  };
+  const blob = (x: number, y: number, rad: number, col: string) => {
+    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+    grd.addColorStop(0, col);
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd;
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  };
+  for (const i of GRIME.oil) {
+    cell(i, () => {
+      for (let k = 0; k < 10; k++) blob(C / 2 + (r() - 0.5) * 110, C / 2 + (r() - 0.5) * 110, 18 + r() * 44, `rgba(34,30,26,${0.05 + r() * 0.07})`);
+    });
+  }
+  cell(GRIME.dirt[0], () => {
+    for (let k = 0; k < 40; k++) {
+      const a = r() * Math.PI * 2;
+      const d = r() * 80;
+      blob(C / 2 + Math.cos(a) * d, C / 2 + Math.sin(a) * d, 30 + r() * 40, `rgba(110,92,64,${0.012 + r() * 0.014})`);
+    }
+  });
+  for (const i of GRIME.skid) {
+    cell(i, () => {
+      const bend = (r() - 0.5) * 120;
+      for (const off of [-22, 22]) {
+        const grd = g.createLinearGradient(20, 0, C - 20, 0);
+        grd.addColorStop(0, 'rgba(20,18,16,0)');
+        grd.addColorStop(0.25, 'rgba(20,18,16,0.5)');
+        grd.addColorStop(1, 'rgba(20,18,16,0)');
+        g.strokeStyle = grd;
+        g.lineWidth = 9;
+        g.beginPath();
+        g.moveTo(20, C / 2 + off);
+        g.quadraticCurveTo(C / 2, C / 2 + off + bend, C - 20, C / 2 + off + bend * 0.4);
+        g.stroke();
+      }
+    });
+  }
+  for (const i of GRIME.crack) {
+    cell(i, () => {
+      g.strokeStyle = 'rgba(40,36,30,0.55)';
+      g.lineCap = 'round';
+      const walk = (x: number, y: number, a: number, n: number, w: number) => {
+        g.lineWidth = w;
+        g.beginPath();
+        g.moveTo(x, y);
+        for (let k = 0; k < n; k++) {
+          a += (r() - 0.5) * 0.9;
+          x += Math.cos(a) * 12;
+          y += Math.sin(a) * 12;
+          g.lineTo(x, y);
+          if (w > 1.5 && r() < 0.15) {
+            g.stroke();
+            walk(x, y, a + (r() < 0.5 ? 1 : -1) * (0.6 + r()), 4 + Math.floor(r() * 5), w * 0.6);
+            g.lineWidth = w;
+            g.beginPath();
+            g.moveTo(x, y);
+          }
+        }
+        g.stroke();
+      };
+      walk(14, C / 2 + (r() - 0.5) * 80, (r() - 0.5) * 0.6, 18, 3.5);
+    });
+  }
+  cell(GRIME.wax[0], () => {
+    g.lineCap = 'round';
+    for (let k = 0; k < 22; k++) {
+      g.strokeStyle = `rgba(30,26,22,${0.12 + r() * 0.2})`;
+      g.lineWidth = 2 + r() * 5;
+      const y = 40 + r() * (C - 80);
+      g.beginPath();
+      g.moveTo(10 + r() * 40, y);
+      g.quadraticCurveTo(C / 2, y + (r() - 0.5) * 30, C - 10 - r() * 40, y + (r() - 0.5) * 20);
+      g.stroke();
+    }
+  });
+  cell(GRIME.gum[0], () => {
+    for (let k = 0; k < 26; k++) {
+      const x = 20 + r() * (C - 40);
+      const y = 20 + r() * (C - 40);
+      g.fillStyle = `rgba(${70 + r() * 40},${66 + r() * 30},${60 + r() * 30},0.75)`;
+      g.beginPath();
+      g.ellipse(x, y, 4 + r() * 5, 3 + r() * 4, r() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
+  cell(GRIME.stain[0], () => {
+    blob(C / 2, C / 2, 110, 'rgba(60,50,40,0.05)');
+    g.strokeStyle = 'rgba(60,50,40,0.16)';
+    g.lineWidth = 5;
+    g.beginPath();
+    for (let a = 0; a <= Math.PI * 2 + 0.01; a += 0.2) {
+      const rad = 95 + Math.sin(a * 3 + 1) * 10 + Math.sin(a * 7) * 5;
+      const x = C / 2 + Math.cos(a) * rad;
+      const y = C / 2 + Math.sin(a) * rad;
+      if (a === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.stroke();
+  });
+  cell(GRIME.leaves[0], () => {
+    const cols = ['#8a6a2c', '#a8742a', '#6f7d3a', '#b5562d', '#7a5a30'];
+    for (let k = 0; k < 34; k++) {
+      const a = r() * Math.PI * 2;
+      const d = r() * 100;
+      g.fillStyle = cols[Math.floor(r() * cols.length)];
+      g.globalAlpha = 0.85;
+      g.beginPath();
+      g.ellipse(C / 2 + Math.cos(a) * d, C / 2 + Math.sin(a) * d, 10 + r() * 6, 4 + r() * 3, r() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+  });
+  GRIME.tag.forEach((i, n) => {
+    cell(i, () => {
+      g.translate(C / 2, C / 2);
+      g.rotate((r() - 0.5) * 0.5);
+      g.font = 'italic bold 92px "Arial Black", Arial, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      const word = n ? 'SK8' : 'RIP';
+      g.lineJoin = 'round';
+      g.lineWidth = 10;
+      g.strokeStyle = 'rgba(20,20,20,0.6)';
+      g.strokeText(word, 0, 0);
+      g.fillStyle = tagColors[n % tagColors.length];
+      g.globalAlpha = 0.8;
+      g.fillText(word, 0, 0);
+      g.globalAlpha = 1;
+      // a dribble of overspray
+      for (let k = 0; k < 40; k++) blob((r() - 0.5) * 220, (r() - 0.5) * 120, 3 + r() * 5, 'rgba(20,20,20,0.25)');
+    });
+  });
+  cell(GRIME.drain[0], () => {
+    // kept small in its cell: an opaque cover would bleed into every decal's distant mips
+    const R2 = 46;
+    g.fillStyle = '#5a5652';
+    g.beginPath();
+    g.arc(C / 2, C / 2, R2, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#2f2d2a';
+    g.lineWidth = 4;
+    g.stroke();
+    g.fillStyle = '#26241f';
+    for (let k = -3; k <= 3; k++) g.fillRect(C / 2 - R2 * 0.7, C / 2 + k * 10 - 2.5, R2 * 1.4, 5);
+  });
+  cell(GRIME.chalk[0], () => {
+    g.strokeStyle = 'rgba(250,248,240,0.7)';
+    g.lineWidth = 6;
+    g.lineCap = 'round';
+    // a hopscotch-ish grid and a star
+    g.strokeRect(40, 30, 70, 70);
+    g.strokeRect(40, 100, 70, 70);
+    g.strokeRect(110, 100, 70, 70);
+    g.beginPath();
+    for (let k = 0; k <= 5; k++) {
+      const a = -Math.PI / 2 + (k * 4 * Math.PI) / 5;
+      const x = 190 + Math.cos(a) * 36;
+      const y = 60 + Math.sin(a) * 36;
+      if (k === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.stroke();
+  });
+  const t = tex(c, false);
+  t.anisotropy = 8;
+  return t;
+}
+
+/**
+ * Four graffiti pieces stacked in one texture (each a 1024 × 256 row): wobbly
+ * bubble letters with a 3D drop, outline, gradient fill, shines and drips.
+ */
+export function graffitiAtlas(words: string[], palettes: [string, string, string][], seed: number) {
+  const W = 1024;
+  const R = 256;
+  const { c, g } = canvas(W, R * 4);
+  const r = rng(seed);
+  for (let row = 0; row < 4; row++) {
+    const word = words[row % words.length];
+    const [c1, c2, bg] = palettes[row % palettes.length];
+    g.save();
+    g.translate(0, row * R);
+    // a sprayed cloud behind the letters
+    for (let k = 0; k < 30; k++) {
+      const x = 90 + r() * (W - 180);
+      const y = R / 2 + (r() - 0.5) * 90;
+      const rad = 50 + r() * 60;
+      const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+      grd.addColorStop(0, bg);
+      grd.addColorStop(0.7, bg);
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd;
+      g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    let size = 170;
+    g.font = `bold ${size}px "Arial Black", Impact, Arial, sans-serif`;
+    const widths = () => word.split('').map((ch) => g.measureText(ch).width * 0.86);
+    let ws = widths();
+    let total = ws.reduce((a, b) => a + b, 0);
+    if (total > W - 120) {
+      size = Math.floor((size * (W - 120)) / total);
+      g.font = `bold ${size}px "Arial Black", Impact, Arial, sans-serif`;
+      ws = widths();
+      total = ws.reduce((a, b) => a + b, 0);
+    }
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineJoin = 'round';
+    const glyphs = word.split('').map((ch, i) => ({
+      ch,
+      x: (W - total) / 2 + ws.slice(0, i).reduce((a, b) => a + b, 0) + ws[i] / 2,
+      y: R / 2 + (r() - 0.5) * 18,
+      rot: (r() - 0.5) * 0.28,
+    }));
+    const each = (fn: (gl: (typeof glyphs)[number]) => void) => {
+      for (const gl of glyphs) {
+        g.save();
+        g.translate(gl.x, gl.y);
+        g.rotate(gl.rot);
+        fn(gl);
+        g.restore();
+      }
+    };
+    // 3D drop
+    for (let d = 12; d > 0; d -= 2) each((gl) => {
+      g.fillStyle = '#1b1a2a';
+      g.fillText(gl.ch, d, d);
+    });
+    each((gl) => {
+      g.lineWidth = 22;
+      g.strokeStyle = '#141413';
+      g.strokeText(gl.ch, 0, 0);
+      g.lineWidth = 9;
+      g.strokeStyle = '#faf9f5';
+      g.strokeText(gl.ch, 0, 0);
+      const grd = g.createLinearGradient(0, -size / 2, 0, size / 2);
+      grd.addColorStop(0, c1);
+      grd.addColorStop(1, c2);
+      g.fillStyle = grd;
+      g.fillText(gl.ch, 0, 0);
+    });
+    // drips off the bottoms
+    g.fillStyle = c2;
+    for (let k = 0; k < 9; k++) {
+      const gl = glyphs[Math.floor(r() * glyphs.length)];
+      const x = gl.x + (r() - 0.5) * ws[0] * 0.5;
+      const y0 = gl.y + size * 0.3;
+      const len = 14 + r() * 40;
+      g.fillRect(x - 2.5, y0, 5, len);
+      g.beginPath();
+      g.arc(x, y0 + len, 4.5, 0, Math.PI * 2);
+      g.fill();
+    }
+    // shines
+    g.fillStyle = '#ffffff';
+    for (let k = 0; k < 5; k++) {
+      const gl = glyphs[Math.floor(r() * glyphs.length)];
+      const x = gl.x + (r() - 0.5) * 40;
+      const y = gl.y - size * 0.22 + (r() - 0.5) * 20;
+      g.beginPath();
+      g.moveTo(x, y - 14);
+      g.lineTo(x + 4, y);
+      g.lineTo(x, y + 14);
+      g.lineTo(x - 4, y);
+      g.closePath();
+      g.fill();
+      g.fillRect(x - 14, y - 1.5, 28, 3);
+    }
+    g.restore();
+  }
+  return tex(c, false);
+}
+
+/** Hand-painted azulejo tiles, Plaza de España style. 2 × 2 tiles per repeat. */
+export function azulejoTexture() {
+  const S = 256;
+  const T = S / 2;
+  const { c, g } = canvas(S, S);
+  const blue = '#1f4e9c';
+  const gold = '#e3a92b';
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) {
+      g.save();
+      g.translate(i * T, j * T);
+      g.fillStyle = '#f4efe2';
+      g.fillRect(0, 0, T, T);
+      // corner quarter-rosettes join up with the neighbouring tiles
+      g.fillStyle = blue;
+      for (const [x, y] of [
+        [0, 0],
+        [T, 0],
+        [0, T],
+        [T, T],
+      ]) {
+        g.beginPath();
+        g.arc(x, y, T * 0.28, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = gold;
+      for (const [x, y] of [
+        [0, 0],
+        [T, 0],
+        [0, T],
+        [T, T],
+      ]) {
+        g.beginPath();
+        g.arc(x, y, T * 0.15, 0, Math.PI * 2);
+        g.fill();
+      }
+      // central flower
+      g.translate(T / 2, T / 2);
+      for (let k = 0; k < 8; k++) {
+        g.rotate(Math.PI / 4);
+        g.fillStyle = k % 2 ? gold : blue;
+        g.beginPath();
+        g.ellipse(0, -T * 0.2, T * 0.07, T * 0.16, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#c0392b';
+      g.beginPath();
+      g.arc(0, 0, T * 0.08, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+      // grout
+      g.strokeStyle = 'rgba(120,110,95,0.6)';
+      g.lineWidth = 2;
+      g.strokeRect(i * T + 1, j * T + 1, T - 2, T - 2);
+    }
+  }
+  return tex(c);
+}

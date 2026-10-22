@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ParkVisuals, box, kicker, bank, ledge, stairs, quarterPipe, funbox } from '../park';
-import { Level, N, S, rect, polyRail, lamps, scoreGoals, flagpole, LETTERS_GOAL } from './common';
+import { Level, N, S, rect, polyRail, lamps, scoreGoals, flagpole, tint, paintedFacade, LETTERS_GOAL } from './common';
+import { Batch, birds, boat, grime, murals, palm, wallCrowd } from './decor';
+import { rng } from '../textures';
 
 const SEA = -0.9;
 
@@ -29,8 +31,9 @@ export const pierLevel: Level = {
   chapter: 3,
   tagline: 'Chapter 3 · Saturday at the beach',
   blurb: 'Kai Moreno wants to see someone ride the 250m pier rail. The water is cold.',
-  sky: '#DCE8EC',
-  fog: [50, 170],
+  sky: '#CFE6EE',
+  zenith: '#3D8ED6',
+  fog: [55, 230],
   ground: false,
   kind: 'street',
   runTime: 120,
@@ -227,13 +230,45 @@ export const pierLevel: Level = {
     const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 2, 12), new THREE.MeshStandardMaterial({ color: 0xffe2b0, emissive: 0xffc070, emissiveIntensity: 0.8 }));
     lamp.position.set(22, 14, -112);
     group.add(lamp);
-    // buildings beyond the promenade
+    // beach-town shopfronts beyond the promenade, pastel with striped awnings
     const geos: THREE.BufferGeometry[] = [];
+    const pastel = [0xf6c6c0, 0xa8dadc, 0xfff1b6, 0xcdeac0, 0xffd6a5, 0xffffff, 0xbde0fe];
+    const awn = new Batch();
+    let k = 0;
     for (let x = -70; x < 70; x += 14) {
       const h = 8 + ((x * 7919) % 9 + 9) % 9;
-      geos.push(new THREE.BoxGeometry(13, h, 10).translate(x + 6.5, 1.2 + h / 2, 70));
+      geos.push(tint(new THREE.BoxGeometry(13, h, 10).translate(x + 6.5, 1.2 + h / 2, 70), pastel[k % pastel.length]));
+      const stripe = [0xe04a3b, 0x1d6fb8, 0x2a9d8f, 0xf2a541][k % 4];
+      for (let i = 0; i < 8; i++) {
+        awn.add(new THREE.BoxGeometry(1.3, 0.06, 2.2).rotateX(-0.35).translate(x + 1.35 + i * 1.45, 6.3, 64.1), i % 2 ? 0xfaf9f5 : stripe);
+      }
+      k++;
     }
-    group.add(new THREE.Mesh(mergeGeometries(geos, false)!, mats.facade));
+    group.add(new THREE.Mesh(mergeGeometries(geos, false)!, paintedFacade(mats)));
+    group.add(awn.build());
+
+    // street life: murals on the promenade wall, people on top, palms behind
+    const walls = [{ a: [-60, 60] as [number, number], b: [60, 60] as [number, number], n: [0, -1] as [number, number], top: 4.8 }];
+    murals(group, t, walls, ["G'DAY", 'SURF', 'PIER', 'NATIONS'], [
+      ['#ffd23f', '#ff6b35', 'rgba(0,120,140,0.92)'],
+      ['#ffffff', '#00a6a6', 'rgba(255,107,53,0.9)'],
+      ['#f7c6ff', '#9b5de5', 'rgba(255,214,0,0.92)'],
+      ['#00843d', '#ffcd00', 'rgba(20,40,80,0.9)'],
+    ], 27);
+    const life = new Batch();
+    wallCrowd(life, t, walls, [0xffcd00, 0x00843d, 0xfaf9f5, 0xff6b35, 0x00a6a6, 0x1d2f5c, 0xf4a3b4], 0.6, 37);
+    for (let x = -56; x <= 56; x += 16) palm(life, x + 3, 1.2, 64.6, 9 + Math.abs(x % 3), 300 + x);
+    group.add(life.build({ side: THREE.DoubleSide }));
+    grime(group, t, rect(-62, -95, 62, 62), 300, 29, { minY: -0.05, tags: ['#ffcd00', '#00843d'], mix: { dirt: 2, oil: 1.5, crack: 0, drain: 0, chalk: 0.5, leaves: 0, stain: 3 } });
+
+    // boats at anchor and gulls over the pier
+    const br = rng(19);
+    for (let i = 0; i < 7; i++) {
+      const side = i % 2 ? 1 : -1;
+      boat(group, side * (32 + br() * 50), -20 - br() * 110, SEA, br() * Math.PI * 2, [0xfaf9f5, 0x1d6fb8, 0xe04a3b, 0x2a9d8f][i % 4], i % 3 !== 2, 500 + i);
+    }
+    birds(group, 7, 0, -55, 24, 9, 0xf4f4f0, 67);
+    birds(group, 4, -30, 30, 14, 12, 0xf4f4f0, 68);
     lamps(group, mats, [
       [-5.2, 10, 0],
       [5.2, 10, 0],

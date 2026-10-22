@@ -888,7 +888,7 @@ export function parkDecor(group: THREE.Group, mats: ParkMaterials) {
     crowns.push(crownGeo.clone().scale(s, s * (0.9 + r() * 0.3), s).translate(x, 0, z));
   }
   group.add(new THREE.Mesh(mergeGeometries(trunks, false)!, new THREE.MeshStandardMaterial({ color: 0x6b5443, roughness: 1 })));
-  group.add(new THREE.Mesh(mergeGeometries(crowns, false)!, new THREE.MeshStandardMaterial({ color: 0x788c5d, roughness: 1, flatShading: true })));
+  group.add(new THREE.Mesh(mergeGeometries(crowns, false)!, new THREE.MeshStandardMaterial({ color: 0x5f9446, roughness: 1, flatShading: true })));
 
   return group;
 }

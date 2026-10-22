@@ -10,7 +10,8 @@ import { grabForDirection, GRABS } from './tricks';
 import { Audio } from './audio';
 import { Hud } from './hud';
 import { Particles } from './fx';
-import { shadowTexture } from './textures';
+import { shadowTexture, skyTexture } from './textures';
+import { ambient } from './levels/decor';
 import { Minimap } from './minimap';
 import { Career, GoalTracker, applyStats, Medal } from './career';
 import { UI, RunMode, GAP_NAMES, Standing, bestTwo } from './ui';
@@ -40,7 +41,17 @@ scene.fog = new THREE.Fog(0xefe7da, 45, 150);
 
 const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.05, 400);
 
-scene.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7d6c, 1.35));
+const hemi = new THREE.HemisphereLight(0xfff6ea, 0x8a7d6c, 1.35);
+scene.add(hemi);
+
+// sky dome: follows the camera, horizon colour matches the fog
+const skyDome = new THREE.Mesh(
+  new THREE.SphereGeometry(360, 32, 16),
+  new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false }),
+);
+skyDome.renderOrder = -1;
+skyDome.frustumCulled = false;
+scene.add(skyDome);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -384,7 +395,7 @@ function disposeGroup(g: THREE.Group) {
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
     for (const x of Array.isArray(mat) ? mat : mat ? [mat] : []) {
       if (shared.has(x)) continue;
-      if (o instanceof THREE.Sprite) (x as THREE.SpriteMaterial).map?.dispose();
+      (x as THREE.MeshStandardMaterial).map?.dispose();
       x.dispose();
     }
   });
@@ -410,6 +421,12 @@ function loadLevel(i: number) {
   const sky = new THREE.Color(L.sky);
   scene.background = sky;
   scene.fog = new THREE.Fog(sky, L.fog[0], L.fog[1]);
+  const skyMat = skyDome.material as THREE.MeshBasicMaterial;
+  skyMat.map?.dispose();
+  skyMat.map = skyTexture(L.sky, L.zenith, i + 1);
+  skyMat.needsUpdate = true;
+  // a touch of sky blue in the fill light, so shade reads cool against warm sun
+  hemi.color.set(0xfff6ea).lerp(new THREE.Color(L.zenith), 0.22);
   skater.terrain = terrain;
   respawnAtStart();
   minimap?.destroy();
@@ -1285,6 +1302,11 @@ function frame(now: number) {
   sun.target.position.copy(cut.active ? camera.position : skater.pos);
   input.grabZone = playing && skater.mode === 'air' && !cut.active ? grabZone() : null;
   input.draw();
+  // ambient life: swaying palms, waving flags, birds, boats
+  ambient.value += dt;
+  mats.water.map?.offset.set(ambient.value * 0.012, ambient.value * 0.02);
+  for (const f of (levelGroup?.userData.ticks ?? []) as ((dt: number, t: number) => void)[]) f(dt, ambient.value);
+  skyDome.position.copy(camera.position);
   renderer.render(scene, camera);
 }
 

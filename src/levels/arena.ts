@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ParkVisuals, box, kicker, bank, ledge, stairs, quarterPipe, funbox } from '../park';
 import { Level, N, S, E, W, rect, polyRail, flagpole } from './common';
+import { Batch, bunting, grime } from './decor';
 import { textTexture, atlasBillboardTexture, rng } from '../textures';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -12,8 +13,9 @@ export const arenaLevel: Level = {
   chapter: 4,
   tagline: 'Chapter 4 · The contest',
   blurb: 'Three heats, sixty seconds each. Medal and you are on the Atlas team.',
-  sky: '#E6DED2',
-  fog: [40, 120],
+  sky: '#EED8BE',
+  zenith: '#6E93C9',
+  fog: [45, 170],
   ground: true,
   kind: 'comp',
   runTime: 60,
@@ -147,12 +149,25 @@ export const arenaLevel: Level = {
       props: [],
     };
   },
-  decorate(group, mats) {
+  decorate(group, mats, t) {
+    grime(group, t, rect(-38, -38, 38, 38), 200, 37, { tags: ['#bc002d', '#1d2f5c'], mix: { tag: 0.3, leaves: 0, chalk: 0, drain: 0.2 } });
+    // sponsor pennants strung between the light towers
+    const flags = new Batch();
+    const tops: [number, number][] = [
+      [-40, -40],
+      [40, -40],
+      [40, 40],
+      [-40, 40],
+    ];
+    tops.forEach(([x, z], i) => {
+      const [x1, z1] = tops[(i + 1) % 4];
+      bunting(flags, new THREE.Vector3(x * 0.97, 16.5, z * 0.97), new THREE.Vector3(x1 * 0.97, 16.5, z1 * 0.97), 3, [0xbc002d, 0xfaf9f5, 0x1d2f5c, 0xe8b547], 120 + i);
+    });
+    group.add(flags.build({ side: THREE.DoubleSide }));
     // bleachers + crowd behind the walls
     const r = rng(17);
     const seats: THREE.BufferGeometry[] = [];
-    const crowd: THREE.BufferGeometry[] = [];
-    const colors: number[] = [];
+    const crowd = new Batch();
     // a crowd in national colours
     const palette = [0xe04a3b, 0x1d2f5c, 0x3a6fb0, 0x009c3b, 0xffdf00, 0xfaf9f5, 0x141413, 0xbc002d, 0xff9933];
     for (const side of [-1, 1]) {
@@ -163,16 +178,14 @@ export const arenaLevel: Level = {
         for (let x = -38; x < 38; x += 0.9) {
           if (r() < 0.25) continue;
           const g = new THREE.BoxGeometry(0.5, 0.9, 0.4).translate(x + r() * 0.3, y + 0.7, z);
-          const c = new THREE.Color(palette[Math.floor(r() * palette.length)]);
-          for (let i = 0; i < g.getAttribute('position').count; i++) colors.push(c.r, c.g, c.b);
-          crowd.push(g);
+          // most bounce along, a few are on their feet jumping
+          const jump = r() < 0.15;
+          crowd.add(g, palette[Math.floor(r() * palette.length)], [r() * 6, jump ? 7 + r() * 3 : 2 + r() * 2, jump ? 0.35 : 0.06, 0]);
         }
       }
     }
     group.add(new THREE.Mesh(mergeGeometries(seats, false)!, new THREE.MeshStandardMaterial({ color: 0x5c5850, roughness: 0.9 })));
-    const cg = mergeGeometries(crowd.map((g) => g.toNonIndexed()), false)!;
-    cg.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    group.add(new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })));
+    group.add(crowd.build({ roughness: 0.9 }));
     // banners on the walls
     const banner = new THREE.MeshBasicMaterial({ map: textTexture('THE NATIONS CUP', '#FAF9F5', '#1D2F5C', 1024, 128, 'bold 76px Georgia, serif') });
     for (const [x, z, ry] of [

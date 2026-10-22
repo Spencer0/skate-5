@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { buildLayout, parkDecor, SPAWN } from '../park';
 import { Level, rect, tagRails, scoreGoals, LETTERS_GOAL } from './common';
+import { Batch, grime, murals, palm, perimeter, wallBunting, wallCrowd } from './decor';
+import { rng } from '../textures';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -10,8 +12,9 @@ export const parkLevel: Level = {
   chapter: 1,
   tagline: 'Chapter 1 · Home turf',
   blurb: 'The Atlas team is scouting. Get footage at the local park and shut Dex up.',
-  sky: '#EFE7DA',
-  fog: [45, 150],
+  sky: '#F4DFC2',
+  zenith: '#4F93D6',
+  fog: [50, 330],
   ground: true,
   kind: 'street',
   runTime: 120,
@@ -144,7 +147,69 @@ export const parkLevel: Level = {
       ],
     };
   },
-  decorate(group, mats) {
+  decorate(group, mats, t) {
     parkDecor(group, mats);
+    const walls = perimeter(75, 3.6);
+    grime(group, t, rect(-75, -75, 75, 75), 520, 11, { tags: ['#ffdf00', '#009c3b', '#3a6fb0'], avoid: [{ x: 0, z: 31, r: 7 }] });
+    murals(group, t, walls, ['VAI BRASIL', 'SKATE', 'RIO', 'NAÇÕES'], [
+      ['#ffdf00', '#009c3b', 'rgba(16,72,150,0.92)'],
+      ['#ff7ac0', '#ff8a00', 'rgba(36,30,70,0.9)'],
+      ['#8ff3ff', '#2a6fdb', 'rgba(255,206,0,0.92)'],
+      ['#ffffff', '#e04a3b', 'rgba(20,120,80,0.92)'],
+    ], 21);
+    const life = new Batch();
+    const shirts = [0xffdf00, 0x009c3b, 0x3a6fb0, 0xfaf9f5, 0xe04a3b, 0x141413, 0xff8a00, 0x7ec8e3];
+    wallCrowd(life, t, walls, shirts, 0.55, 31);
+    wallBunting(life, 77, 3.6, 15, [0x009c3b, 0xffdf00, 0x3a6fb0, 0xfaf9f5], 41);
+    // palms among the trees outside the walls
+    const r = rng(51);
+    for (let i = 0; i < 26; i++) {
+      const side = Math.floor(r() * 4);
+      const along = (r() * 2 - 1) * 92;
+      const out = 82 + r() * 14;
+      const x = side === 0 ? along : side === 1 ? -along : side === 2 ? out : -out;
+      const z = side === 0 ? out : side === 1 ? -out : side === 2 ? along : -along;
+      palm(life, x, 0, z, 8 + r() * 5, 60 + i);
+    }
+    group.add(life.build({ side: THREE.DoubleSide }));
+    rioSkyline(group);
   },
 };
+
+/** Hills of colourful houses to the north and Sugarloaf in the haze. */
+function rioSkyline(group: THREE.Group) {
+  const r = rng(71);
+  const b = new Batch();
+  // green hills
+  for (const [x, z, sx, sy, sz] of [
+    [-60, -230, 90, 38, 50],
+    [50, -250, 110, 52, 60],
+    [150, -215, 70, 30, 46],
+    [-160, -200, 80, 34, 50],
+  ]) {
+    b.add(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(sx, sy, sz).translate(x, 0, z), 0x5f8a48);
+  }
+  // Sugarloaf: a tall rounded dome off to the side
+  b.add(new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(34, 95, 30).translate(150, 0, -300), 0x6b7a5c);
+  b.add(new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(26, 52, 24).translate(105, 0, -285), 0x71805f);
+  // favela houses stacked up the hillsides
+  const colors = [0xf2c14e, 0xe76f51, 0x2a9d8f, 0xf4a3b4, 0x8ecae6, 0xfaf9f5, 0xe9c46a, 0xd62828, 0x90be6d];
+  for (const [hx, hz, sx, sy, sz] of [
+    [-60, -230, 90, 38, 50],
+    [50, -250, 110, 52, 60],
+  ]) {
+    for (let i = 0; i < 160; i++) {
+      const a = r() * Math.PI - Math.PI; // the face looking at the park
+      const d = Math.sqrt(r()) * 0.92;
+      const lx = Math.cos(a) * d;
+      const lz = -Math.sin(a) * d;
+      const top = Math.sqrt(Math.max(0, 1 - lx * lx - lz * lz));
+      const x = hx + lx * sx;
+      const z = hz + lz * sz;
+      const w = 3 + r() * 4;
+      const h = 3 + r() * 4;
+      b.add(new THREE.BoxGeometry(w, h, 3 + r() * 3).translate(x, top * sy + h / 2 - 1, z), colors[Math.floor(r() * colors.length)]);
+    }
+  }
+  group.add(b.build({ roughness: 1, flatShading: true }));
+}

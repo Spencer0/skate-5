@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { ParkVisuals, box, kicker, bank, ledge, stairs, hubba, quarterPipe, rollIn, rollInRun } from '../park';
 import { radiusFor, transitionRun, transitionHeight } from '../terrain';
 import { Level, N, S, E, W, rect, polyRail, flagpole } from './common';
+import { Batch, grime } from './decor';
 import { textTexture, rng } from '../textures';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -63,7 +64,8 @@ export const megaLevel: Level = {
   chapter: 0,
   tagline: 'Free skate · 24 m mega ramp',
   blurb: 'A 24 m mega ramp, a superpipe, a giant bowl and 100 m rails. Lifts take you back up.',
-  sky: '#D6E4F0',
+  sky: '#D3E3F0',
+  zenith: '#3A7FC8',
   fog: [140, 390],
   ground: true,
   kind: 'free',
@@ -227,11 +229,11 @@ export const megaLevel: Level = {
   decorate(group, mats, t) {
     const M = MEGA;
     const B = M.B;
+    grime(group, t, rect(-B, -B, B, B), 700, 47, { mix: { leaves: 0, chalk: 0, drain: 0.2 } });
     // grandstands behind the north, east and west walls
     const r = rng(41);
     const seats: THREE.BufferGeometry[] = [];
-    const crowd: THREE.BufferGeometry[] = [];
-    const colors: number[] = [];
+    const crowd = new Batch();
     const palette = [0xe04a3b, 0x1d2f5c, 0x3a6fb0, 0x009c3b, 0xffdf00, 0xfaf9f5, 0x141413, 0xff9933];
     for (let row = 0; row < 12; row++) {
       const off = B + 5 + row * 1.6;
@@ -245,16 +247,14 @@ export const megaLevel: Level = {
           const g = new THREE.BoxGeometry(0.5, 0.9, 0.4);
           if (side === 0) g.translate(a + r() * 0.3, y + 0.7, -off);
           else g.rotateY(Math.PI / 2).translate(side === 1 ? off : -off, y + 0.7, a + r() * 0.3);
-          const c = new THREE.Color(palette[Math.floor(r() * palette.length)]);
-          for (let i = 0; i < g.getAttribute('position').count; i++) colors.push(c.r, c.g, c.b);
-          crowd.push(g);
+          // most bounce along, a few are on their feet jumping
+          const jump = r() < 0.15;
+          crowd.add(g, palette[Math.floor(r() * palette.length)], [r() * 6, jump ? 7 + r() * 3 : 2 + r() * 2, jump ? 0.35 : 0.06, 0]);
         }
       }
     }
     group.add(new THREE.Mesh(mergeGeometries(seats, false)!, new THREE.MeshStandardMaterial({ color: 0x5c5850, roughness: 0.9 })));
-    const cg = mergeGeometries(crowd.map((g) => g.toNonIndexed()), false)!;
-    cg.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    group.add(new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })));
+    group.add(crowd.build({ roughness: 0.9 }));
 
     // banners on the walls and the tower
     const banner = new THREE.MeshBasicMaterial({ map: textTexture('MEGA PARK · BIG AIR', '#FAF9F5', '#E04A3B', 1024, 128, 'bold 72px Georgia, serif'), side: THREE.DoubleSide });
