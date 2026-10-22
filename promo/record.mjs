@@ -53,12 +53,16 @@ async function frame() {
   const t0 = Date.now();
   for (let tries = 0; ; tries++) {
     try {
-      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 }), 420000));
+      ({ data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 }), 20000));
       if (Date.now() - t0 > 3000) console.log('slow screenshot', Date.now() - t0, 'ms at frame', n);
       break;
     } catch (e) {
       if (tries >= 3) throw e;
       console.log(e.message, JSON.stringify(await guard('probe', p.evaluate(() => ({ vis: document.visibilityState, now: performance.now(), pop: [...document.querySelectorAll('.popup')].map((x) => x.textContent) })), 5000).catch((x) => x.message)));
+      // nudge the browser's virtual clock too, in case the compositor is waiting on it
+      const nudged = new Promise((r) => cdp.once('Emulation.virtualTimeBudgetExpired', r));
+      await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'advance', budget: 250 });
+      await Promise.race([nudged, new Promise((r) => setTimeout(r, 5000))]);
       await p.evaluate((dt) => window.__step(dt), DT).catch(() => {});
     }
   }
