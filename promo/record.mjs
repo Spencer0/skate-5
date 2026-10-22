@@ -39,13 +39,16 @@ const cdp = await ctx.newCDPSession(p);
 let n = 0;
 let clock = 0; // virtual ms since recording began
 await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'pause' });
+// Fail loudly, naming the call, instead of hanging forever.
+const guard = (label, pr, ms = 30000) =>
+  Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error(`stalled in ${label} at frame ${n}`)), ms))]);
 async function frame() {
   const expired = new Promise((r) => cdp.once('Emulation.virtualTimeBudgetExpired', r));
-  await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'advance', budget: DT });
+  await guard('setVirtualTimePolicy', cdp.send('Emulation.setVirtualTimePolicy', { policy: 'advance', budget: DT }));
   // a missed budget event would stall the run forever: give up after 15s and carry on
   await Promise.race([expired, new Promise((r) => setTimeout(r, 15000))]);
-  await p.evaluate((dt) => window.__step(dt), DT);
-  const { data } = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 });
+  await guard('__step', p.evaluate((dt) => window.__step(dt), DT));
+  const { data } = await guard('captureScreenshot', cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 90 }));
   fs.writeFileSync(`${out}/f${String(n++).padStart(5, '0')}.jpg`, Buffer.from(data, 'base64'));
   clock += DT;
 }
