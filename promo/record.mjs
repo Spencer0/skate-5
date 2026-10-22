@@ -29,6 +29,7 @@ await p.addInitScript(() => {
   window.cancelAnimationFrame = (i) => q.delete(i);
   window.__step = (dt) => { T += dt; const cbs = [...q.values()]; q.clear(); for (const cb of cbs) cb(T); };
 });
+if (process.env.HIDE_DONE) await p.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '.tut-done{display:none!important}'; document.head.appendChild(st); }));
 await p.goto('http://127.0.0.1:5173/');
 await p.waitForTimeout(2500);
 p.on('crash', () => console.log('PAGE CRASHED'));
