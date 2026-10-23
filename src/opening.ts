@@ -91,7 +91,6 @@ const LOOK_B = sanitizeLook({
 
 /** Where the argument happens: just off the spawn, looking north over the park. */
 const SPOT = { a: new THREE.Vector3(6.55, 0, 47.1), b: new THREE.Vector3(5.45, 0, 47.25) };
-const KICKER = new THREE.Vector3(-34, 0.9, 30);
 
 const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const easeOut = (t: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
@@ -155,6 +154,9 @@ interface Person {
   hl: THREE.Vector3;
   hr: THREE.Vector3;
   jaw: Jaw | null;
+  /** the current gesture and when it started */
+  aimKey: string;
+  aimT: number;
 }
 
 function person(look: ReturnType<typeof sanitizeLook>, at: THREE.Vector3): Person {
@@ -167,6 +169,8 @@ function person(look: ReturnType<typeof sanitizeLook>, at: THREE.Vector3): Perso
     hl: new THREE.Vector3(),
     hr: new THREE.Vector3(),
     jaw: null,
+    aimKey: '',
+    aimT: 0,
   };
 }
 
@@ -175,6 +179,12 @@ interface Intent {
   look: THREE.Vector3;
   /** a world point to point at (with whichever hand is on that side) */
   point?: THREE.Vector3 | null;
+  /**
+   * an "over there" point, in the body's own frame: ang radians from straight ahead
+   * (+ toward the left hand), up how high. Things behind them get pointed at like
+   * this, out to the side, the way people do, not with an arm wrenched backwards.
+   */
+  aim?: { ang: number; up: number };
   /** both palms up and out */
   palms?: number;
   /** hands to the head */
@@ -450,11 +460,15 @@ export class Opening {
     return w && w.length ? w[Math.min(n, w.length - 1)].t0 : Infinity;
   }
 
-  private targetOf(name: 'rail' | 'ramp' | 'kicker') {
-    if (name === 'kicker') return KICKER;
-    const g = this.ghost(name);
-    return g ? g.board.root.position.clone().setY(g.board.root.position.y + 0.6) : KICKER;
-  }
+  /**
+   * Where each of them gestures for each spot (body frame, see Intent.aim): always
+   * with the hand on the far side from the other guy, so a point never reads as
+   * pointing at him. A's left and B's right face away from each other.
+   */
+  private static AIMS = {
+    a: { rail: { ang: 0.75, up: 0.3 }, ramp: { ang: 1.35, up: 0.1 }, kicker: { ang: 1.05, up: 0.55 } },
+    b: { rail: { ang: -0.95, up: 0.3 }, ramp: { ang: -1.3, up: 0.1 }, kicker: { ang: -1.1, up: 0.5 } },
+  };
 
   private headOf(p: Person) {
     return p.rider.joint('head', new THREE.Vector3());
@@ -469,14 +483,13 @@ export class Opening {
     const a: Intent = { look: hb };
     const b: Intent = { look: ha };
     const camP = this.host.camera.position;
-    const { i, u } = this.lineAt(d);
+    const { i } = this.lineAt(d);
     const W = (n: number) => this.wordT(i, n);
     switch (i) {
       case 0: {
         // "Who's on the rail, What's on the ramp, and Both's on the kicker."
         const at = d < W(4) ? 'rail' : d < W(9) ? 'ramp' : 'kicker';
-        a.point = this.targetOf(at);
-        a.look = d < W(1) ? hb : a.point;
+        a.aim = Opening.AIMS.a[at];
         a.lean = 0.04;
         break;
       }
@@ -501,14 +514,12 @@ export class Opening {
         break;
       case 5:
         // "The guy on the rail!"
-        b.point = this.targetOf('rail');
-        b.look = u < 0.35 ? b.point : ha;
+        b.aim = Opening.AIMS.b.rail;
         b.lean = 0.1;
         break;
       case 6:
         // "Who's on the rail."
-        a.point = this.targetOf('rail');
-        a.look = u < 0.5 ? hb : a.point;
+        a.aim = Opening.AIMS.a.rail;
         break;
       case 7:
         // "What?"
@@ -518,8 +529,7 @@ export class Opening {
         break;
       case 8:
         // "Ramp."
-        a.point = this.targetOf('ramp');
-        a.look = a.point;
+        a.aim = Opening.AIMS.a.ramp;
         break;
       case 9:
         // "Okay. Then who's on the kicker?"
@@ -527,8 +537,7 @@ export class Opening {
           b.head = 1;
           b.look = camP;
         } else {
-          b.point = this.targetOf('kicker');
-          b.look = d < W(3) ? b.point : ha;
+          b.aim = Opening.AIMS.b.kicker;
         }
         break;
       case 10:
@@ -559,7 +568,6 @@ export class Opening {
       if (!p.jaw && p.rider.ready) p.jaw = rigJaw(p.rider.group);
       p.jaw?.set(st.talk * (0.45 + 0.55 * Math.abs(Math.sin(d * 17 + (who === 'a' ? 0 : 1)))));
       const k = 1 - Math.exp(-dt * 11);
-      st.look.lerp(it.look, st.look.lengthSq() ? k : 1);
       st.lean += ((it.lean ?? 0) - st.lean) * k;
       st.shrug += ((it.shrug ?? 0) - st.shrug) * k;
       const g = p.rider.group;
@@ -570,32 +578,54 @@ export class Opening {
       // decide each hand's target
       let wl: THREE.Vector3 | null = null;
       let wr: THREE.Vector3 | null = null;
-      // point up over anything in the way, higher the farther it is: "way over there"
-      const reach = (from: THREE.Vector3, to: THREE.Vector3, len = 0.75) => {
-        const dir = to.clone().sub(from);
-        const lift = 0.25 + Math.min(0.45, dir.length() / 80);
-        return from.clone().add(dir.normalize().add(new THREE.Vector3(0, lift, 0)).normalize().multiplyScalar(len));
-      };
-      if (it.point) {
-        const toT = it.point.clone().sub(chest);
-        const side = toT.dot(left) >= 0 ? 'l' : 'r';
-        const sh = chest.clone().addScaledVector(left, side === 'l' ? 0.18 : -0.18).setY(chest.y + 0.1);
-        const target = reach(sh, it.point);
+      // pointing: the chest turns toward it, the arm covers the rest within reach of a
+      // real shoulder (never back behind the body), angled up over anything in the way
+      let turn = 0;
+      if (it.point || it.aim) {
+        let ang: number;
+        let lift: number;
+        if (it.aim) {
+          ({ ang, up: lift } = it.aim);
+        } else {
+          const toT = it.point!.clone().sub(chest);
+          ang = Math.max(-1.1, Math.min(1.1, Math.atan2(toT.dot(left), toT.dot(fwd)))); // + toward the left hand
+          lift = Math.max(-0.2, Math.min(0.4, toT.y / Math.max(0.3, Math.hypot(toT.x, toT.z))));
+        }
+        turn = ang * 0.4;
+        const side = ang >= 0 ? 'l' : 'r';
+        const yawF = Math.atan2(fwd.x, fwd.z);
+        const horiz = new THREE.Vector3(Math.sin(yawF + ang), 0, Math.cos(yawF + ang));
+        const dir = horiz.add(new THREE.Vector3(0, lift, 0)).normalize();
+        // glance along the arm as the point goes out, then back to the other guy
+        const key = `${ang},${lift}`;
+        if (key !== p.aimKey) {
+          p.aimKey = key;
+          p.aimT = t;
+        }
+        if (it.aim && t - p.aimT < 0.45) it.look = chest.clone().addScaledVector(dir, 8);
+        const turnedLeft = left.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), turn);
+        const sh = chest.clone().addScaledVector(turnedLeft, side === 'l' ? 0.17 : -0.17).setY(chest.y + 0.12);
+        // just short of full reach: the arm reads straight, the elbow isn't locked
+        const target = sh.addScaledVector(dir, 0.62);
         if (side === 'l') wl = target;
         else wr = target;
       }
+      st.turn = (st.turn ?? 0) + (turn - (st.turn ?? 0)) * k;
+      st.look.lerp(it.look, st.look.lengthSq() ? k : 1);
       if (it.palms) {
         const lo = chest.clone().setY(chest.y - 0.2).addScaledVector(fwd, 0.3);
         wl ??= lo.clone().addScaledVector(left, 0.32 * it.palms);
         wr ??= lo.clone().addScaledVector(left, -0.32 * it.palms);
       }
       if (it.head) {
-        wl = head.clone().addScaledVector(left, 0.12).setY(head.y + 0.08);
-        wr = head.clone().addScaledVector(left, -0.12).setY(head.y + 0.08);
+        // palms on the sides of the head, elbows out
+        wl = head.clone().addScaledVector(left, 0.1).addScaledVector(fwd, -0.01).setY(head.y + 0.07);
+        wr = head.clone().addScaledVector(left, -0.1).addScaledVector(fwd, -0.01).setY(head.y + 0.07);
       }
       if (it.fling) {
-        wl = head.clone().addScaledVector(left, 0.55).setY(head.y + 0.35).addScaledVector(fwd, 0.15);
-        wr = head.clone().addScaledVector(left, -0.55).setY(head.y + 0.35).addScaledVector(fwd, 0.15);
+        // arms thrown up and out, a bit forward: "what do you want from me"
+        wl = head.clone().addScaledVector(left, 0.5).setY(head.y + 0.12).addScaledVector(fwd, 0.22);
+        wr = head.clone().addScaledVector(left, -0.5).setY(head.y + 0.12).addScaledVector(fwd, 0.22);
       }
       if (it.face) wl = head.clone().addScaledVector(fwd, 0.12).setY(head.y + 0.02);
       // ease: quick to throw a hand out, slower to let it drop

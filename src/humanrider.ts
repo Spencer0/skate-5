@@ -98,6 +98,8 @@ export interface StandState {
   lean: number;
   /** 0..1 shoulders up to the ears */
   shrug: number;
+  /** radians the chest turns (+ toward the left hand), e.g. to point at something off to the side */
+  turn?: number;
 }
 
 export class HumanRider {
@@ -650,13 +652,14 @@ export class HumanRider {
     // idle life: breathing, a slow weight shift, a little bob while talking
     const sway = Math.sin(t * 0.7) * 0.025;
     const bob = Math.sin(t * 8.5) * 0.04 * st.talk;
-    const hipQ = tq().setFromEuler(new THREE.Euler(st.lean * 0.25, sway * 2, sway * 1.5, 'YXZ'));
+    const turn = st.turn ?? 0;
+    const hipQ = tq().setFromEuler(new THREE.Euler(st.lean * 0.25, sway * 2 + turn * 0.35, sway * 1.5, 'YXZ'));
     // head toward the look point, the chest follows a little
     const head = B.head.getWorldPosition(tv()).applyMatrix4(g2l);
     const d = st.look.clone().applyMatrix4(g2l).sub(head);
     const yaw = Math.max(-1.3, Math.min(1.3, Math.atan2(d.x, d.z)));
     const pitch = Math.max(-0.5, Math.min(0.6, Math.atan2(-d.y, Math.hypot(d.x, d.z))));
-    const torsoQ = tq().setFromEuler(new THREE.Euler(st.lean + bob * 0.5 + Math.sin(t * 1.7) * 0.01, yaw * 0.3, -sway, 'YXZ'));
+    const torsoQ = tq().setFromEuler(new THREE.Euler(st.lean + bob * 0.5 + Math.sin(t * 1.7) * 0.01, yaw * 0.3 + turn, -sway, 'YXZ'));
     const headQ = tq().setFromEuler(new THREE.Euler(pitch + bob, yaw, Math.sin(t * 0.9) * 0.04, 'YXZ'));
 
     const hipC = new THREE.Vector3(sway, this.ankleH + this.legLen * 0.985, -st.lean * 0.05);
@@ -669,11 +672,6 @@ export class HumanRider {
     });
     this.setRiderQ(B.neck_01, torsoQ.clone().slerp(headQ, 0.4).multiply(this.restQ.get(B.neck_01)!));
     this.setRiderQ(B.head, headQ.clone().multiply(this.restQ.get(B.head)!));
-    // shoulders up
-    for (const [b, side] of [[B.clavicle_l, 1], [B.clavicle_r, -1]] as const) {
-      const q = torsoQ.clone().multiply(tq().setFromEuler(new THREE.Euler(0, 0, side * st.shrug * 0.28)));
-      this.setRiderQ(b, q.multiply(this.restQ.get(b)!));
-    }
 
     // feet planted a little apart, toes out
     const legPole = toW(new THREE.Vector3(0, 0.25, 1)).sub(toW(new THREE.Vector3()));
@@ -695,8 +693,8 @@ export class HumanRider {
     const right = new THREE.Vector3(-1, 0, 0).applyQuaternion(torsoQ);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(torsoQ);
     const front = new THREE.Vector3(0, 0, 1).applyQuaternion(torsoQ);
-    const arm = (upper: THREE.Bone, lower: THREE.Bone, hand: THREE.Bone, side: number, want: THREE.Vector3 | null, reach: number) => {
-      const sh = upper.getWorldPosition(tv());
+    const arm = (clav: THREE.Bone, upper: THREE.Bone, lower: THREE.Bone, hand: THREE.Bone, side: number, want: THREE.Vector3 | null, reach: number) => {
+      let sh = upper.getWorldPosition(tv());
       const a = sh.distanceTo(lower.getWorldPosition(tv()));
       const b = lower.getWorldPosition(tv()).distanceTo(hand.getWorldPosition(tv()));
       const shL = sh.clone().applyMatrix4(g2l);
@@ -706,16 +704,49 @@ export class HumanRider {
         .addScaledVector(up, -(a + b) * 0.93)
         .addScaledVector(front, 0.05 + Math.sin(t * 1.1 + side) * 0.015);
       if (want && reach > 0) target.lerp(want.clone().applyMatrix4(g2l), Math.min(1, reach));
-      // elbows drop and stay out to the side
-      const pole = toW(new THREE.Vector3(side * 0.6, -0.6, -0.6).applyQuaternion(torsoQ)).sub(toW(new THREE.Vector3()));
+      // keep the hand outside the torso (a blend between two gestures can cut straight through it)
+      const hipY = this.ankleH + this.legLen;
+      if (target.y > hipY - 0.1 && target.y < shL.y + 0.05) {
+        const px = target.dot(right);
+        const pz = target.dot(front) + st.lean * 0.05;
+        const e = (px / 0.25) ** 2 + (pz / 0.2) ** 2;
+        if (e < 1) {
+          const k = 1 / Math.sqrt(Math.max(e, 1e-4)) - 1;
+          target.addScaledVector(right, px * k).addScaledVector(front, (pz || 0.01) * k);
+        }
+      }
+      // ...and out of the head (hands going up to it pass in front of the face)
+      const headL = B.head.getWorldPosition(tv()).applyMatrix4(g2l);
+      const off = target.clone().sub(headL);
+      if (off.length() < 0.17) {
+        // round the side of the head, never through it
+        if (Math.abs(off.dot(right)) < 0.05) off.addScaledVector(right, side * 0.05);
+        target.copy(headL).add(off.setLength(0.17));
+      }
+      // how far the hand is raised: 0 at the hip .. 1 at shoulder height and above
+      const raise = Math.max(0, Math.min(1, (target.clone().sub(shL).dot(up) + (a + b) * 0.6) / ((a + b) * 0.75)));
+      // the shoulder blade rides up with a raised arm (and a shrug), as a real one does:
+      // without it the top of the arm folds into the shoulder
+      const lift = raise * raise * 0.045 + st.shrug * 0.04;
+      if (lift > 0.002) {
+        this.aim(clav, upper, toW(shL.clone().addScaledVector(up, lift).addScaledVector(right, side * raise * 0.01)));
+        sh = upper.getWorldPosition(tv());
+      }
+      // elbows hang down and a little out; they swing out to the side as the hand comes up
+      const poleL = right
+        .clone()
+        .multiplyScalar(side * (0.35 + 0.65 * raise))
+        .addScaledVector(up, -0.8 + 0.6 * raise)
+        .addScaledVector(front, -0.35 + 0.15 * raise);
+      const pole = toW(poleL).sub(toW(new THREE.Vector3()));
       const elbow = tv();
       const end = tv();
       ik(sh, toW(target), a, b, pole, elbow, end);
       this.aim(upper, lower, elbow);
       this.aim(lower, hand, end);
     };
-    arm(B.upperarm_l, B.lowerarm_l, B.hand_l, -1, st.handL, st.reachL);
-    arm(B.upperarm_r, B.lowerarm_r, B.hand_r, 1, st.handR, st.reachR);
+    arm(B.clavicle_l, B.upperarm_l, B.lowerarm_l, B.hand_l, -1, st.handL, st.reachL);
+    arm(B.clavicle_r, B.upperarm_r, B.lowerarm_r, B.hand_r, 1, st.handR, st.reachR);
   }
 
   update(dt: number, st: RiderState) {
