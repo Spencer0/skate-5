@@ -7,6 +7,8 @@ export class Audio {
   /** when set, sounds are scheduled at this context time instead of now (offline renders) */
   at: number | null = null;
   private master!: GainNode;
+  /** where one-shot sounds go: the master bus, or a quieter send for faraway skaters */
+  private out!: AudioNode;
   private noise!: AudioBuffer;
   private rollGain!: GainNode;
   private rollFilter!: BiquadFilterNode;
@@ -45,6 +47,7 @@ export class Audio {
     this.master.gain.value = this.muted ? 0 : 0.8;
     const comp = ctx.createDynamicsCompressor();
     this.master.connect(comp).connect(ctx.destination);
+    this.out = this.master;
 
     const len = ctx.sampleRate * 2;
     this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -146,7 +149,7 @@ export class Audio {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(opts.gain, t + atk);
     g.gain.exponentialRampToValueAtTime(0.0008, t + opts.dur);
-    src.connect(f).connect(g).connect(this.master);
+    src.connect(f).connect(g).connect(this.out);
     src.start(t, Math.random() * 1.5);
     src.stop(t + opts.dur + 0.05);
   }
@@ -162,7 +165,7 @@ export class Audio {
     const g = ctx.createGain();
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.out);
     o.start(t);
     o.stop(t + dur + 0.05);
   }
@@ -292,6 +295,49 @@ export class Audio {
     const notes = [392, 523, 659, 784, 1047];
     notes.forEach((f, i) => this.tone(f, 0.18, 0.08, 'sawtooth', 1, i * 0.04));
     this.burst({ dur: 0.5, freq: 3000, q: 0.7, gain: 0.25, attack: 0.1 });
+  }
+
+  /** Play skate sounds made by `fn` at a fraction of their volume (other skaters, off in the park). */
+  distant(level: number, fn: () => void) {
+    const ctx = this.ctx;
+    if (!ctx || level <= 0.01) return;
+    const g = ctx.createGain();
+    g.gain.value = Math.min(1, level);
+    g.connect(this.master);
+    this.out = g;
+    try {
+      fn();
+    } finally {
+      this.out = this.master;
+    }
+    // the sends are short-lived: let the graph drop this one once its sounds finish
+    setTimeout(() => g.disconnect(), 1500);
+  }
+
+  /** Decode a recorded sound (dialogue) for play(). */
+  decode(data: ArrayBuffer): Promise<AudioBuffer | null> {
+    const ctx = this.ctx;
+    if (!ctx) return Promise.resolve(null);
+    return ctx.decodeAudioData(data).catch(() => null);
+  }
+
+  /** Start a decoded sound `delay` seconds from now through the master bus; returns its context start time. */
+  play(buf: AudioBuffer, gain = 1, delay = 0) {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    src.connect(g).connect(this.master);
+    const at = this.now + delay;
+    src.start(at);
+    return { at, stop: () => src.stop() };
+  }
+
+  /** A fast air whoosh for a hard cut. */
+  whoosh() {
+    this.burst({ dur: 0.28, freq: 1400, q: 0.6, gain: 0.35, attack: 0.18 });
+    this.burst({ dur: 0.18, freq: 240, q: 1, gain: 0.5, attack: 0.12, type: 'lowpass' });
   }
 
   combo(mult: number) {

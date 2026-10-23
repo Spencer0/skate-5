@@ -2694,3 +2694,129 @@ body {
     max-height: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Story opening: a phone video (9:16 window on wide screens)          */
+/* ------------------------------------------------------------------ */
+.op {
+  position: fixed;
+  display: none;
+  overflow: hidden;
+  z-index: 5;
+  pointer-events: none;
+  font-family: 'Inter', var(--sans);
+}
+.op.on {
+  display: block;
+}
+.op-skip {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: 14px;
+  font: 700 12px var(--sans);
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(20, 20, 19, 0.55);
+  color: var(--ivory);
+  cursor: pointer;
+  pointer-events: auto;
+}
+/* the "POV" hook up top, white box like a phone text overlay */
+.op-hook {
+  position: absolute;
+  top: 13%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.9);
+  max-width: 82%;
+  padding: 7px 12px 8px;
+  border-radius: 9px;
+  background: #fff;
+  color: #111;
+  font-weight: 800;
+  font-size: clamp(15px, 4.4vmin, 22px);
+  line-height: 1.2;
+  text-align: center;
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
+.op-hook.show {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+/* burned-in captions: a few words at a time, the spoken word lights up */
+.op-cap {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 60%;
+  text-align: center;
+  font-weight: 900;
+  font-size: clamp(26px, 8.4vmin, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: #fff;
+  -webkit-text-stroke: 0.09em #000;
+  paint-order: stroke fill;
+  text-shadow: 0 0.07em 0 rgba(0, 0, 0, 0.55);
+}
+.op-cap.pop {
+  animation: op-pop 0.14s ease-out;
+}
+@keyframes op-pop {
+  from {
+    transform: scale(0.72);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.op-w {
+  display: inline-block;
+  opacity: 0.55;
+  transition:
+    opacity 0.05s,
+    transform 0.08s;
+}
+.op-w.on {
+  opacity: 1;
+}
+/* the three "names" each get a colour so the bit reads */
+.op-w.who.on {
+  color: #ffe14a;
+}
+.op-w.what.on {
+  color: #5ef08a;
+}
+.op-w.both.on {
+  color: #ff7ad1;
+}
+.op-w.shout {
+  margin: 0 0.14em;
+}
+.op-w.shout.on {
+  transform: scale(1.25) rotate(-3deg);
+}
+.op-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+}
+.op-flash.go {
+  animation: op-flash 0.18s ease-out;
+}
+@keyframes op-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}

@@ -6,6 +6,7 @@ import { RiderStage } from './stage';
 import { CAMERAS } from './settings';
 import { Creator } from './creator';
 import { EXTRA_AUTHORS, defaultLook } from './custom';
+import { OPENING_ID } from './opening';
 
 export type RunMode = 'career' | 'free' | 'comp';
 
@@ -16,6 +17,8 @@ export interface UIHooks {
   endRun(): void;
   quit(): void;
   playIntro(levelIndex: number, then: () => void): void;
+  /** the story opening; with no `then` it drops you straight into a chapter 1 run */
+  playOpening(then?: () => void): void;
   previewGoal(levelIndex: number, goal: GoalDef, back: () => void): void;
   toggleSound(): boolean;
   isMuted(): boolean;
@@ -194,7 +197,10 @@ export class UI {
         const b = el('div', 'chapter-bar', item);
         el('div', 'chapter-fill', b).style.width = `${(done / L.goals.length) * 100}%`;
         item.addEventListener('click', () => {
-          if (!this.career.seen(L.intro.id)) this.hooks.playIntro(i, () => this.showLevel(i));
+          // a brand new story starts with the opening and goes straight into a run;
+          // chapter 1's intro then plays after that first run
+          if (i === 0 && !this.career.seen(L.intro.id) && !this.career.seen(OPENING_ID)) this.hooks.playOpening();
+          else if (!this.career.seen(L.intro.id) && i !== 0) this.hooks.playIntro(i, () => this.showLevel(i));
           else this.showLevel(i);
         });
       } else {
@@ -223,6 +229,7 @@ export class UI {
     if (L.kind === 'comp') this.button(btns, 'Enter the contest · 3 heats', () => this.hooks.startRun(i, 'comp'), 'primary');
     else this.button(btns, `Start run · ${Math.floor(L.runTime / 60)}:${String(L.runTime % 60).padStart(2, '0')}`, () => this.hooks.startRun(i, 'career'), 'primary');
     this.button(btns, 'Free skate here', () => this.hooks.startRun(i, 'free'));
+    if (i === 0) this.button(btns, 'Replay opening', () => this.hooks.playOpening(() => this.showLevel(i)));
     this.button(btns, 'Replay intro', () => this.hooks.playIntro(i, () => this.showLevel(i)));
     if (L.kind === 'street') el('p', 'menu-p small', this.card, i < LEVELS.length - 1 ? `Complete ${L.unlockAt} goals to unlock ${LEVELS[i + 1].name}. Every goal earns a stat point.` : '');
   }

@@ -79,6 +79,27 @@ function frameQ(across: THREE.Vector3, up: THREE.Vector3, out: THREE.Quaternion)
   return out.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
 }
 
+/**
+ * Off the board: a person standing around (story cutscenes). Points are in
+ * world space; each hand blends from hanging relaxed toward its target by
+ * its reach.
+ */
+export interface StandState {
+  time: number;
+  /** what the head turns to */
+  look: THREE.Vector3;
+  /** 0..1 how hard they're talking: head bobs, chest pumps */
+  talk: number;
+  handL: THREE.Vector3 | null;
+  reachL: number;
+  handR: THREE.Vector3 | null;
+  reachR: number;
+  /** radians, + leans in, - rocks back */
+  lean: number;
+  /** 0..1 shoulders up to the ears */
+  shrug: number;
+}
+
 export class HumanRider {
   group = new THREE.Group();
   private fallback: Rider;
@@ -606,6 +627,95 @@ export class HumanRider {
     this.aim(B.lowerarm_l, B.hand_l, P[RAG.handL]);
     this.aim(B.upperarm_r, B.lowerarm_r, P[RAG.elbR]);
     this.aim(B.lowerarm_r, B.hand_r, P[RAG.handR]);
+  }
+
+  /** World position of a skeleton point (head, hands...) once the model is in. */
+  joint(name: 'head' | 'hand_l' | 'hand_r' | 'lowerarm_l' | 'lowerarm_r' | 'neck_01', out: THREE.Vector3) {
+    return this.ready ? this.bones[name].getWorldPosition(out) : out.copy(this.group.position).setY(this.group.position.y + 1.6);
+  }
+
+  /** Stand on the ground at the group's origin, facing +Z: no board, just a person. */
+  stand(st: StandState) {
+    if (!this.ready || !this.group.visible) return;
+    this.rag = null;
+    for (const [b, r] of this.rest) {
+      b.position.copy(r.p);
+      b.quaternion.copy(r.q);
+    }
+    this.group.updateMatrixWorld(true);
+    const B = this.bones;
+    const toW = (v: THREE.Vector3) => v.applyMatrix4(this.group.matrixWorld);
+    const g2l = this.group.matrixWorld.clone().invert();
+    const t = st.time;
+    // idle life: breathing, a slow weight shift, a little bob while talking
+    const sway = Math.sin(t * 0.7) * 0.025;
+    const bob = Math.sin(t * 8.5) * 0.04 * st.talk;
+    const hipQ = tq().setFromEuler(new THREE.Euler(st.lean * 0.25, sway * 2, sway * 1.5, 'YXZ'));
+    // head toward the look point, the chest follows a little
+    const head = B.head.getWorldPosition(tv()).applyMatrix4(g2l);
+    const d = st.look.clone().applyMatrix4(g2l).sub(head);
+    const yaw = Math.max(-1.3, Math.min(1.3, Math.atan2(d.x, d.z)));
+    const pitch = Math.max(-0.5, Math.min(0.6, Math.atan2(-d.y, Math.hypot(d.x, d.z))));
+    const torsoQ = tq().setFromEuler(new THREE.Euler(st.lean + bob * 0.5 + Math.sin(t * 1.7) * 0.01, yaw * 0.3, -sway, 'YXZ'));
+    const headQ = tq().setFromEuler(new THREE.Euler(pitch + bob, yaw, Math.sin(t * 0.9) * 0.04, 'YXZ'));
+
+    const hipC = new THREE.Vector3(sway, this.ankleH + this.legLen * 0.985, -st.lean * 0.05);
+    const pelvisPos = hipC.clone().sub(this.hipOffset.clone().applyQuaternion(hipQ));
+    B.pelvis.position.copy((B.pelvis.parent as THREE.Object3D).worldToLocal(toW(pelvisPos)));
+    B.pelvis.updateMatrixWorld(true);
+    this.setRiderQ(B.pelvis, hipQ.clone().multiply(this.restQ.get(B.pelvis)!));
+    (['spine_01', 'spine_02', 'spine_03'] as BoneName[]).forEach((n, i) => {
+      this.setRiderQ(B[n], hipQ.clone().slerp(torsoQ, (i + 1) / 3).multiply(this.restQ.get(B[n])!));
+    });
+    this.setRiderQ(B.neck_01, torsoQ.clone().slerp(headQ, 0.4).multiply(this.restQ.get(B.neck_01)!));
+    this.setRiderQ(B.head, headQ.clone().multiply(this.restQ.get(B.head)!));
+    // shoulders up
+    for (const [b, side] of [[B.clavicle_l, 1], [B.clavicle_r, -1]] as const) {
+      const q = torsoQ.clone().multiply(tq().setFromEuler(new THREE.Euler(0, 0, side * st.shrug * 0.28)));
+      this.setRiderQ(b, q.multiply(this.restQ.get(b)!));
+    }
+
+    // feet planted a little apart, toes out
+    const legPole = toW(new THREE.Vector3(0, 0.25, 1)).sub(toW(new THREE.Vector3()));
+    const leg = (thigh: THREE.Bone, calf: THREE.Bone, foot: THREE.Bone, target: THREE.Vector3, footYaw: number) => {
+      const root = thigh.getWorldPosition(tv());
+      const a = root.distanceTo(calf.getWorldPosition(tv()));
+      const b = calf.getWorldPosition(tv()).distanceTo(foot.getWorldPosition(tv()));
+      const knee = tv();
+      const end = tv();
+      ik(root, toW(target.clone()), a, b, legPole, knee, end);
+      this.aim(thigh, calf, knee);
+      this.aim(calf, foot, end);
+      this.setRiderQ(foot, tq().setFromEuler(new THREE.Euler(0, footYaw, 0, 'YXZ')).multiply(this.restQ.get(foot)!));
+    };
+    leg(B.thigh_l, B.calf_l, B.foot_l, new THREE.Vector3(0.13, this.ankleH, 0.02), 0.2);
+    leg(B.thigh_r, B.calf_r, B.foot_r, new THREE.Vector3(-0.13, this.ankleH, -0.02), -0.2);
+
+    // arms hang (swinging a touch), or reach for their targets
+    const right = new THREE.Vector3(-1, 0, 0).applyQuaternion(torsoQ);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(torsoQ);
+    const front = new THREE.Vector3(0, 0, 1).applyQuaternion(torsoQ);
+    const arm = (upper: THREE.Bone, lower: THREE.Bone, hand: THREE.Bone, side: number, want: THREE.Vector3 | null, reach: number) => {
+      const sh = upper.getWorldPosition(tv());
+      const a = sh.distanceTo(lower.getWorldPosition(tv()));
+      const b = lower.getWorldPosition(tv()).distanceTo(hand.getWorldPosition(tv()));
+      const shL = sh.clone().applyMatrix4(g2l);
+      const target = shL
+        .clone()
+        .addScaledVector(right, side * 0.12)
+        .addScaledVector(up, -(a + b) * 0.93)
+        .addScaledVector(front, 0.05 + Math.sin(t * 1.1 + side) * 0.015);
+      if (want && reach > 0) target.lerp(want.clone().applyMatrix4(g2l), Math.min(1, reach));
+      // elbows drop and stay out to the side
+      const pole = toW(new THREE.Vector3(side * 0.6, -0.6, -0.6).applyQuaternion(torsoQ)).sub(toW(new THREE.Vector3()));
+      const elbow = tv();
+      const end = tv();
+      ik(sh, toW(target), a, b, pole, elbow, end);
+      this.aim(upper, lower, elbow);
+      this.aim(lower, hand, end);
+    };
+    arm(B.upperarm_l, B.lowerarm_l, B.hand_l, -1, st.handL, st.reachL);
+    arm(B.upperarm_r, B.lowerarm_r, B.hand_r, 1, st.handR, st.reachR);
   }
 
   update(dt: number, st: RiderState) {

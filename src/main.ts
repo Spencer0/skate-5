@@ -16,6 +16,7 @@ import { Minimap } from './minimap';
 import { Career, GoalTracker, applyStats, Medal } from './career';
 import { UI, RunMode, GAP_NAMES, Standing, bestTwo } from './ui';
 import { CutscenePlayer, previewScene } from './cutscene';
+import { Opening, OPENING_ID } from './opening';
 import { Props } from './props';
 import { HumanRider } from './humanrider';
 import { CAMERAS, loadOptions, saveOptions } from './settings';
@@ -124,6 +125,7 @@ function swapRider() {
 const fall = { on: false, t: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), q: new THREE.Quaternion(), side: 1 };
 let tracker: GoalTracker | null = null;
 const cut = new CutscenePlayer(app, camera);
+const opening = new Opening(app, { scene, camera, audio, groundAt: (x, z) => terrain.height(x, z) });
 
 const fade = document.createElement('div');
 fade.className = 'fade';
@@ -205,6 +207,7 @@ const ui = new UI(app, career, {
     if (s && s.mode !== 'free') ui.showLevel(s.level);
     else ui.showTitle();
   },
+  playOpening,
   playIntro(i, then) {
     loadLevel(i);
     playScene(LEVELS[i].intro, () => {
@@ -358,6 +361,60 @@ function playScene(sc: Parameters<CutscenePlayer['play']>[0], then: () => void) 
   });
 }
 cut.onLine = () => audio.blip();
+
+/**
+ * The story opening at Brazil Park, shot like a phone video. A new story goes
+ * straight from it into the first run; `then` replaces that (replays).
+ */
+function playOpening(then?: () => void) {
+  playing = false;
+  stopRecording();
+  ui.hide();
+  hud.root.classList.add('cine');
+  loadLevel(0);
+  audio.start();
+  fade.classList.add('on');
+  opening.load().then(() => {
+    // straight from black into the first shot, no fade
+    fade.style.transition = 'none';
+    fade.classList.remove('on');
+    void fade.offsetWidth;
+    fade.style.transition = '';
+    const fog = scene.fog as THREE.Fog;
+    const near = fog.near;
+    const far = fog.far;
+    fog.near = near * 2;
+    fog.far = far * 1.8;
+    board.root.visible = blob.visible = rider.group.visible = false;
+    opening.play(() => {
+      fog.near = near;
+      fog.far = far;
+      board.root.visible = blob.visible = true;
+      rider.setStyle(options.rider);
+      hud.root.classList.remove('cine');
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      career.markSeen(OPENING_ID);
+      cam.init = false;
+      // the models are big and only needed again for a replay
+      opening.dispose();
+      if (then) then();
+      else startRun(0, 'career');
+    });
+  });
+}
+
+/** Chapter 1's intro waits until after your first run there (the opening comes first). */
+function introFirst(i: number, then: () => void) {
+  const L = LEVELS[i];
+  if (career.seen(L.intro.id)) return then();
+  playScene(L.intro, () => {
+    career.markSeen(L.intro.id);
+    then();
+  });
+}
 
 /** Camera for a goal's "show me" preview. */
 function goalView(g: GoalDef): { cam: V3; look: V3 } | null {
@@ -579,8 +636,8 @@ function finishRun(timeUp: boolean) {
       timeUp,
     },
     {
-      retry: () => startRun(s.level, 'career'),
-      level: () => ui.showLevel(s.level),
+      retry: () => introFirst(s.level, () => startRun(s.level, 'career')),
+      level: () => introFirst(s.level, () => ui.showLevel(s.level)),
       nextChapter: chapterUnlocked
         ? () =>
             playScene(L.outro, () => {
@@ -1479,7 +1536,8 @@ function frame(now: number) {
   bed[1] = !playing || grindKind === 'none' ? 0 : grindKind === 'grind' ? 1 : 2;
   bed[2] = skater.grind ? Math.abs(skater.grind.spd) : 0;
   bed[3] = skater.braking && skater.speed > 1.5 ? 1 : 0;
-  audio.update(bed[0], playing ? grindKind : 'none', bed[2], bed[3] > 0);
+  // the opening runs the wheel sounds itself (the skaters in the park)
+  if (!opening.active) audio.update(bed[0], playing ? grindKind : 'none', bed[2], bed[3] > 0);
 
   // HUD
   hud.setScore(combo.total, session ? session.bestCombo : 0);
@@ -1493,13 +1551,15 @@ function frame(now: number) {
   minimap?.draw(bx, bz, cam.yaw, props?.letterDots ?? []);
   hud.root.classList.toggle('dim', !playing);
 
-  if (cut.active) cut.update(dt);
+  if (opening.active) opening.update(realDt);
+  else if (cut.active) cut.update(dt);
   else if (!debug.freeCam) {
     if (!playing && ui.open) cam.yaw += dt * 0.12;
     updateCamera(dt);
   }
-  sun.position.copy(cut.active ? camera.position : skater.pos).add(SUN_OFFSET);
-  sun.target.position.copy(cut.active ? camera.position : skater.pos);
+  const lit = opening.active ? opening.focus : cut.active ? camera.position : skater.pos;
+  sun.position.copy(lit).add(SUN_OFFSET);
+  sun.target.position.copy(lit);
   input.grabZone = playing && skater.mode === 'air' && !cut.active ? grabZone() : null;
   input.draw();
   // ambient life: swaying palms, waving flags, birds, boats
@@ -1507,7 +1567,8 @@ function frame(now: number) {
   mats.water.map?.offset.set(ambient.value * 0.012, ambient.value * 0.02);
   for (const f of (levelGroup?.userData.ticks ?? []) as ((dt: number, t: number) => void)[]) f(dt, ambient.value);
   skyDome.position.copy(camera.position);
-  renderer.render(scene, camera);
+  if (opening.active) renderPortrait();
+  else renderer.render(scene, camera);
   if (recorder.active && playing && !cut.active) {
     const mode = Math.max(0, MODES.indexOf(skater.mode as (typeof MODES)[number]));
     if (!recorder.capture(realDt, (out, o) => writeFrame({ board, rider, blob, camera }, out, o, bed, mode))) {
@@ -1516,6 +1577,30 @@ function frame(now: number) {
     }
   }
   hud.setRec(options.recording && playing && session ? (recorder.active ? recorder.time : -1) : null);
+}
+
+/** The opening is a phone video: on a wide screen it plays in a 9:16 window. */
+function renderPortrait() {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const v = opening.layout(W, H);
+  if (camera.aspect !== v.w / v.h) {
+    camera.aspect = v.w / v.h;
+    camera.updateProjectionMatrix();
+  }
+  if (v.w === W) {
+    renderer.render(scene, camera);
+    return;
+  }
+  renderer.setScissorTest(false);
+  renderer.setClearColor(0x0b0b0a, 1);
+  renderer.clear();
+  renderer.setViewport(v.x, H - v.y - v.h, v.w, v.h);
+  renderer.setScissor(v.x, H - v.y - v.h, v.w, v.h);
+  renderer.setScissorTest(true);
+  renderer.render(scene, camera);
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, W, H);
 }
 
 let pendingGrab: number | null = null;
@@ -1621,4 +1706,7 @@ requestAnimationFrame(frame);
   finishRun,
   loadLevel,
   tut,
+  recorder,
+  opening,
+  playOpening,
 };

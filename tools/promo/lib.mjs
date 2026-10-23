@@ -37,7 +37,7 @@ const INIT = () => {
   };
 };
 
-export async function open({ w = 540, h = 960, scale = 2, state = {} } = {}) {
+export async function open({ w = 540, h = 960, scale = 2, state = {}, init = null } = {}) {
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: scale, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
@@ -46,6 +46,7 @@ export async function open({ w = 540, h = 960, scale = 2, state = {} } = {}) {
   await ctx.addInitScript((st) => {
     for (const [k, v] of Object.entries(st)) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
   }, state);
+  if (init) await ctx.addInitScript(init);
   await page.goto(process.env.URL ?? 'http://127.0.0.1:5199/');
   const g = {
     page,
