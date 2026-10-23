@@ -11,12 +11,14 @@ export interface Options {
   camera: number;
   rider: RiderStyle;
   autoRevert: boolean;
+  /** shows the REC button so lines can be saved for the Studio */
+  recording: boolean;
 }
 
 const KEY = 'skate5.options';
 
 export function loadOptions(): Options {
-  const def: Options = { camera: 0, rider: 'solid', autoRevert: true };
+  const def: Options = { camera: 0, rider: 'solid', autoRevert: true, recording: false };
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return { ...def, ...(JSON.parse(raw) as Partial<Options>) };

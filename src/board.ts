@@ -24,7 +24,8 @@ export class BoardModel {
   body = new THREE.Group();
   wheels: THREE.Mesh[] = [];
   hangers: THREE.Group[] = [];
-  private wheelSpin = 0;
+  wheelSpin = 0;
+  steer = 0;
   private graphic!: THREE.MeshStandardMaterial;
   deck = 'atlas';
 
@@ -203,8 +204,14 @@ export class BoardModel {
 
   /** Spin wheels by distance travelled; steer the hangers. */
   animate(dist: number, steer: number) {
-    this.wheelSpin -= dist / DECK.wheelR;
-    for (const w of this.wheels) w.rotation.z = this.wheelSpin;
+    this.pose(this.wheelSpin - dist / DECK.wheelR, steer);
+  }
+
+  /** Set the wheel spin and truck steer directly (replays). */
+  pose(spin: number, steer: number) {
+    this.wheelSpin = spin;
+    this.steer = steer;
+    for (const w of this.wheels) w.rotation.z = spin;
     this.hangers[0].rotation.y = steer * 0.12; // tail truck
     this.hangers[1].rotation.y = -steer * 0.12; // nose truck
   }

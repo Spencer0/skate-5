@@ -501,6 +501,32 @@ export class HumanRider {
     return out;
   }
 
+  /* ---------------------------- replays --------------------------- */
+
+  /**
+   * Snapshot the posed skeleton for a replay: pelvis position then each named
+   * bone's local rotation (every other bone stays at rest). Returns false
+   * while the stand-in capsule is still showing.
+   */
+  writePose(out: Float32Array, o: number) {
+    if (!this.ready) return false;
+    this.bones.pelvis.position.toArray(out, o);
+    BONES.forEach((n, i) => this.bones[n].quaternion.toArray(out, o + 3 + i * 4));
+    return true;
+  }
+
+  /** Pose the skeleton straight from a replay snapshot. */
+  readPose(src: Float32Array, o: number) {
+    if (!this.ready) return;
+    this.rag = null;
+    for (const [b, r] of this.rest) {
+      b.position.copy(r.p);
+      b.quaternion.copy(r.q);
+    }
+    this.bones.pelvis.position.fromArray(src, o);
+    BONES.forEach((n, i) => this.bones[n].quaternion.fromArray(src, o + 3 + i * 4));
+  }
+
   /* ---------------------------- ragdoll --------------------------- */
 
   get ragdolling() {

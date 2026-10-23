@@ -3,7 +3,9 @@
  * short envelopes so it stays tiny and responsive.
  */
 export class Audio {
-  ctx: AudioContext | null = null;
+  ctx: BaseAudioContext | null = null;
+  /** when set, sounds are scheduled at this context time instead of now (offline renders) */
+  at: number | null = null;
   private master!: GainNode;
   private noise!: AudioBuffer;
   private rollGain!: GainNode;
@@ -17,12 +19,27 @@ export class Audio {
 
   start() {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') this.ctx.resume();
+      if (this.ctx.state === 'suspended') (this.ctx as AudioContext).resume();
       return;
     }
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
-    const ctx = new AC();
+    this.build(new AC());
+  }
+
+  /** The same sounds rendered into an OfflineAudioContext (replay export). */
+  static offline(ctx: OfflineAudioContext) {
+    const a = new Audio();
+    a.build(ctx);
+    a.at = 0;
+    return a;
+  }
+
+  private get now() {
+    return this.at ?? this.ctx!.currentTime;
+  }
+
+  private build(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.8;
@@ -87,7 +104,7 @@ export class Audio {
 
   setMuted(m: boolean) {
     this.muted = m;
-    if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.8, this.ctx.currentTime, 0.05);
+    if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.8, this.now, 0.05);
   }
 
   private loop() {
@@ -103,7 +120,7 @@ export class Audio {
   /** Continuous sounds, called every frame. */
   update(rollSpeed: number, grinding: 'none' | 'grind' | 'slide', grindSpeed: number, powerslide: boolean) {
     if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const t = this.now;
     const s = Math.min(1, rollSpeed / 9);
     this.rollGain.gain.setTargetAtTime(s * 0.32 + (powerslide ? 0.25 : 0), t, 0.05);
     this.rollFilter.frequency.setTargetAtTime(powerslide ? 1800 : 260 + s * 700, t, 0.05);
@@ -117,7 +134,7 @@ export class Audio {
   private burst(opts: { dur: number; freq: number; q: number; gain: number; type?: BiquadFilterType; delay?: number; attack?: number }) {
     const ctx = this.ctx;
     if (!ctx) return;
-    const t = ctx.currentTime + (opts.delay ?? 0);
+    const t = this.now + (opts.delay ?? 0);
     const src = ctx.createBufferSource();
     src.buffer = this.noise;
     const f = ctx.createBiquadFilter();
@@ -137,7 +154,7 @@ export class Audio {
   private tone(freq: number, dur: number, gain: number, type: OscillatorType = 'sine', slide = 0, delay = 0) {
     const ctx = this.ctx;
     if (!ctx) return;
-    const t = ctx.currentTime + delay;
+    const t = this.now + delay;
     const o = ctx.createOscillator();
     o.type = type;
     o.frequency.setValueAtTime(freq, t);

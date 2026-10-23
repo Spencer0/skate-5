@@ -61,6 +61,27 @@ to gain speed — that's how you keep the superpipe and bowls going.
 - **Camera button** (top right) cycles Chase, Classic, Overhead and Filmer views;
   also in Options.
 
+## Studio: record clips, cut a skate video
+
+- **Record:** turn on **Options → Recording**, then tap **● REC** in the top
+  bar (or press **V**) while you skate, and tap again to stop. A clip is up to
+  60 s; the Studio keeps up to 10 minutes of footage (about 9 MB) in the
+  browser's IndexedDB. Clips are named after the tricks you landed.
+- **Clips are data, not video:** each 30 fps frame stores the board, the
+  rider's skeleton, the contact shadow, the camera and the rolling/grinding
+  sound levels, plus every skate sound with its time. Playback interpolates
+  between frames, so slow-mo stays smooth and the lens can change after the
+  fact.
+- **Edit:** **Studio** on the title screen. Watch a clip, **+ Add** it to the
+  edit strip, then tap a cut to trim it (Set start / Set end at the playhead),
+  pick a lens (**Game** = what you saw, **Filmer** = low fisheye follow,
+  **Tripod** = fixed and panning) and a speed (normal, ½, ¼), and reorder.
+- **Export:** renders the edit frame by frame (not in real time, so no dropped
+  frames) with WebCodecs, re-synthesizes the sound offline and muxes an MP4
+  (H.264 + AAC where the browser has them, otherwise VP9 / Opus) with
+  `mp4-muxer`. Landscape 720p, portrait 720p or 1080p, with an optional title
+  card. Needs a browser with WebCodecs (recent Chrome, Edge, Safari or Firefox).
+
 ## Controls
 
 **Touch (two floating thumb sticks)**

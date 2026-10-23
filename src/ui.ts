@@ -33,6 +33,9 @@ export interface UIHooks {
   getAutoRevert(): boolean;
   setAutoRevert(v: boolean): void;
   setRiderStyle(s: RiderStyle): void;
+  getRecording(): boolean;
+  setRecording(v: boolean): void;
+  openStudio(): void;
 }
 
 export interface RunReport {
@@ -159,6 +162,7 @@ export class UI {
     this.button(btns, 'Free Skate', () => this.showFree());
     this.button(btns, 'Skater', () => this.showSkater('rider', () => this.showTitle()));
     this.button(btns, 'Options', () => this.showOptions(() => this.showTitle()));
+    this.button(btns, 'Studio', () => this.hooks.openStudio());
     this.button(btns, 'How to play', () => this.hooks.showTricks());
     const done = this.career.totalDone();
     el('div', 'menu-foot', this.card, done ? `Career: ${done}/${this.career.totalGoals()} goals` : 'Best in landscape · headphones on');
@@ -540,6 +544,16 @@ export class UI {
       (id) => this.hooks.setAutoRevert(id === 'on'),
     );
     el('p', 'menu-p small', this.card, 'Pivot to face forward after rolling back down a ramp. Vert airs always turn you around.');
+    seg(
+      'Recording',
+      [
+        { id: 'off', name: 'Off' },
+        { id: 'on', name: 'On' },
+      ],
+      this.hooks.getRecording() ? 'on' : 'off',
+      (id) => this.hooks.setRecording(id === 'on'),
+    );
+    el('p', 'menu-p small', this.card, 'Adds a ● REC button while you skate (or press V). Saved clips go to the Studio on the title screen, where you cut them into a video and export an MP4.');
     seg(
       'Sound',
       [

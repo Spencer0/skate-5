@@ -26,6 +26,7 @@ export class Hud {
   menuBtn: HTMLButtonElement;
   camBtn: HTMLButtonElement;
   starBtn: HTMLButtonElement;
+  recBtn: HTMLButtonElement;
   private toasts: HTMLElement;
   private timer: HTMLElement;
   private tracker: HTMLElement;
@@ -48,6 +49,8 @@ export class Hud {
     this.special = el('div', 'special', mid);
     this.specialFill = el('div', 'special-fill', this.special);
     const btns = el('div', 'hud-btns', top);
+    this.recBtn = el('button', 'hud-btn rec-btn', btns) as HTMLButtonElement;
+    this.setRec(null);
     this.camBtn = el('button', 'hud-btn icon cam-btn', btns) as HTMLButtonElement;
     this.camBtn.setAttribute('aria-label', 'Change camera');
     this.camBtn.innerHTML =
@@ -61,7 +64,7 @@ export class Hud {
     this.tracker = el('div', 'tracker', this.root);
     this.goalsBtn = el('button', 'goals-chip', this.tracker, 'Goals') as HTMLButtonElement;
     this.trackRows = el('div', 'track-rows', this.tracker);
-    for (const b of [this.goalsBtn, this.camBtn, this.menuBtn]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    for (const b of [this.goalsBtn, this.recBtn, this.camBtn, this.menuBtn]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
 
     this.combo = el('div', 'combo', this.root);
     this.comboNames = el('div', 'combo-names', this.combo);
@@ -85,6 +88,19 @@ export class Hud {
   setScore(total: number, best: number) {
     this.score.textContent = total.toLocaleString();
     this.best.textContent = `best combo ${best.toLocaleString()}`;
+  }
+
+  private recKey = '';
+  /** null hides the button; -1 is armed; otherwise seconds recorded so far. */
+  setRec(secs: number | null) {
+    const key = secs === null ? 'off' : secs < 0 ? 'idle' : String(Math.floor(secs));
+    if (key === this.recKey) return;
+    this.recKey = key;
+    this.recBtn.style.display = secs === null ? 'none' : '';
+    const live = secs !== null && secs >= 0;
+    this.recBtn.classList.toggle('live', live);
+    this.recBtn.textContent = live ? `● ${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}` : '● REC';
+    this.recBtn.setAttribute('aria-label', live ? 'Stop recording' : 'Start recording');
   }
 
   setGoals(done: number, total: number | null) {

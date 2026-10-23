@@ -11,6 +11,7 @@
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "mp4-muxer": "5.2.2",
     "three": "0.170.0"
   },
   "devDependencies": {

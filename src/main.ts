@@ -20,6 +20,10 @@ import { Props } from './props';
 import { HumanRider } from './humanrider';
 import { CAMERAS, loadOptions, saveOptions } from './settings';
 import { Tutorial, tutorialPlayed } from './tutorial';
+import { Recorder, SFX, writeFrame } from './replay/rig';
+import { FPS, MAX_CLIP_SECONDS, MODES } from './replay/clip';
+import { listClips, putClip, roomLeft } from './replay/store';
+import { Studio } from './replay/studio';
 
 /* ------------------------------------------------------------------ */
 /* Setup                                                               */
@@ -193,6 +197,7 @@ const ui = new UI(app, career, {
   },
   quit() {
     playing = false;
+    stopRecording();
     const s = session;
     session = null;
     hud.setTimer(null);
@@ -259,6 +264,13 @@ const ui = new UI(app, career, {
   statsChanged() {
     applyStats(career.effectiveStats());
   },
+  getRecording: () => options.recording,
+  setRecording(v) {
+    options.recording = v;
+    saveOptions(options);
+    if (!v) stopRecording();
+  },
+  openStudio,
 });
 
 /* ------------------------------------------------------------------ */
@@ -317,6 +329,10 @@ hud.camBtn.addEventListener('click', () => {
   hud.toast('Camera', CAMERAS[options.camera].name, 'letter');
 });
 hud.goalsBtn.addEventListener('click', pause);
+hud.recBtn.addEventListener('click', toggleRecording);
+window.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'v' && !e.repeat && !(e.target instanceof HTMLInputElement)) toggleRecording();
+});
 hud.starBtn.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
   e.preventDefault();
@@ -459,6 +475,7 @@ function respawnAtStart() {
 }
 
 function startRun(i: number, mode: RunMode) {
+  stopRecording();
   stopTutorial();
   loadLevel(i);
   const L = PARKS[i];
@@ -495,6 +512,7 @@ function finishRun(timeUp: boolean) {
   const s = session;
   if (!s) return;
   playing = false;
+  stopRecording();
   hud.setTimer(null);
   combo.bank();
   const L = PARKS[s.level];
@@ -753,6 +771,7 @@ function handle(ev: SkaterEvent) {
       shake.amp = Math.min(0.06, 0.012 + ev.impact * 0.004);
       dustBurst(8 + Math.round(ev.impact * 2), 1.2);
       for (const r of ev.tricks) combo.add(r);
+      if (recorder.active) recorder.tricks.push(...ev.tricks.map((r) => r.name));
       const gaps = gapsCleared();
       const L = PARKS[levelIndex];
       for (const g of gaps) {
@@ -823,6 +842,7 @@ function handle(ev: SkaterEvent) {
       break;
     case 'grindEnd':
       combo.add(ev.record);
+      if (recorder.active) recorder.tricks.push(ev.record.name);
       liveGrind = null;
       break;
     case 'wall':
@@ -1047,6 +1067,176 @@ function updateCamera(dt: number) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Recording + studio                                                  */
+/* ------------------------------------------------------------------ */
+
+/** what audio.update() was given this frame: roll speed, grind kind, grind speed, powerslide */
+const bed = [0, 0, 0, 0];
+const recorder = new Recorder(MAX_CLIP_SECONDS * FPS);
+// every skate sound also lands in the clip being recorded, to be replayed in the edit
+for (const n of SFX) {
+  const fns = audio as unknown as Record<string, (...a: unknown[]) => void>;
+  const orig = fns[n].bind(audio);
+  fns[n] = (...a: unknown[]) => {
+    recorder.sound(n, a as (number | string | boolean)[]);
+    orig(...a);
+  };
+}
+
+function toggleRecording() {
+  if (!options.recording || !session) return;
+  if (recorder.active) stopRecording();
+  else if (playing) {
+    recorder.start();
+    audio.blip();
+  }
+}
+
+function stopRecording() {
+  if (!recorder.active) return;
+  const frames = recorder.frames;
+  const data = recorder.stop();
+  if (frames < FPS) return; // under a second: a mis-tap
+  const tricks = [...new Set(recorder.tricks)];
+  const name = tricks.length ? tricks.slice(0, 3).join(' · ') + (tricks.length > 3 ? ' …' : '') : 'Cruising';
+  const L = PARKS[levelIndex];
+  const clip = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    name,
+    created: Date.now(),
+    level: levelIndex,
+    levelName: L.name,
+    rider: career.data.rider ?? 'brock',
+    look: career.customLook(),
+    deck: career.data.deck,
+    frames,
+    data,
+    sfx: recorder.sfx,
+  };
+  listClips()
+    .then((all) => {
+      if (roomLeft(all) < frames / FPS) {
+        hud.toast('Studio is full', 'Delete some clips in the Studio to record more', 'letter');
+        return;
+      }
+      return putClip(clip).then(() => hud.toast('Clip saved', `${name} · open the Studio to edit`, 'letter'));
+    })
+    .catch((e) => {
+      console.warn('clip not saved', e);
+      hud.toast('Clip not saved', 'This browser blocked storage', 'letter');
+    });
+}
+
+const studioFxPos = new THREE.Vector3();
+const studio = new Studio(app, {
+  scene,
+  camera,
+  renderer,
+  board,
+  blob,
+  audio,
+  rider: () => rider,
+  loadLevel,
+  groundAt: (x, z) => terrain.height(x, z),
+  deck: () => career.data.deck,
+  fx(dt, at, grind, events) {
+    studioFxPos.copy(at);
+    if (grind) {
+      sparkAcc += dt * 60 * (grind === 2 ? 0.3 : 1);
+      while (sparkAcc > 1) {
+        sparkAcc -= 1;
+        tmpV.set((Math.random() - 0.5) * 1.2, 0.6, (Math.random() - 0.5) * 1.2);
+        sparks.emit(studioFxPos, tmpV, 2.2, SPARK, 0.35);
+      }
+    }
+    for (const e of events) {
+      const n = e === 'pop' ? 5 : e === 'land' ? 10 : 0;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        tmpV.set(Math.cos(a), 0.2, Math.sin(a));
+        dust.emit(studioFxPos, tmpV, 0.6, DUST, 0.5);
+      }
+      if (e === 'splash') {
+        for (let i = 0; i < 60; i++) {
+          tmpV.set((Math.random() - 0.5) * 3, 2 + Math.random() * 3, (Math.random() - 0.5) * 3);
+          splash.emit(studioFxPos, tmpV, 0.6, WATER, 1.0);
+        }
+      }
+    }
+  },
+  render(dt, view) {
+    worldTick(dt);
+    if (!view) {
+      renderer.render(scene, camera);
+      return;
+    }
+    // letterboxed monitor: dark surround, the shot in its export aspect
+    const H = window.innerHeight;
+    renderer.setScissorTest(false);
+    renderer.setClearColor(0x141413, 1);
+    renderer.clear();
+    renderer.setViewport(view.x, H - view.y - view.h, view.w, view.h);
+    renderer.setScissor(view.x, H - view.y - view.h, view.w, view.h);
+    renderer.setScissorTest(true);
+    renderer.render(scene, camera);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, window.innerWidth, H);
+  },
+  setRenderSize(w, h, ratio) {
+    renderer.setPixelRatio(ratio);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  },
+  restoreRenderSize() {
+    renderer.setPixelRatio(perf.ratio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+  },
+  exit() {
+    hud.root.style.display = '';
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    cam.init = false;
+    ui.showTitle();
+  },
+});
+
+function openStudio() {
+  playing = false;
+  stopRecording();
+  ui.hide();
+  hud.root.style.display = 'none';
+  input.actions.length = 0;
+  studio.open();
+}
+
+/** Things that move whether or not anyone is skating: particles, water, palms, flags, sky. */
+function worldTick(dt: number) {
+  sparks.update(dt);
+  dust.update(dt);
+  spray.update(dt);
+  splash.update(dt);
+  glow.update(dt);
+  for (const f of fountains) {
+    sprayAcc += dt * 45;
+    while (sprayAcc > 1) {
+      sprayAcc -= 1;
+      tmpV.set((Math.random() - 0.5) * 0.9, 3.4 + Math.random() * 0.6, (Math.random() - 0.5) * 0.9);
+      spray.emit(f, tmpV, 0.2, WATER, 0.75);
+    }
+  }
+  // shadows centre on the board: a tripod can stand well outside the shadow box
+  sun.position.copy(board.root.position).add(SUN_OFFSET);
+  sun.target.position.copy(board.root.position);
+  ambient.value += dt;
+  mats.water.map?.offset.set(ambient.value * 0.012, ambient.value * 0.02);
+  for (const f of (levelGroup?.userData.ticks ?? []) as ((dt: number, t: number) => void)[]) f(dt, ambient.value);
+  skyDome.position.copy(camera.position);
+}
+
+/* ------------------------------------------------------------------ */
 /* Loop                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -1131,6 +1321,12 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   let dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  if (studio.active) {
+    input.enabled = false;
+    studio.update(dt);
+    return;
+  }
+  const realDt = dt;
   if (playing && !document.hidden) adaptResolution(dt);
 
   const push = input.poll();
@@ -1279,7 +1475,11 @@ function frame(now: number) {
   } else joint.x = joint.z = Infinity;
 
   const grindKind = skater.mode === 'grind' && skater.grind ? (skater.grind.family === 'slide' ? 'slide' : 'grind') : 'none';
-  audio.update(playing && skater.mode === 'ground' ? skater.speed : 0, playing ? grindKind : 'none', skater.grind ? Math.abs(skater.grind.spd) : 0, skater.braking && skater.speed > 1.5);
+  bed[0] = playing && skater.mode === 'ground' ? skater.speed : 0;
+  bed[1] = !playing || grindKind === 'none' ? 0 : grindKind === 'grind' ? 1 : 2;
+  bed[2] = skater.grind ? Math.abs(skater.grind.spd) : 0;
+  bed[3] = skater.braking && skater.speed > 1.5 ? 1 : 0;
+  audio.update(bed[0], playing ? grindKind : 'none', bed[2], bed[3] > 0);
 
   // HUD
   hud.setScore(combo.total, session ? session.bestCombo : 0);
@@ -1308,6 +1508,14 @@ function frame(now: number) {
   for (const f of (levelGroup?.userData.ticks ?? []) as ((dt: number, t: number) => void)[]) f(dt, ambient.value);
   skyDome.position.copy(camera.position);
   renderer.render(scene, camera);
+  if (recorder.active && playing && !cut.active) {
+    const mode = Math.max(0, MODES.indexOf(skater.mode as (typeof MODES)[number]));
+    if (!recorder.capture(realDt, (out, o) => writeFrame({ board, rider, blob, camera }, out, o, bed, mode))) {
+      hud.toast('Clip full', `${MAX_CLIP_SECONDS} s max per clip`, 'letter');
+      stopRecording();
+    }
+  }
+  hud.setRec(options.recording && playing && session ? (recorder.active ? recorder.time : -1) : null);
 }
 
 let pendingGrab: number | null = null;
