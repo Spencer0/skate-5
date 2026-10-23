@@ -13,10 +13,17 @@ fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
 // no sound in the capture: the dialogue then runs on the opening's own (virtual) clock
-const init = () => {
+const quiet = () => {
   window.AudioContext = undefined;
   window.webkitAudioContext = undefined;
 };
+// CLEAN=1 also hides the Skip button, for a video to post
+const clean = () => {
+  window.AudioContext = undefined;
+  window.webkitAudioContext = undefined;
+  addEventListener('DOMContentLoaded', () => document.head.append(Object.assign(document.createElement('style'), { textContent: '.op-skip{display:none!important}' })));
+};
+const init = process.env.CLEAN ? clean : quiet;
 const g = await open({ w: +(process.env.W ?? 540), h: +(process.env.H ?? 960), scale: +scaleArg, init, state: { 'skate5.tutorial': '1', 'skate5.career.v1': { rider: 'coral' } } });
 await g.tick();
 await g.sk(() => window.__skate.playOpening(() => (window.__done = true)));
