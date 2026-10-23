@@ -43,22 +43,23 @@ REF_TEXT = {
 }
 
 # gap: seconds after the previous line ends (negative = talks over it)
+# cut: (skater, seconds) a cutaway to that skater's trick right after this line,
+#      silent on the dialogue track (the opening shows the trick and the park sound)
 # speed: Kokoro speed; exag: how hard Chatterbox pushes it; tempo: final time-stretch
 # CAPS are only for the captions (TTS would spell them out)
 SCRIPT = [
     dict(who='a', text="Who's on the rail, What's on the ramp, and Both's on the kicker.", speed=1.12, exag=0.4, tempo=1.12, gap=0.0),
     dict(who='b', text="Who's on the rail?", speed=1.12, exag=0.6, gap=0.1),
-    dict(who='a', text="Yep.", speed=1.0, exag=0.35, gap=0.05),
+    dict(who='a', text="Yep.", speed=1.0, exag=0.35, gap=0.05, cut=('rail', 2.4)),
     dict(who='b', text="I'm asking you!", speed=1.18, exag=0.8, tempo=1.1, gap=-0.05),
     dict(who='a', text="Who.", speed=1.0, exag=0.35, gap=0.06),
     dict(who='b', text="The guy on the rail!", speed=1.22, exag=0.85, tempo=1.08, gap=-0.04),
     dict(who='a', text="Who's on the rail.", speed=1.1, exag=0.4, gap=0.05),
     dict(who='b', text="What?", speed=1.0, exag=0.75, gap=0.12),
-    dict(who='a', text="Ramp.", speed=1.0, exag=0.35, gap=0.04),
+    dict(who='a', text="Ramp.", speed=1.0, exag=0.35, gap=0.04, cut=('ramp', 2.6)),
     dict(who='b', text="Okay. Then who's on the kicker?", speed=1.22, exag=0.9, tempo=1.1, gap=0.08),
     dict(who='a', text="Both.", speed=1.0, exag=0.35, gap=0.06),
-    dict(who='b', text="Both of WHO?!", speed=1.2, exag=1.1, gap=-0.04),
-    dict(who='a', text="Rail.", speed=0.95, exag=0.3, gap=0.25),
+    dict(who='b', text="Both of WHO?!", speed=1.2, exag=1.1, gap=-0.04, cut=('kicker', 2.4)),
 ]
 
 tts = Kokoro(model, voices)
@@ -151,11 +152,16 @@ for i, L in enumerate(SCRIPT):
 
 # lay the lines end to end on one clock
 t = 0.0
+cuts = []
 for L in lines:
     L['t0'] = max(0.0, t + L['gap'])
     L['t1'] = L['t0'] + L['dur']
     t = L['t1']
-total = t + 0.4
+    if 'cut' in L:
+        name, length = L['cut']
+        cuts.append(dict(name=name, t0=round(t + 0.12, 3), t1=round(t + 0.12 + length, 3)))
+        t += 0.12 + length
+total = t
 mix = np.zeros(int(total * SR) + 1, dtype=np.float32)
 for L in lines:
     x, _ = sf.read(L['wav'], dtype='float32')
@@ -184,7 +190,7 @@ subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', raw, '-af',
                 'highpass=f=90,acompressor=threshold=-20dB:ratio=3:attack=5:release=80,loudnorm=I=-16:TP=-1.5:LRA=7',
                 '-ar', '44100', '-ac', '1', '-b:a', '96k', mp3], check=True)
 
-cues = dict(duration=round(total, 3), engine=ENGINE, voices=VOICE,
+cues = dict(duration=round(total, 3), engine=ENGINE, voices=VOICE, cuts=cuts,
             lines=[dict(who=L['who'], text=L['text'], t0=round(L['t0'], 3), t1=round(L['t1'], 3), words=L['words']) for L in lines])
 json.dump(cues, open(os.path.join(out, 'opening.json'), 'w'), indent=1)
 for L in lines:

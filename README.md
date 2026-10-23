@@ -11,13 +11,13 @@ cutscenes with a small cast: Mara (your crew leader), Dex (the rival), Kai
 Moreno (Atlas Skateboards team manager) and Officer Pete (plaza security).
 
 - **Opening:** a new story starts with an in-engine phone-video opening at
-  Brazil Park. First come three seconds of the park busy with real recorded
-  trick lines. Then it hard-cuts to two locals with a bagged bottle doing a
-  rapid "Who's on the rail, What's on the ramp, Both's on the kicker" bit,
-  voiced and captioned word by word. After that you drop straight into your
-  first run, and Mara's intro follows it. The opening is 9:16 on wide screens
-  and can be skipped. Replay it from Brazil Park's menu. Assets are generated
-  by `tools/story/`.
+  Brazil Park: two locals doing a rapid "Who's on the rail, What's on the
+  ramp, Both's on the kicker" bit, voiced and captioned word by word, while
+  the park skates behind them (real recorded trick lines). Between exchanges
+  it cuts away to the skater just named landing a trick, then you drop
+  straight into your first run (Mara's intro follows it). 9:16 on wide
+  screens, skippable, replayable from Brazil Park's menu. Assets come from
+  `tools/story/`.
 - **Runs:** each session is a 2:00 run. Goals save the moment you land them.
   When the clock hits zero your current line gets to finish.
 - **Goals (≈13 per spot):** High / Pro / Sick score, collect N-A-T-I-O-N in one run,

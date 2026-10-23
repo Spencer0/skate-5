@@ -56,18 +56,23 @@ const LINES = {
     for (let i = 0; i < 200; i++) {
       const st = await stat(g);
       log(st);
-      if (!popped && st.z < E('KP', 30.4)) { popped = true; await flip(g, KICKFLIP, E('KC', 12)); continue; }
+      if (!popped && st.z < E('KP', 30.4)) { popped = true; await flip(g, process.env.KT === 'kf' ? KICKFLIP : TRE, E('KC', 12)); continue; }
       if (popped && st.m === 'ground' && i > 120) break;
       await g.tick();
     }
   },
-  // back and forth on the mini ramp, popping airs at the lips
+  // straight up the big south quarter pipe, a flip trick in the air above the coping, back in
   async ramp(g, log) {
-    await place(g, 22, 39.5, 90, E('MV', 7.5));
-    // hold push: pumping the transitions keeps the speed up
+    await place(g, E('MX', 45), E('MZ0', 52), 90, E('MV', 10));
     await leftStick(g, 0, true);
+    let flipped = false, wasAir = false;
     for (let i = 0; i < 240; i++) {
-      log(await stat(g));
+      const st = await stat(g);
+      log(st);
+      if (!flipped && st.m === 'ground' && st.y > E('MY', 1.7)) { flipped = true; await flip(g, process.env.MT === 'tre' ? TRE : KICKFLIP, E('MC', 12)); continue; }
+      if (st.m === 'air') wasAir = true;
+      // end on the roll-away, before the fakie roll meets the banks behind
+      if (wasAir && i > 150) break;
       await g.tick();
     }
   },

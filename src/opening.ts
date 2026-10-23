@@ -11,24 +11,24 @@ import { Cues, captionAt, wordClass } from './captions';
 import { Jaw, rigJaw } from './jaw';
 
 /**
- * The story-mode opening, in engine and shot for a phone: three seconds of a
- * busy Brazil Park (real recorded trick lines replayed on extra skaters), a
- * hard cut to two locals arguing over a bagged bottle ("Who's on the rail"),
- * voiced and captioned word by word, then the player drops in.
+ * The story-mode opening, in engine and shot for a phone: two locals at
+ * Brazil Park arguing "Who's on the rail", voiced and captioned word by word,
+ * while the park skates behind them (real recorded trick lines replayed on
+ * extra skaters). Between exchanges it cuts away to the skater just named
+ * landing a trick: Who on the rail, What on the ramp, Both on the kicker.
+ * Then the player drops in.
  *
- * Assets (public/story/, made by tools/story/): ghosts.bin (the background
- * skaters), opening.mp3 (the dialogue) and opening.json (when every line and
- * word is spoken).
+ * Assets (public/story/, made by tools/story/): ghosts.bin (the skaters),
+ * opening.mp3 (the dialogue, with silent gaps for the cutaways) and
+ * opening.json (when every line, word and cutaway happens).
  */
 
 export const OPENING_ID = 'story-opening';
 
-/** seconds of park montage before the cut */
-const MONTAGE = 3;
-/** the dialogue starts this long after the cut */
-const LEAD_IN = 0.3;
-/** hold after the last line before the player drops in */
-const TAIL = 1.1;
+/** the first frame lands this far before the first line: they're already mid-argument */
+const LEAD_IN = 0.35;
+/** hold after the last cutaway before the player drops in */
+const TAIL = 0.1;
 /** phone framing on wide screens */
 const PORTRAIT = 9 / 16;
 
@@ -37,14 +37,25 @@ interface Ghost {
   board: BoardModel;
   rider: HumanRider;
   blob: THREE.Mesh;
-  /** clip time at opening time 0 */
+  /** clip time at dialogue time 0 */
   offset: number;
   frame: Float32Array;
   sfxAt: number;
 }
 
-/** Where the background skaters' lines start, so each trick lands inside its montage shot. */
-const OFFSETS: Record<string, number> = { flat: 1.6, kicker: 1.43, rail: 2.5, stairs: -0.05, ramp: 0 };
+/**
+ * For the skaters with a cutaway: the clip time their cutaway starts at (so the
+ * trick lands mid-shot). Their background loop runs in step with it, so the
+ * cutaway is just what they happen to be doing then. The others: any phase.
+ */
+const CUT_IN: Record<string, number> = { rail: 3.9, ramp: 2.1, kicker: 1.6 };
+const PHASE: Record<string, number> = { flat: 1.2, stairs: 0.4 };
+/** what the captions call each cutaway skater */
+const NAMES: Record<string, [string, string, string]> = {
+  rail: ['WHO', 'who', 'on the rail'],
+  ramp: ['WHAT', 'what', 'on the ramp'],
+  kicker: ['BOTH', 'both', 'on the kicker'],
+};
 
 /** The two locals. A explains, B loses it. */
 const LOOK_A = sanitizeLook({
@@ -172,8 +183,6 @@ interface Intent {
   fling?: number;
   /** a hand over the face */
   face?: number;
-  /** the bottle to the lips */
-  sip?: number;
   lean?: number;
   shrug?: number;
 }
@@ -188,7 +197,6 @@ export interface OpeningHost {
 export class Opening {
   private root: HTMLElement;
   private cap: HTMLElement;
-  private hook: HTMLElement;
   private flash: HTMLElement;
   private group = new THREE.Group();
   private ghosts: Ghost[] = [];
@@ -216,9 +224,6 @@ export class Opening {
     this.root = document.createElement('div');
     this.root.className = 'op';
     parent.appendChild(this.root);
-    this.hook = document.createElement('div');
-    this.hook.className = 'op-hook';
-    this.hook.textContent = 'POV: first session at Brazil Park';
     this.cap = document.createElement('div');
     this.cap.className = 'op-cap';
     this.flash = document.createElement('div');
@@ -230,7 +235,7 @@ export class Opening {
       e.stopPropagation();
       this.finish();
     });
-    this.root.append(this.hook, this.cap, this.flash, skip);
+    this.root.append(this.cap, this.flash, skip);
   }
 
   /** Fetch the clips, voice and models; resolves when everything is in (or gave up). */
@@ -276,7 +281,7 @@ export class Opening {
         new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
       );
       this.group.add(board.root, rider.group, blob);
-      return { clip, board, rider, blob, offset: OFFSETS[h.name] ?? 0, frame: new Float32Array(STRIDE), sfxAt: -1 };
+      return { clip, board, rider, blob, offset: 0, frame: new Float32Array(STRIDE), sfxAt: -1 };
     });
   }
 
@@ -295,9 +300,14 @@ export class Opening {
     // the bystanders stand on whatever the ground is there
     for (const [p, at] of [[this.a!, SPOT.a], [this.b!, SPOT.b]] as const) p.rider.group.position.set(at.x, this.host.groundAt(at.x, at.z), at.z);
     this.face();
-    for (const g of this.ghosts) g.sfxAt = this.clipT(g, 0);
+    // each cutaway skater's loop is phased so its cutaway shows the trick
+    for (const g of this.ghosts) {
+      const cut = this.cues?.cuts?.find((c) => c.name === g.clip.name);
+      g.offset = cut ? CUT_IN[cut.name] - cut.t0 : (PHASE[g.clip.name] ?? 0);
+      g.sfxAt = this.clipT(g, -LEAD_IN);
+    }
+    this.placeBottle();
     this.root.classList.add('on');
-    this.hook.classList.add('show');
     this.cap.textContent = '';
   }
 
@@ -324,7 +334,6 @@ export class Opening {
     this.voiceStop = null;
     this.host.scene.remove(this.group);
     this.root.classList.remove('on');
-    this.hook.classList.remove('show');
     this.host.audio.update(0, 'none', 0, false);
     const cb = this.onDone;
     this.onDone = null;
@@ -348,20 +357,26 @@ export class Opening {
   }
 
   private get end() {
-    return MONTAGE + LEAD_IN + (this.cues?.duration ?? 0) + TAIL;
+    return LEAD_IN + (this.cues?.duration ?? 0) + TAIL;
   }
 
-  private clipT(g: Ghost, t: number) {
+  /** Where a skater's looping line is at dialogue time d (a short pause between loops). */
+  private clipT(g: Ghost, d: number) {
     const len = clipDuration(g.clip) + 0.6;
-    const x = t + g.offset;
-    return x < 0 ? x : x % len;
+    const x = d + g.offset;
+    return ((x % len) + len) % len;
+  }
+
+  /** The cutaway showing at dialogue time d, if any. */
+  private cutAt(d: number) {
+    return this.cues?.cuts?.find((c) => d >= c.t0 && d < c.t1) ?? null;
   }
 
   /** Dialogue time: the voice's own clock when it's playing, so captions never drift. */
   private dialogT() {
     const ctx = this.host.audio.ctx;
     if (this.voiceStop && ctx) return ctx.currentTime - this.voiceAt;
-    return this.t - MONTAGE - LEAD_IN;
+    return this.t - LEAD_IN;
   }
 
   update(dt: number) {
@@ -369,13 +384,13 @@ export class Opening {
     this.t += dt;
     const t = this.t;
     if (t >= this.end) return this.finish();
-    this.updateGhosts(t);
-    if (t >= MONTAGE + LEAD_IN && !this.voiceStop && this.voice && this.host.audio.ctx && !this.host.audio.muted) {
+    if (t >= LEAD_IN && !this.voiceStop && this.voice && this.host.audio.ctx && !this.host.audio.muted) {
       const v = this.host.audio.play(this.voice, 1.15);
       this.voiceAt = v.at;
       this.voiceStop = v.stop;
     }
     const d = this.dialogT();
+    this.updateGhosts(d);
     this.updatePeople(dt, t, d);
     this.updateCamera(t, d);
     this.updateCaptions(d);
@@ -383,19 +398,16 @@ export class Opening {
 
   /* ---------------------------- skaters ---------------------------- */
 
-  private updateGhosts(t: number) {
+  private updateGhosts(d: number) {
     const cam = this.host.camera.position;
     let near: Ghost | null = null;
     let nearD = Infinity;
     for (const g of this.ghosts) {
-      const ct = this.clipT(g, t);
-      sampleFrame(g.clip, Math.max(0, ct), g.frame);
+      const ct = this.clipT(g, d);
+      sampleFrame(g.clip, ct, g.frame);
       applyFrame({ board: g.board, rider: g.rider, blob: g.blob, camera: this.host.camera }, g.frame);
-      // hold off-screen until the line starts
-      const on = ct >= 0;
-      g.board.root.visible = g.rider.group.visible = g.blob.visible = on;
       const dist = g.board.root.position.distanceTo(cam);
-      if (on && dist < nearD) {
+      if (dist < nearD) {
         near = g;
         nearD = dist;
       }
@@ -457,16 +469,9 @@ export class Opening {
     const a: Intent = { look: hb };
     const b: Intent = { look: ha };
     const camP = this.host.camera.position;
-    if (d < -LEAD_IN + 0.01) {
-      // caught mid-argument: they're already glaring at each other
-      return { a, b };
-    }
     const { i, u } = this.lineAt(d);
     const W = (n: number) => this.wordT(i, n);
     switch (i) {
-      case -1:
-        a.sip = 1; // a swig before he explains it again
-        break;
       case 0: {
         // "Who's on the rail, What's on the ramp, and Both's on the kicker."
         const at = d < W(4) ? 'rail' : d < W(9) ? 'ramp' : 'kicker';
@@ -536,14 +541,6 @@ export class Opening {
         b.shrug = 1;
         b.lean = -0.14;
         break;
-      default: {
-        // "Rail." ... and a calm swig while the other one gives up
-        a.look = u < 0.6 ? hb : camP;
-        a.sip = u > 0.5 ? 1 : 0;
-        b.face = u > 0.35 ? 1 : 0;
-        b.lean = 0.12;
-        b.look = new THREE.Vector3(hb.x, hb.y - 1, hb.z).addScaledVector(new THREE.Vector3(0, 0, 1), 1);
-      }
     }
     return { a, b };
   }
@@ -560,7 +557,7 @@ export class Opening {
       st.talk = this.talkLevel(who, d);
       // the jaw flaps with the syllables inside each word
       if (!p.jaw && p.rider.ready) p.jaw = rigJaw(p.rider.group);
-      p.jaw?.set(st.talk * (0.45 + 0.55 * Math.abs(Math.sin(d * 17 + (who === 'a' ? 0 : 1)))) + (it.sip ? 0.25 : 0));
+      p.jaw?.set(st.talk * (0.45 + 0.55 * Math.abs(Math.sin(d * 17 + (who === 'a' ? 0 : 1)))));
       const k = 1 - Math.exp(-dt * 11);
       st.look.lerp(it.look, st.look.lengthSq() ? k : 1);
       st.lean += ((it.lean ?? 0) - st.lean) * k;
@@ -601,7 +598,6 @@ export class Opening {
         wr = head.clone().addScaledVector(left, -0.55).setY(head.y + 0.35).addScaledVector(fwd, 0.15);
       }
       if (it.face) wl = head.clone().addScaledVector(fwd, 0.12).setY(head.y + 0.02);
-      if (it.sip && who === 'a') wr = head.clone().addScaledVector(fwd, 0.16).setY(head.y - 0.06);
       // ease: quick to throw a hand out, slower to let it drop
       const ease = (cur: THREE.Vector3, want: THREE.Vector3 | null, r: number, curReach: number) => {
         if (want) cur.lerp(want, curReach < 0.05 ? 1 : 1 - Math.exp(-dt * 16));
@@ -613,29 +609,18 @@ export class Opening {
       st.handR!.copy(p.hr);
       p.rider.stand(st);
     }
-    this.placeBottle();
-    this.focus.copy(SPOT.a).lerp(SPOT.b, 0.5);
   }
 
-  /** The bottle rides in A's right hand: neck at the fist, bag along the forearm. */
+  /** The bagged bottle stands on the ground by A's feet, between the two of them. */
   private placeBottle() {
-    const r = this.a!.rider;
-    const hand = r.joint('hand_r', new THREE.Vector3());
-    const elbow = r.joint('lowerarm_r', new THREE.Vector3());
-    const along = hand.clone().sub(elbow).normalize();
-    this.bottle.position.copy(hand).addScaledVector(along, 0.05);
-    // the bag hangs past the fist, the neck back toward the wrist
-    this.bottle.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), along);
-    // a hand at the mouth tips the bottle up
-    const head = r.joint('head', new THREE.Vector3());
-    if (hand.distanceTo(head) < 0.3) {
-      const up = new THREE.Vector3(0, 1, 0);
-      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(r.group.quaternion);
-      const dir = up.multiplyScalar(0.8).addScaledVector(fwd, 0.6).normalize();
-      this.bottle.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
-      this.bottle.position.copy(head).addScaledVector(fwd, 0.1).setY(head.y - 0.06);
-    }
-    this.bottle.visible = r.ready;
+    const g = this.a!.rider.group;
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(g.quaternion);
+    const right = new THREE.Vector3(-1, 0, 0).applyQuaternion(g.quaternion);
+    const at = g.position.clone().addScaledVector(fwd, 0.32).addScaledVector(right, 0.22);
+    // origin is the bottle's neck: stand it on its base, leaning a touch
+    this.bottle.position.set(at.x, this.host.groundAt(at.x, at.z) + 0.3 * 0.85, at.z);
+    this.bottle.rotation.set(0.05, 0.6, -0.04);
+    this.bottle.scale.setScalar(0.85);
   }
 
   /** 0..1 mouth-and-head energy for a speaker: a pulse on every word they say. */
@@ -657,53 +642,49 @@ export class Opening {
   private setShot(n: number) {
     if (n === this.shot) return;
     const first = this.shot === -1;
+    const intoCut = n >= 100;
     this.shot = n;
-    if (first) return;
-    // hard cut: a white blink and a whoosh on the big one
-    if (n === 4) {
-      this.flash.classList.remove('go');
-      void this.flash.offsetWidth;
-      this.flash.classList.add('go');
-      this.host.audio.whoosh();
-      this.hook.classList.remove('show');
-    }
+    if (first || !intoCut) return;
+    // into a cutaway: a white blink and a whoosh
+    this.flash.classList.remove('go');
+    void this.flash.offsetWidth;
+    this.flash.classList.add('go');
+    this.host.audio.whoosh();
   }
 
   private updateCamera(t: number, d: number) {
     const L = this.lens;
     const cam = this.host.camera;
-    const g = (n: string) => this.ghost(n);
-    if (t < MONTAGE) {
-      // 0: drone push over the park, 1: low tripod on the jump box, 2: fisheye on the rail, 3: the 6-stair
-      const n = t < 0.8 ? 0 : t < 1.5 ? 1 : t < 2.2 ? 2 : 3;
-      this.setShot(n);
-      if (n === 0) {
-        const k = easeOut(t / 0.8);
-        L.pos.set(-12, 11, 68).lerp(new THREE.Vector3(-3, 5.5, 52), k);
-        L.look.set(-2, 0, 24).lerp(new THREE.Vector3(3, 0.8, 28), k);
-        L.fov = 62 - 8 * k;
-      } else if (n === 1 && g('kicker')) {
-        const b = g('kicker')!.board.root.position;
-        L.pos.set(-30.6, 0.42, 27.4);
-        L.look.lerp(b.clone().setY(b.y + 0.55), t - 0.8 < 1 / 30 ? 1 : 0.35);
-        L.fov = 74 - 10 * smooth((t - 0.8) / 0.7);
-      } else if (n === 2 && g('rail')) {
-        const gh = g('rail')!;
-        lens(gh.clip, 'filmer', Math.max(0, this.clipT(gh, t)), { in: 0, out: 1 }, this.host.groundAt, L);
+    const cut = this.cutAt(d);
+    const g = cut ? this.ghost(cut.name) : null;
+    if (cut && g) {
+      this.setShot(100 + this.cues!.cuts!.indexOf(cut));
+      const u = d - cut.t0;
+      const k = smooth(u / (cut.t1 - cut.t0));
+      const b = g.board.root.position;
+      const first = u < 1 / 30;
+      if (cut.name === 'rail') {
+        // fisheye, chasing the board down the rail
+        lens(g.clip, 'filmer', this.clipT(g, d), { in: 0, out: 1 }, this.host.groundAt, L);
         L.fov = 86;
-      } else if (n === 3 && g('stairs')) {
-        const b = g('stairs')!.board.root.position;
-        const k = smooth((t - 2.2) / 0.8);
-        L.pos.set(46, 0.7, -31.5).lerp(new THREE.Vector3(45.2, 0.55, -30.6), k);
-        L.look.lerp(b.clone().setY(b.y + 0.6), t - 2.2 < 1 / 30 ? 1 : 0.4);
-        L.fov = 62 - 6 * k;
+      } else if (cut.name === 'ramp') {
+        // back across the flat from the quarter pipe, panning up with the air
+        L.pos.set(41.2, 0.9, 63.2).lerp(new THREE.Vector3(41.6, 0.8, 64.4), k);
+        L.look.lerp(b.clone().setY(b.y + 0.6), first ? 1 : 0.3);
+        L.fov = 64 - 6 * k;
+      } else {
+        // low tripod beside the jump box
+        L.pos.set(-30.6, 0.42, 27.4);
+        L.look.lerp(b.clone().setY(b.y + 0.55), first ? 1 : 0.35);
+        L.fov = 74 - 10 * k;
       }
-      this.focus.copy(L.look);
+      this.focus.copy(b);
     } else {
       this.dialogCamera(d);
+      this.focus.copy(SPOT.a).lerp(SPOT.b, 0.5);
     }
     // handheld: a phone in somebody's hand
-    const shake = t < MONTAGE ? 0.012 : 0.006;
+    const shake = cut ? 0.012 : 0.006;
     const n1 = Math.sin(t * 7.3) * 0.6 + Math.sin(t * 13.1) * 0.4;
     const n2 = Math.sin(t * 5.9 + 1.3) * 0.6 + Math.sin(t * 11.7 + 0.4) * 0.4;
     cam.position.copy(L.pos);
@@ -724,15 +705,14 @@ export class Opening {
     const mid = ha.clone().lerp(hb, 0.5);
     const { i, line, u } = this.lineAt(d);
     // which framing: 'two' (both, waist up), 'a' or 'b' (one face)
-    const plan = ['two', 'b', 'a', 'b', 'a', 'b', 'a', 'b', 'a', 'two', 'a', 'b', 'two'];
+    const plan = ['two', 'b', 'a', 'b', 'a', 'b', 'a', 'b', 'a', 'two', 'a', 'b'];
     const frame = i < 0 ? 'two' : (plan[i] ?? 'two');
-    // a new shot per line; shot 4 is the cut in from the montage
-    this.setShot(5 + i);
+    // a new shot per line
+    this.setShot(1 + i);
     const front = new THREE.Vector3(0, 0, 1);
     if (frame === 'two') {
       const push = smooth(Math.max(0, d + LEAD_IN) / 4) * 0.5;
-      const end = i >= 12 ? smooth(u / 1.2) * 0.35 : 0;
-      L.pos.copy(mid).addScaledVector(front, 3.4 - push + end).setY(mid.y - 0.12);
+      L.pos.copy(mid).addScaledVector(front, 3.4 - push).setY(mid.y - 0.12);
       L.look.copy(mid).setY(mid.y - 0.42);
       L.fov = 48;
     } else {
@@ -753,9 +733,16 @@ export class Opening {
 
   private updateCaptions(d: number) {
     const c = this.cues ? captionAt(this.cues, d) : null;
+    const cut = this.cutAt(d);
     let html = '';
     let key = '';
-    if (c) {
+    if (cut && NAMES[cut.name]) {
+      // the skater's "name", big
+      const [name, cls, where] = NAMES[cut.name];
+      key = 'cut:' + cut.name;
+      html = `<span class="op-w ${cls} on op-name">${name}</span><span class="op-where">${where}</span>`;
+      this.cap.className = 'op-cap cutaway';
+    } else if (c) {
       key = `${c.line}:${c.chunk[0].t0}`;
       html = c.chunk.map((w, k) => `<span class="${wordClass(w.w)}${k < c.lit ? ' on' : ''}">${w.w.replace(/[<>&]/g, '')}</span>`).join(' ');
       this.cap.className = 'op-cap ' + this.cues!.lines[c.line].who;

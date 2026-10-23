@@ -2722,30 +2722,6 @@ body {
   cursor: pointer;
   pointer-events: auto;
 }
-/* the "POV" hook up top, white box like a phone text overlay */
-.op-hook {
-  position: absolute;
-  top: 13%;
-  left: 50%;
-  transform: translateX(-50%) scale(0.9);
-  max-width: 82%;
-  padding: 7px 12px 8px;
-  border-radius: 9px;
-  background: #fff;
-  color: #111;
-  font-weight: 800;
-  font-size: clamp(15px, 4.4vmin, 22px);
-  line-height: 1.2;
-  text-align: center;
-  opacity: 0;
-  transition:
-    opacity 0.15s,
-    transform 0.15s;
-}
-.op-hook.show {
-  opacity: 1;
-  transform: translateX(-50%) scale(1);
-}
 /* burned-in captions: a few words at a time, the spoken word lights up */
 .op-cap {
   position: absolute;
@@ -2798,10 +2774,24 @@ body {
   color: #ff7ad1;
 }
 .op-w.shout {
-  margin: 0 0.14em;
+  margin: 0 0.1em 0 0.32em;
 }
 .op-w.shout.on {
   transform: scale(1.25) rotate(-3deg);
+}
+/* cutaways: the skater's "name", low so the trick has the frame */
+.op-cap.cutaway {
+  top: 74%;
+}
+.op-name {
+  display: block;
+  font-size: 1.9em;
+  line-height: 1;
+}
+.op-where {
+  display: block;
+  margin-top: 0.15em;
+  font-size: 0.62em;
 }
 .op-flash {
   position: absolute;

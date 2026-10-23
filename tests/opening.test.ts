@@ -43,8 +43,23 @@ test('the voiced dialogue matches its script and runs in order', () => {
     last = L.t1;
   }
   assert.ok(cues.duration >= last);
-  // "10 seconds of rapid dialogue"
-  assert.ok(cues.duration < 15, `${cues.duration}s`);
+  // rapid dialogue: about ten seconds of talking all told
+  const talk = cues.lines.reduce((n, L) => n + L.t1 - L.t0, 0);
+  assert.ok(talk < 13, `${talk}s of talking`);
+});
+
+test('each cutaway shows the skater just named, in silence', () => {
+  const cues = JSON.parse(fs.readFileSync('public/story/opening.json', 'utf8')) as Cues;
+  assert.deepEqual(
+    cues.cuts?.map((c) => c.name),
+    ['rail', 'ramp', 'kicker'],
+  );
+  for (const c of cues.cuts ?? []) {
+    assert.ok(c.t1 > c.t0 + 1.5, c.name);
+    for (const L of cues.lines) assert.ok(L.t1 <= c.t0 + 0.05 || L.t0 >= c.t1 - 0.1, `${L.text} talks over the ${c.name} cutaway`);
+  }
+  // it ends on the last cutaway, straight into the run
+  assert.equal(cues.cuts?.at(-1)?.t1, cues.duration);
 });
 
 test('the background skaters file holds every line the opening shoots', () => {

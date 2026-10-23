@@ -18,9 +18,17 @@ export interface CueLine {
   words: Word[];
 }
 
+/** A silent stretch of the dialogue track where the opening cuts away to a skater. */
+export interface Cutaway {
+  name: string;
+  t0: number;
+  t1: number;
+}
+
 export interface Cues {
   duration: number;
   lines: CueLine[];
+  cuts?: Cutaway[];
 }
 
 /** CSS classes for a word: the bit's three "names" get a colour each, CAPS shout. */
