@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Voice the story-mode opening ("Who's on the rail") and time every word.
 
-usage: voices.py <kokoro .onnx> <voices .bin> <out dir> [--engine kokoro|chatterbox] [--takes N] [--try A,B]
+usage: voices.py <kokoro .onnx> <voices .bin> <out dir> [--engine kokoro|chatterbox] [--takes N] [--try A,B] [--pace X]
 
 Kokoro (Apache-2.0) gives each character a voice. With --engine chatterbox
 (MIT) a short Kokoro read becomes each character's reference voice and
@@ -29,6 +29,8 @@ def opt(name, d):
 
 ENGINE = opt('--engine', 'kokoro')
 TAKES = int(opt('--takes', '4'))
+# every line sped up by this much on top of its own tempo (rapid-fire delivery)
+PACE = float(opt('--pace', '1.12'))
 work = os.path.join(out, 'work')
 os.makedirs(work, exist_ok=True)
 SR = 24000
@@ -46,7 +48,7 @@ REF_TEXT = {
 SCRIPT = [
     dict(who='a', text="Who's on the rail, What's on the ramp, and Both's on the kicker.", speed=1.12, exag=0.4, tempo=1.12, gap=0.0),
     dict(who='b', text="Who's on the rail?", speed=1.12, exag=0.6, gap=0.1),
-    dict(who='a', text="Yup.", speed=1.0, exag=0.35, gap=0.05),
+    dict(who='a', text="Yep.", speed=1.0, exag=0.35, gap=0.05),
     dict(who='b', text="I'm asking you!", speed=1.18, exag=0.8, tempo=1.1, gap=-0.05),
     dict(who='a', text="Who.", speed=1.0, exag=0.35, gap=0.06),
     dict(who='b', text="The guy on the rail!", speed=1.22, exag=0.85, tempo=1.08, gap=-0.04),
@@ -128,11 +130,11 @@ for i, L in enumerate(SCRIPT):
     want = norm(L['text'])
     n = 1 if ENGINE == 'kokoro' else TAKES * (2 if len(want) <= 2 else 1)
     # a quick, natural pace for this many words
-    target = 0.14 + 0.25 * len(want)
+    target = (0.14 + 0.25 * len(want)) / PACE
     best = None
     for k in range(n):
         x = trim(render(L, k))
-        x = stretch(x, L.get('tempo', 1.0))
+        x = stretch(x, L.get('tempo', 1.0) * PACE)
         x = x / (np.max(np.abs(x)) + 1e-9) * 0.9
         heard = hear(x)
         got = norm(' '.join(w.word for w in heard))
