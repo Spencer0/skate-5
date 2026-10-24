@@ -90,27 +90,30 @@ test('captions mark the words a scene asks for', () => {
 test("chapter 2's cold open: the takes, in order, in silence", () => {
   const cues = JSON.parse(fs.readFileSync('public/story/plaza.json', 'utf8')) as Cues;
   assert.match(cues.lines[0].text, /^Yo, film this/);
-  assert.match(cues.lines.at(-1)!.text, /in frame\.$/);
+  assert.match(cues.lines.at(-1)!.text, /texting my girl\.$/);
   assert.deepEqual(
     cues.cuts?.map((c) => c.name),
-    ['take1', 'take2', 'setup', 'final'],
+    ['take1', 'take2', 'take3', 'take4', 'final', 'leave'],
   );
   for (const L of cues.lines) assert.equal(L.words.map((x) => x.w).join(' '), L.text);
   for (const c of cues.cuts ?? []) {
     for (const L of cues.lines) assert.ok(L.t1 <= c.t0 + 0.05 || L.t0 >= c.t1 - 0.1, `${L.text} talks over ${c.name}`);
   }
-  // TikTok length: 20-25 s, the punchline after the last take
-  assert.ok(cues.duration > 19 && cues.duration < 25.5, `${cues.duration}s`);
-  assert.ok(cues.lines.at(-1)!.t0 >= cues.cuts!.at(-1)!.t1);
+  // TikTok length, and the punchline lands after the big trick
+  assert.ok(cues.duration > 19 && cues.duration < 32, `${cues.duration}s`);
+  const fin = cues.cuts!.find((c) => c.name === 'final')!;
+  assert.ok(cues.lines.at(-1)!.t0 >= fin.t1);
+  // it ends on him leaving, straight into the loop
+  assert.equal(cues.cuts?.at(-1)?.t1, cues.duration);
 });
 
-test("the cold open's skater file has its three lines", () => {
+test("the cold open's skater file has its lines: a take per kickflip", () => {
   const b = fs.readFileSync('public/story/plaza-ghosts.bin');
   const n = b.readUInt32LE(0);
   const head = JSON.parse(b.subarray(4, 4 + n).toString()) as { name: string; rider: string }[];
   assert.deepEqual(
     head.map((h) => h.name),
-    ['rollin', 'kickflip', 'final'],
+    ['rollin', 'kf1', 'kf2', 'kf3', 'kf4', 'leave', 'final'],
   );
   // one skater: every line on the same body
   assert.ok(head.every((h) => h.rider === head[0].rider));

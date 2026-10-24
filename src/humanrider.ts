@@ -100,7 +100,15 @@ export interface StandState {
   shrug: number;
   /** radians the chest turns (+ toward the left hand), e.g. to point at something off to the side */
   turn?: number;
+  /** 0..1 how far each hand's fingers close round something held (a phone) */
+  gripL?: number;
+  gripR?: number;
 }
+
+/** the axis a finger joint bends on, in the bone's own frame */
+const CURL_AXIS = new THREE.Vector3(1, 0, 0);
+/** the finger bones of one hand, knuckle first; the thumb's chain is last */
+const FINGERS = ['index', 'middle', 'ring', 'pinky', 'thumb'];
 
 export class HumanRider {
   group = new THREE.Group();
@@ -125,6 +133,8 @@ export class HumanRider {
   private restHipQ = new THREE.Quaternion();
   private restChestQ = new THREE.Quaternion();
   private rag: Ragdoll | null = null;
+  /** each hand's finger chains (knuckle, middle, tip), for gripping */
+  private fingers: Record<'l' | 'r', THREE.Bone[][]> = { l: [], r: [] };
   private ground: Ground | null = null;
 
   private look: CustomLook | null;
@@ -192,6 +202,9 @@ export class HumanRider {
       this.bones[n] = b;
     }
     this.all = [...byName.values()];
+    for (const side of ['l', 'r'] as const) {
+      this.fingers[side] = FINGERS.map((f) => [1, 2, 3].map((k) => byName.get(`${f}_0${k}_${side}`)).filter((b): b is THREE.Bone => !!b));
+    }
     for (const b of this.all) this.rest.set(b, { p: b.position.clone(), q: b.quaternion.clone() });
 
     // scale to the character's height; MakeHuman faces +Z with feet at y=0
@@ -747,6 +760,19 @@ export class HumanRider {
     };
     arm(B.clavicle_l, B.upperarm_l, B.lowerarm_l, B.hand_l, -1, st.handL, st.reachL);
     arm(B.clavicle_r, B.upperarm_r, B.lowerarm_r, B.hand_r, 1, st.handR, st.reachR);
+    if (st.gripL) this.curl('l', st.gripL);
+    if (st.gripR) this.curl('r', st.gripR);
+  }
+
+  /** Close a hand: every finger joint bends in toward the palm, the thumb less, as round a phone. */
+  private curl(side: 'l' | 'r', k: number) {
+    this.fingers[side].forEach((chain, f) => {
+      const thumb = f === FINGERS.length - 1;
+      chain.forEach((b, j) => {
+        const ang = k * (thumb ? [0.15, 0.35, 0.3][j] : [0.9, 1.1, 0.7][j]);
+        b.quaternion.multiply(tq().setFromAxisAngle(CURL_AXIS, ang));
+      });
+    });
   }
 
   update(dt: number, st: RiderState) {

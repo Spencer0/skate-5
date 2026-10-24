@@ -10,7 +10,7 @@ Their shared parts are in `src/storykit.ts`.
 | `ghosts.bin` | `ghosts.mjs` | The opening's background skaters: five scripted trick lines in Brazil Park, captured by the game's own replay recorder (pose, board, sounds). |
 | `opening.mp3` | `voices.py` | The "Who's on the rail" dialogue, mixed. |
 | `opening.json` | `voices.py` | When each line and word is spoken, for the captions, gestures and jaw. |
-| `plaza-ghosts.bin` | `SCENE=plaza ghosts.mjs` | Nico's three lines at the Plaza: the roll-in, the kickflip that every take reuses, and the fountain laser flip. |
+| `plaza-ghosts.bin` | `SCENE=plaza ghosts.mjs` | Nico's lines at the Plaza: the roll-in, a kickflip for each of the four takes (`kf1`-`kf4`, each a little different), the fountain laser flip, and the storm-off. |
 | `plaza.mp3`, `plaza.json` | `voices.py --scene plaza` | The "film this" dialogue and its timings. |
 
 ## Background skaters

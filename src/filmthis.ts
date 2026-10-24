@@ -1,19 +1,20 @@
 import * as THREE from 'three';
 import { BoardModel } from './board';
 import { F, STRIDE, clipDuration, sampleFrame } from './replay/clip';
-import { lens, Lens } from './replay/rig';
+import { Lens } from './replay/rig';
 import { sanitizeLook } from './custom';
 import { Cues, captionAt, wordClass } from './captions';
 import { Ghost, Intent, Person, StoryHost, easeOut, flapJaw, handheld, headOf, person, phoneView, poseGhost, posePerson, smooth, talkLevel, unpackGhosts, wheels } from './storykit';
 
 /**
  * Chapter 2's cold open, "Bro, can you film this?", shot like a TikTok: Nico
- * rolls up to the Plaza fountain and asks Theo to film one kickflip. Theo
- * turns into the most demanding director in cinema history. Every take of the
- * kickflip is the very same recorded line (only the camera gets fancier),
- * then Nico finally sends a 360 laser flip over the fountain, in slow motion
- * with a replay, and the reveal: Theo's phone was pointed at the floor. It
- * ends on a hard cut back to the first frame, so the clip loops.
+ * rolls up to the Plaza fountain and asks Theo to film one kickflip. Nico lands
+ * it four times through the very same lens: the same trick, each a real take
+ * (a little faster, a later catch...), every one fine. Theo has a new note each time,
+ * each one more unreasonable than the last, until Nico sends a 360 laser flip
+ * over the fountain (bullet time, trick callouts, replay). "Tell me you got
+ * it!" Theo was texting. Nico skates off, back the way he rolled in, and the
+ * clip loops to its first frame.
  *
  * Assets (public/story/, made by tools/story/ with --scene plaza / SCENE=plaza):
  * plaza-ghosts.bin (Nico's lines), plaza.mp3 and plaza.json (the dialogue,
@@ -51,23 +52,16 @@ const LOOK_THEO = sanitizeLook({
 const SPOT = {
   nico: new THREE.Vector3(2.45, 0, 14.25),
   theo: new THREE.Vector3(5.0, 0, 16.6),
-  /** where Theo puts the phone down for take 3 */
-  phone: new THREE.Vector3(3.95, 0, 15.85),
-  /** and where he stands to direct: between it and Nico, so a side-on wide shot gets all three */
-  theo2: new THREE.Vector3(3.33, 0, 15.19),
+  /** where Nico looks for "hit the big gap" */
+  fountain: new THREE.Vector3(0, 1, 2),
 };
 
 /** roll-in clip time at dialogue time 0: he's sliding to a stop as the first line ends */
 const ROLL_AT = 1.35;
-/** the kickflip clip time take 1 starts from: always the same trick, straight in (pop 0.5 s in) */
-const TAKE_AT = 0.75;
-/** take 2, same clip: Theo's "cinematic" version, a speed ramp through the flip */
-const TAKE2: [number, number][] = [
-  [0, 0.75],
-  [0.42, 1.17],
-  [1.15, 1.6],
-  [1.7, 2.15],
-];
+/** the clip time every take starts from: the same trick through the same lens, each one landed a little differently */
+const TAKE_AT = 0.7;
+/** the storm-off: Nico stares a beat, then pushes away */
+const STARE = 0.55;
 /**
  * The last take, as (shot time, clip time) keys: the approach in real time, the
  * laser flip slowed right down over the fountain, a ramp back up to the landing,
@@ -76,18 +70,19 @@ const TAKE2: [number, number][] = [
 const LIVE: [number, number][] = [
   [0, 1.9],
   [0.6, 2.5],
-  [2.5, 3.1],
-  [2.85, 3.95],
+  [2.4, 3.1],
+  [2.75, 3.95],
 ];
-const REPLAY_AT = 2.85;
+const REPLAY_AT = 2.75;
 const REPLAY: [number, number][] = [
   [REPLAY_AT, 2.3],
-  [3.65, 3.15],
-  [4.2, 3.95],
+  [3.5, 3.15],
+  [4.0, 3.95],
 ];
+const TAKES = ['take1', 'take2', 'take3', 'take4'] as const;
 
-/** the words the captions pop in colour */
-const MARKED: Record<string, string> = { again: 'hi', naturally: 'hi', trick: 'hi', accidental: 'hi', filming: 'hi', frame: 'hi' };
+/** the words the captions pop in colour: every one of Theo's notes */
+const MARKED: Record<string, string> = { naturally: 'hi', natural: 'hi', clean: 'hi', life: 'hi', creative: 'hi', harder: 'hi', sick: 'hi', texting: 'hi' };
 
 const keyed = (keys: [number, number][], u: number) => {
   if (u <= keys[0][0]) return keys[0][1];
@@ -99,32 +94,121 @@ const keyed = (keys: [number, number][], u: number) => {
   return keys[keys.length - 1][1];
 };
 
-/** A phone: a black slab with a lit screen on the back and the lens up top. Origin in the middle, lens facing +Z (aim it with lookAt). */
-function phoneModel() {
+const std = (color: number, roughness = 0.5, metalness = 0.2) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+
+/**
+ * A skate filmer's camcorder, carried by the handle on top, with a fisheye on
+ * the front. Origin at the handle grip; the lens looks down +Z (aim it with lookAt).
+ */
+function camcorder() {
   const g = new THREE.Group();
-  // a light titanium back, so it reads against Theo's black shirt
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.17, 0.012), new THREE.MeshStandardMaterial({ color: 0xb9bcc2, roughness: 0.3, metalness: 0.6 }));
-  // the screen faces him: bright, so it reads as a phone even small in frame
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.075, 0.155), new THREE.MeshBasicMaterial({ color: 0xcfe6ff }));
-  screen.position.z = -0.0065;
-  screen.rotation.y = Math.PI;
-  // the camera bump: a dark square with two lenses
-  const bump = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.038, 0.004), new THREE.MeshStandardMaterial({ color: 0x2a2b2f, roughness: 0.4, metalness: 0.5 }));
-  bump.position.set(-0.016, 0.054, 0.008);
-  g.add(body, screen, bump);
-  for (const dy of [0.009, -0.009]) {
-    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.0075, 0.0075, 0.004, 16), new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.05, metalness: 0.9 }));
-    lens.rotation.x = Math.PI / 2;
-    lens.position.set(-0.016, 0.054 + dy, 0.011);
-    g.add(lens);
-  }
+  const dark = std(0x2b2c30, 0.55, 0.3);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.1, 0.2), dark);
+  body.position.set(0, -0.085, 0.01);
+  // the handle: a bar on two posts, the hand closes round the bar
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.018, 0.15), std(0x141416, 0.7));
+  bar.position.set(0, 0, 0.01);
+  const postA = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.03, 0.018), dark);
+  postA.position.set(0, -0.022, 0.075);
+  const postB = postA.clone();
+  postB.position.z = -0.055;
+  // the lens barrel and the big fisheye on the end of it
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.033, 0.06, 20), std(0x161618, 0.4, 0.4));
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, -0.08, 0.14);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.045, 0.03, 24), std(0x101012, 0.35, 0.5));
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(0, -0.08, 0.183);
+  const glass = new THREE.Mesh(new THREE.SphereGeometry(0.045, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), std(0x1a2a40, 0.05, 0.9));
+  glass.rotation.x = Math.PI / 2;
+  glass.position.set(0, -0.08, 0.195);
+  // viewfinder out the back, and the red tally light
+  const vf = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.06, 12), std(0x141416, 0.7));
+  vf.rotation.x = Math.PI / 2;
+  vf.position.set(0.02, -0.05, -0.115);
+  const tally = new THREE.Mesh(new THREE.SphereGeometry(0.006, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff2a1f }));
+  tally.position.set(0.03, -0.045, 0.112);
+  g.add(body, bar, postA, postB, barrel, ring, glass, vf, tally);
   g.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) o.castShadow = true;
   });
   return g;
 }
 
-type Shot = 'hook' | 'line' | 'take1' | 'take2' | 'setup' | 'final' | 'floor' | 'tail';
+/** What Theo was actually doing: his messages. */
+function chatTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = 300;
+  cv.height = 620;
+  const c = cv.getContext('2d')!;
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 0, 300, 620);
+  c.fillStyle = '#f2f2f5';
+  c.fillRect(0, 0, 300, 96);
+  c.fillStyle = '#c9c9d1';
+  c.beginPath();
+  c.arc(150, 38, 22, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = '#111';
+  c.font = '600 20px sans-serif';
+  c.textAlign = 'center';
+  c.fillText('babe <3', 150, 84);
+  const bubble = (text: string, mine: boolean, y: number) => {
+    c.font = '500 21px sans-serif';
+    const w = c.measureText(text).width + 30;
+    const x = mine ? 286 - w : 14;
+    c.fillStyle = mine ? '#1e8bff' : '#e9e9ee';
+    c.beginPath();
+    c.roundRect(x, y, w, 42, 20);
+    c.fill();
+    c.fillStyle = mine ? '#fff' : '#111';
+    c.textAlign = 'left';
+    c.fillText(text, x + 15, y + 28);
+  };
+  bubble('what u doing', false, 130);
+  bubble('nothing lol', true, 186);
+  bubble('nico is skating', true, 236);
+  bubble('omg hiii', false, 300);
+  bubble('miss u', false, 350);
+  bubble('miss u more', true, 414);
+  bubble('fr fr', true, 464);
+  // he's still typing
+  c.fillStyle = '#e9e9ee';
+  c.beginPath();
+  c.roundRect(14, 534, 76, 42, 20);
+  c.fill();
+  c.fillStyle = '#8e8e96';
+  for (let i = 0; i < 3; i++) {
+    c.beginPath();
+    c.arc(36 + i * 16, 555, 5, 0, Math.PI * 2);
+    c.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** His phone: the screen (his messages) faces him; the lens faces +Z, like the camcorder. */
+function phoneModel() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.155, 0.01), std(0x18181a, 0.35, 0.4));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.068, 0.145), new THREE.MeshBasicMaterial({ map: chatTexture() }));
+  screen.position.z = -0.0055;
+  screen.rotation.y = Math.PI;
+  g.add(body, screen);
+  return g;
+}
+
+type Shot = 'hook' | 'take' | 'line' | 'final' | 'insert' | 'leave' | 'tail';
+interface At {
+  shot: Shot;
+  /** time into the shot */
+  u: number;
+  /** the line, for 'line' and 'insert' */
+  i: number;
+  /** which take, for 'take' */
+  n: number;
+}
 
 export class FilmThis {
   private root: HTMLElement;
@@ -143,6 +227,7 @@ export class FilmThis {
   private theo: Person | null = null;
   /** Nico's board, lying by his feet while he argues */
   private deck = new BoardModel();
+  private cam = camcorder();
   private phone = phoneModel();
   private cues: Cues | null = null;
   private voice: AudioBuffer | null = null;
@@ -166,8 +251,8 @@ export class FilmThis {
     const div = (cls: string, html = '') => Object.assign(document.createElement('div'), { className: cls, innerHTML: html });
     this.root = div('op fm');
     parent.appendChild(this.root);
-    // the phone's camera screen: corner marks, REC and the clock
-    this.rec = div('fm-rec', '<i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i><span class="fm-recl"><b></b>REC <span class="fm-tc">00:00</span></span><span class="fm-hd">4K · 60</span>');
+    // the camcorder's screen: corner marks, REC and the clock
+    this.rec = div('fm-rec', '<i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i><span class="fm-recl"><b></b>REC <span class="fm-tc">00:00</span></span><span class="fm-hd">SP · 4:3</span>');
     this.tc = this.rec.querySelector('.fm-tc')!;
     this.bars = div('fm-bars', '<i></i><i></i>');
     this.pov = div('fm-pov', '<span>POV: filming your homie</span>');
@@ -204,7 +289,7 @@ export class FilmThis {
     this.nico = person(NICO, SPOT.nico);
     this.theo = person(LOOK_THEO, SPOT.theo);
     this.deck.setDeck('compass');
-    this.group.add(this.nico.rider.group, this.theo.rider.group, this.deck.root, this.phone);
+    this.group.add(this.nico.rider.group, this.theo.rider.group, this.deck.root, this.cam, this.phone);
     // models stream in; give them a few seconds before rolling anyway
     const riders = [...this.ghosts.map((g) => g.rider), this.nico.rider, this.theo.rider];
     const t0 = performance.now();
@@ -223,11 +308,17 @@ export class FilmThis {
     this.chunk = '';
     this.voiceAt = 0;
     this.host.scene.add(this.group);
-    for (const p of [this.nico!, this.theo!]) {
-      const at = p.rider.group.position;
-      at.y = this.host.groundAt(at.x, at.z);
+    const N = this.nico!.rider.group;
+    const T = this.theo!.rider.group;
+    for (const [g, at] of [
+      [N, SPOT.nico],
+      [T, SPOT.theo],
+    ] as const) {
+      g.position.set(at.x, this.host.groundAt(at.x, at.z), at.z);
     }
-    this.place(false);
+    // the two of them face each other
+    N.rotation.set(0, Math.atan2(T.position.x - N.position.x, T.position.z - N.position.z), 0);
+    T.rotation.set(0, Math.atan2(N.position.x - T.position.x, N.position.z - T.position.z), 0);
     // the board lies by Nico's feet, nose toward Theo
     const n = SPOT.nico;
     const toTheo = SPOT.theo.clone().sub(n).setY(0).normalize();
@@ -239,17 +330,6 @@ export class FilmThis {
     for (const g of this.ghosts) g.sfxAt = -1;
     this.root.classList.add('on');
     this.cap.textContent = '';
-  }
-
-  /** Theo where he films from (or, for take 3 on, in front of the phone he put down), both facing in. */
-  private place(directing: boolean) {
-    const N = this.nico!.rider.group;
-    const T = this.theo!.rider.group;
-    const at = directing ? SPOT.theo2 : SPOT.theo;
-    T.position.set(at.x, this.host.groundAt(at.x, at.z), at.z);
-    const yaw = (me: THREE.Object3D, to: THREE.Vector3) => Math.atan2(to.x - me.position.x, to.z - me.position.z);
-    N.rotation.set(0, yaw(N, T.position), 0);
-    T.rotation.set(0, yaw(T, N.position), 0);
   }
 
   finish() {
@@ -314,18 +394,30 @@ export class FilmThis {
     return w && w.length ? w[Math.min(n, w.length - 1)].t0 : Infinity;
   }
 
+  /** the last line: "Oh, sorry dude. I was texting my girl." */
+  private get lastLine() {
+    return (this.cues?.lines.length ?? 0) - 1;
+  }
+
   /** What's on screen at dialogue time d, and the time into that shot. */
-  private shotAt(d: number): { shot: Shot; u: number; i: number } {
-    if (this.t >= this.end - TAIL) return { shot: 'tail', u: this.t - (this.end - TAIL), i: -1 };
-    for (const name of ['take1', 'take2', 'setup', 'final'] as const) {
-      const c = this.cut(name);
-      if (c && d >= c.t0 && d < c.t1) return { shot: name, u: d - c.t0, i: -1 };
+  private shotAt(d: number): At {
+    if (this.t >= this.end - TAIL) return { shot: 'tail', u: this.t - (this.end - TAIL), i: -1, n: -1 };
+    for (let n = 0; n < TAKES.length; n++) {
+      const c = this.cut(TAKES[n]);
+      if (c && d >= c.t0 && d < c.t1) return { shot: 'take', u: d - c.t0, i: -1, n };
     }
+    for (const name of ['final', 'leave'] as const) {
+      const c = this.cut(name);
+      if (c && d >= c.t0 && d < c.t1) return { shot: name, u: d - c.t0, i: -1, n: -1 };
+    }
+    // after the storm-off, before the tail: hold on him going
+    const lv = this.cut('leave');
+    if (lv && d >= lv.t1) return { shot: 'leave', u: d - lv.t0, i: -1, n: -1 };
     const { i, u } = this.lineAt(d);
-    const n = this.cues?.lines.length ?? 0;
-    if (i <= 0) return { shot: 'hook', u: d + LEAD_IN, i: 0 };
-    if (i === n - 1 && d >= (this.cut('final')?.t1 ?? Infinity)) return { shot: 'floor', u, i };
-    return { shot: 'line', u, i };
+    if (i <= 0) return { shot: 'hook', u: d + LEAD_IN, i: 0, n: -1 };
+    // "I was texting my girl.": the insert of what he was really doing
+    if (i === this.lastLine && d >= this.wordT(i, 3) - 0.1) return { shot: 'insert', u, i, n: -1 };
+    return { shot: 'line', u, i, n: -1 };
   }
 
   update(dt: number) {
@@ -339,27 +431,32 @@ export class FilmThis {
     }
     const d = this.dialogT();
     const s = this.shotAt(d);
-    this.place(s.shot === 'final' || s.shot === 'floor' || (s.shot === 'line' && s.i >= 6));
     this.updateSkaters(s);
     this.updatePeople(dt, d, s);
-    this.updateCamera(d, s);
+    this.updateCamera(s);
     this.updateOverlay(d, s);
   }
 
   /* ---------------------------- skaters ---------------------------- */
 
   /** Which recorded line is on screen, and at what clip time. */
-  private riding(s: { shot: Shot; u: number }): [string, number] | null {
+  private riding(s: At): [string, number] | null {
     if (s.shot === 'hook') return ['rollin', ROLL_AT - LEAD_IN + s.u];
     // the loop: runs up to the first frame exactly
     if (s.shot === 'tail') return ['rollin', ROLL_AT - LEAD_IN - TAIL + s.u];
-    if (s.shot === 'take1') return ['kickflip', TAKE_AT + s.u];
-    if (s.shot === 'take2') return ['kickflip', keyed(TAKE2, s.u)];
+    // every take: a kickflip, recorded take by take
+    if (s.shot === 'take') return [`kf${s.n + 1}`, TAKE_AT + s.u];
     if (s.shot === 'final') return ['final', s.u < REPLAY_AT ? keyed(LIVE, s.u) : keyed(REPLAY, s.u)];
+    if (s.shot === 'leave' && s.u >= STARE) return ['leave', s.u - STARE];
     return null;
   }
 
-  private updateSkaters(s: { shot: Shot; u: number }) {
+  private talking() {
+    const d = this.dialogT();
+    return (this.cues?.lines ?? []).some((L) => d >= L.t0 - 0.05 && d <= L.t1 + 0.05);
+  }
+
+  private updateSkaters(s: At) {
     const ride = this.riding(s);
     let on: Ghost | null = null;
     for (const g of this.ghosts) {
@@ -375,99 +472,94 @@ export class FilmThis {
     }
     if (!on) this.host.audio.update(0, 'none', 0, false);
     // standing Nico is off while he's riding; so is his board
-    const standing = !ride;
-    this.nico!.rider.group.visible = standing;
-    this.deck.root.visible = standing;
-  }
-
-  private talking() {
-    const d = this.dialogT();
-    return (this.cues?.lines ?? []).some((L) => d >= L.t0 - 0.05 && d <= L.t1 + 0.05);
+    this.nico!.rider.group.visible = !ride;
+    this.deck.root.visible = !ride;
   }
 
   /* ---------------------------- the two ---------------------------- */
 
-  /** Where Theo holds the phone to film: both hands, out in front of his chest, at Nico. */
-  private held() {
+  private frame() {
     const T = this.theo!.rider.group;
-    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(T.quaternion);
-    return T.position.clone().addScaledVector(fwd, 0.34).setY(T.position.y + 1.42);
+    return {
+      fwd: new THREE.Vector3(0, 0, 1).applyQuaternion(T.quaternion),
+      left: new THREE.Vector3(1, 0, 0).applyQuaternion(T.quaternion),
+      at: T.position,
+    };
   }
 
-  /** his hands either side of the phone */
-  private grip(side: number) {
-    const T = this.theo!.rider.group;
-    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(T.quaternion);
-    const left = new THREE.Vector3(1, 0, 0).applyQuaternion(T.quaternion);
-    return this.held().addScaledVector(fwd, -0.07).addScaledVector(left, side * 0.06).setY(this.held().y - 0.05);
+  /** where his right hand carries the camcorder by the handle: out in front of his chest, so it's in his close-ups */
+  private camHand() {
+    const { fwd, left, at } = this.frame();
+    return at.clone().addScaledVector(fwd, 0.36).addScaledVector(left, -0.06).setY(at.y + 1.3);
   }
 
-  private intents(d: number, s: { shot: Shot; i: number }): { a: Intent; b: Intent } {
+  /** the camcorder's lens (the camera for the filming shots), from where the hand holds it */
+  private camLens() {
+    const { fwd } = this.frame();
+    return this.camHand().addScaledVector(fwd, 0.2).setY(this.camHand().y - 0.08);
+  }
+
+  /** his left hand with the phone up, reading it */
+  private phoneHand() {
+    const { fwd, left, at } = this.frame();
+    return at.clone().addScaledVector(fwd, 0.3).addScaledVector(left, 0.06).setY(at.y + 1.22);
+  }
+
+  /** a hand's palm, a hand's length on from the wrist along the forearm */
+  private palm(p: Person, side: 'l' | 'r') {
+    const w = p.rider.joint(side === 'l' ? 'hand_l' : 'hand_r', new THREE.Vector3());
+    const el = p.rider.joint(side === 'l' ? 'lowerarm_l' : 'lowerarm_r', new THREE.Vector3());
+    return w.addScaledVector(w.clone().sub(el).normalize(), 0.06);
+  }
+
+  private intents(d: number, s: At): { a: Intent; b: Intent } {
     const N = this.nico!;
     const T = this.theo!;
     const hn = headOf(N);
     const ht = headOf(T);
     const a: Intent = { look: ht };
-    // Theo watches his phone screen, never Nico
-    const ph = this.held();
-    const b: Intent = { look: ph.clone(), holdR: this.grip(-1), holdL: this.grip(1) };
-    const cam = this.host.camera.position;
+    const b: Intent = { look: hn, holdR: this.camHand() };
     const W = (n: number) => this.wordT(s.i, n);
-    const phoneDown = SPOT.phone.clone().setY(this.host.groundAt(SPOT.phone.x, SPOT.phone.z));
-    if (s.shot === 'setup' || s.shot === 'final' || s.shot === 'floor' || (s.shot === 'line' && s.i >= 6)) b.holdR = b.holdL = undefined;
+    // from the last line on he's on his phone, the camcorder hanging off his other hand
+    const texting = s.shot === 'insert' || s.shot === 'leave' || (s.shot === 'line' && s.i === this.lastLine);
+    if (texting) {
+      b.holdR = undefined;
+      b.holdL = this.phoneHand();
+      b.look = this.phoneHand();
+    }
     switch (s.shot === 'line' ? s.i : -1) {
       case 1:
-        // "Nah, that wasn't it. Do it again."
-        a.look = ht;
-        break;
       case 2:
-        // "What do you mean?"
-        a.palms = 1;
-        a.shrug = 0.5;
-        a.lean = 0.06;
-        break;
       case 3:
-        // "You gotta catch it more naturally."
-        b.look = hn;
+        // the notes: dead flat, a little point at him for emphasis
+        if (d > W(1) && d < W(3)) b.palms = 0.4;
         break;
       case 4:
-        // "Catch what naturally? I did the trick."
-        if (d < W(3)) {
-          a.palms = 1;
-          a.shrug = 1;
-          a.lean = -0.05;
-        } else {
-          a.point = new THREE.Vector3(-1.5, 0.4, 13.6);
-          a.lean = 0.08;
+        // "Okay, now you're just too creative. Hit the big gap with something harder."
+        if (d >= W(6)) {
+          b.aim = { ang: 0.9, up: 0.25 };
+          a.look = SPOT.fountain;
         }
         break;
       case 5:
-        // "Yeah, but it didn't look accidental." Nico looks straight down the lens.
-        a.look = cam;
+        // "Dude, that was so sick! Tell me you got it!"
+        if (d < W(4)) {
+          a.fling = 1;
+          a.lean = -0.08;
+        } else {
+          a.palms = 1;
+          a.lean = 0.1;
+        }
         break;
       case 6:
-        // "Okay, this time pretend you don't know I'm filming."
-        b.look = hn;
-        if (d < W(2)) b.palms = 0.8;
-        else if (d < W(5)) b.point = hn;
-        else b.point = phoneDown;
         a.look = ht;
         break;
-      case 7:
-        // "You're literally talking to me."
-        a.point = ht.clone().setY(ht.y - 0.3);
-        a.lean = 0.1;
-        b.look = hn;
-        break;
     }
-    if (s.shot === 'floor') {
-      a.look = ht;
-      b.look = hn;
-    }
+    if (s.shot === 'leave') a.look = ht;
     return { a, b };
   }
 
-  private updatePeople(dt: number, d: number, s: { shot: Shot; i: number }) {
+  private updatePeople(dt: number, d: number, s: At) {
     if (!this.nico || !this.theo) return;
     const { a, b } = this.intents(d, s);
     const N = this.nico;
@@ -480,32 +572,28 @@ export class FilmThis {
     // deadpan: he barely moves when he talks
     T.st.talk = talkLevel(this.cues, 'b', d) * 0.45;
     flapJaw(T, T.st.talk * 1.6, d, 1);
+    // a fist round the camcorder's handle, all the time; fingers round the phone when it's out
+    T.st.gripR = 1;
+    T.st.gripL = b.holdL ? 0.7 : 0;
     posePerson(T, b, dt, this.t);
-    // the phone: in his hand, at Nico; then down on the ground, tipped onto its face
-    if (b.holdR) {
-      // in his hands: between the two of them, a touch out and up
-      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(T.rider.group.quaternion);
-      // each palm is a hand's length on from the wrist, along the forearm
-      const palm = (h: 'hand_l' | 'hand_r', e: 'lowerarm_l' | 'lowerarm_r') => {
-        const w = T.rider.joint(h, new THREE.Vector3());
-        const el = T.rider.joint(e, new THREE.Vector3());
-        return w.addScaledVector(w.clone().sub(el).normalize(), 0.07);
-      };
-      const hl = palm('hand_l', 'lowerarm_l');
-      const hr = palm('hand_r', 'lowerarm_r');
-      this.phone.position.copy(hl).lerp(hr, 0.5).addScaledVector(fwd, 0.02).setY((hl.y + hr.y) / 2 + 0.04);
-      this.phone.lookAt(headOf(N));
-    } else {
-      const p = SPOT.phone;
-      this.phone.position.set(p.x, this.host.groundAt(p.x, p.z) + 0.04, p.z);
-      this.phone.lookAt(SPOT.nico.x, 0.03, SPOT.nico.z);
-      this.phone.rotateX(0.95);
+    // the camcorder hangs from his fist: aimed at Nico while filming, at the floor when he's texting
+    const { fwd } = this.frame();
+    const fist = this.palm(T, 'r');
+    this.cam.position.copy(fist);
+    if (b.holdR) this.cam.lookAt(headOf(N).setY(fist.y - 0.1));
+    else this.cam.lookAt(fist.clone().addScaledVector(fwd, 0.25).setY(fist.y - 1));
+    this.phone.visible = !!b.holdL;
+    if (b.holdL) {
+      // the screen toward his face
+      const at = this.palm(T, 'l').setY(this.palm(T, 'l').y + 0.05);
+      this.phone.position.copy(at);
+      this.phone.lookAt(at.clone().multiplyScalar(2).sub(headOf(T)));
     }
   }
 
   /* ----------------------------- camera ----------------------------- */
 
-  /** a smoothed board position for the phone to follow (from the clip, so the loop lands on the same frame) */
+  /** a smoothed board position for the lens to follow (from the clip, so every take frames the same) */
   private follow(name: string, ct: number, out: THREE.Vector3) {
     const g = this.ghost(name);
     out.set(0, 0, 0);
@@ -530,90 +618,59 @@ export class FilmThis {
     this.host.audio.whoosh();
   }
 
-  private updateCamera(d: number, s: { shot: Shot; u: number; i: number }) {
+  private updateCamera(s: At) {
     const L = this.lens;
     const cam = this.host.camera;
     const ride = this.riding(s);
-    const N = this.nico!;
-    const T = this.theo!;
-    const hn = headOf(N);
-    const ht = headOf(T);
+    const hn = headOf(this.nico!);
+    const ht = headOf(this.theo!);
     let shake = 0.006;
-    let roll = 0;
-    // in the phone's own shots Theo is behind it: keep him and it out of the lens
+    // Theo's own footage: he's behind the lens, keep him (and the camcorder) out of it
     let pov = false;
     switch (s.shot) {
       case 'hook':
       case 'tail':
-      case 'take1': {
-        // Theo's phone, panning with him
-        this.setShot(s.shot === 'take1' ? 'take1' : 'hook', s.shot === 'take1');
+      case 'take': {
+        // through the camcorder, low, panning with him: identical for every take
+        this.setShot(s.shot === 'take' ? 'take' + s.n : 'hook', s.shot === 'take');
         pov = true;
         const b = this.follow(ride![0], ride![1], new THREE.Vector3());
-        L.pos.copy(this.held());
-        L.look.copy(b).setY(b.y + 0.75);
-        L.fov = 62;
+        L.pos.copy(this.camLens());
+        L.look.copy(b).setY(b.y + 0.7);
+        L.fov = 70;
         shake = 0.008;
-        break;
-      }
-      case 'take2': {
-        // take 2: fisheye, low, chasing the board like a real filmer
-        this.setShot('take2', true);
-        const g = this.ghost('kickflip')!;
-        lens(g.clip, 'filmer', ride![1], { in: 0, out: 1 }, this.host.groundAt, L);
-        L.pos.y -= 0.22;
-        L.fov = 94;
-        shake = 0.012;
-        break;
-      }
-      case 'setup': {
-        // take 3: he lowers the phone right down to the ground, aimed up at Nico
-        this.setShot('setup', true);
-        pov = true;
-        const k = easeOut(Math.max(0, s.u - 0.25) / 0.7);
-        const hi = this.held();
-        const p = SPOT.phone;
-        const lo = new THREE.Vector3(p.x, this.host.groundAt(p.x, p.z) + 0.08, p.z);
-        L.pos.copy(hi).lerp(lo, k);
-        L.look.copy(hn).setY(hn.y - 0.25 - 0.3 * (1 - k));
-        L.fov = 62 + 20 * k;
-        roll = Math.sin(k * Math.PI) * 0.35 + 0.05 * k;
-        shake = 0.01 * (1 - k);
         break;
       }
       case 'final':
         this.finalCamera(s.u);
         shake = s.u >= REPLAY_AT ? 0.012 : 0.004;
         break;
-      case 'floor': {
-        // what the phone actually got: the floor
-        this.setShot('floor', false);
-        pov = true;
-        const p = SPOT.phone;
-        const y = this.host.groundAt(p.x, p.z);
-        const to = SPOT.nico.clone().sub(p).setY(0).normalize();
-        L.pos.set(p.x, y + 0.2, p.z);
-        L.look.set(p.x + to.x * 0.14, y, p.z + to.z * 0.14);
-        L.fov = 70;
-        shake = 0;
-        roll = 0.08;
+      case 'insert': {
+        // over his shoulder, onto the screen
+        this.setShot('insert', false);
+        const p = this.phone.position;
+        const toFace = ht.clone().sub(p).normalize();
+        L.pos.copy(p).addScaledVector(toFace, 0.3);
+        L.look.copy(p);
+        L.fov = 38;
+        shake = 0.002;
         break;
       }
+      case 'leave':
+        this.leaveCamera(s.u, hn, ht);
+        break;
       default:
-        this.dialogCamera(d, s.i, s.u, hn, ht);
-        shake = 0.006;
+        this.dialogCamera(s.i, s.u, hn, ht);
     }
-    // Theo is behind the held phone in its own shots; down on the ground it sees him
-    const behind = pov && (s.shot === 'hook' || s.shot === 'tail' || s.shot === 'take1' || (s.shot === 'setup' && s.u < 0.6));
-    T.rider.group.visible = !behind;
-    this.phone.visible = !pov && s.shot !== 'take2';
-    if (s.shot === 'final' || s.shot === 'take2') this.focus.copy(this.ghost(ride![0])?.board.root.position ?? SPOT.nico);
+    this.theo!.rider.group.visible = !pov && s.shot !== 'insert';
+    this.cam.visible = !pov;
+    if (s.shot === 'final') this.focus.copy(this.ghost('final')?.board.root.position ?? SPOT.nico);
     else this.focus.copy(SPOT.nico).lerp(SPOT.theo, 0.5);
-    this.rec.classList.toggle('on', pov || s.shot === 'take2');
-    handheld(cam, L.pos, L.look, L.fov, this.t, shake, roll);
+    this.rec.classList.toggle('on', pov);
+    handheld(cam, L.pos, L.look, L.fov, this.t, shake);
   }
 
-  /** Take 4: a crane off the deck, bullet time over the fountain, then the replay from the landing. */
+  /** Take 5: a crane off the deck, bullet time over the fountain, then the replay from the landing. */
   private finalCamera(u: number) {
     const L = this.lens;
     const ct = u < REPLAY_AT ? keyed(LIVE, u) : keyed(REPLAY, u);
@@ -642,66 +699,69 @@ export class FilmThis {
     }
   }
 
-  /** Singles, an over-the-shoulder two-shot, and a wide of Theo directing over the phone on the ground. */
-  private dialogCamera(d: number, i: number, u: number, hn: THREE.Vector3, ht: THREE.Vector3) {
+  /** Nico stares at him a beat; then, from behind Theo (still texting), he pushes off the way he came. */
+  private leaveCamera(u: number, hn: THREE.Vector3, ht: THREE.Vector3) {
     const L = this.lens;
-    const { line } = this.lineAt(d);
-    // 'two' (both), 'a' (Nico), 'b' (Theo), 'gb' (Theo directing, wide)
-    const plan = ['two', 'b', 'a', 'b', 'a', 'two', 'gb', 'a', 'floor'];
-    const frame = plan[i] ?? 'two';
-    this.setShot('line' + i, false);
-    const axis = ht.clone().sub(hn).setY(0).normalize();
-    const side = new THREE.Vector3(-axis.z, 0, axis.x);
-    if (frame === 'gb') {
-      // side on and wide: the phone on the ground, Theo directing over it, Nico
-      const P = SPOT.phone;
-      const n = SPOT.nico;
-      const along = new THREE.Vector3(P.x - n.x, 0, P.z - n.z).normalize();
-      const across = new THREE.Vector3(along.z, 0, -along.x);
-      const mid = n.clone().lerp(P, 0.5);
-      const push = smooth(u / 2.2) * 0.4;
-      L.pos.copy(mid).addScaledVector(across, 4.7 - push).setY(1.15);
-      L.look.copy(mid).setY(0.8);
-      L.fov = 50;
+    if (u < STARE) {
+      this.setShot('stare', false);
+      this.single(hn, ht, 0, 34);
       return;
     }
-    if (frame === 'two') {
-      // portrait is narrow: over Nico's shoulder at Theo, so when Nico turns to the lens it's right there
-      const push = smooth(u / 2) * 0.25;
-      L.pos.copy(hn).addScaledVector(axis, -1.5 + push).addScaledVector(side, 0.5).setY(hn.y + 0.02);
-      L.look.copy(ht).setY(ht.y - 0.35).lerp(hn, 0.2);
-      L.fov = 54;
-      return;
-    }
-    // a single from just off the other one's eyeline: head and shoulders, three-quarters on
-    const me = frame === 'a' ? hn : ht;
-    const other = frame === 'a' ? ht : hn;
+    this.setShot('leave', false);
+    const { fwd, left, at } = this.frame();
+    L.pos.copy(at).addScaledVector(fwd, -1.3).addScaledVector(left, -0.55).setY(at.y + 1.55);
+    const b = this.follow('leave', u - STARE, new THREE.Vector3());
+    L.look.copy(ht).setY(ht.y - 0.35).lerp(b.setY(0.9), 0.65);
+    L.fov = 50;
+  }
+
+  /** a single from just off the other one's eyeline: head and shoulders, three-quarters on */
+  private single(me: THREE.Vector3, other: THREE.Vector3, u: number, fov: number) {
+    const L = this.lens;
     const toOther = other.clone().sub(me).setY(0).normalize();
+    // the same side of the pair for both of them (the fountain side), so the eyelines match
+    const side = new THREE.Vector3(-0.67, 0, 0.74).projectOnPlane(toOther).normalize();
     L.pos.copy(me).addScaledVector(toOther, 1.3).addScaledVector(side, 0.8).setY(me.y - 0.05);
     L.look.copy(me).setY(me.y - 0.2).addScaledVector(toOther, -0.06);
-    const loud = line && /[!?]/.test(line.text) && line.who === frame;
-    // Theo's singles creep in, like the camera knows he's insufferable
-    L.fov = frame === 'b' ? 38 - 6 * smooth(u / 1.8) : 38 - (loud ? easeOut(u / 0.12) * 5 : 0);
+    L.fov = fov - 4 * smooth(u / 1.8);
+  }
+
+  /** Theo's notes in close-up (each a touch closer: he's getting worse), Nico in his. */
+  private dialogCamera(i: number, u: number, hn: THREE.Vector3, ht: THREE.Vector3) {
+    this.setShot('line' + i, false);
+    const L = this.lens;
+    const line = this.cues?.lines[i];
+    // "...hit the big gap with something harder": cut to Nico taking that in
+    if (i === 4 && this.dialogT() >= this.wordT(4, 6)) {
+      this.setShot('line4b', false);
+      this.single(hn, ht, 0, 36);
+      return;
+    }
+    if (line?.who === 'a') {
+      const loud = /[!?]/.test(line.text);
+      // wide enough for his arms: he's losing it
+      this.single(hn, ht, 0, loud ? 48 : 38);
+      L.fov -= loud ? easeOut(u / 0.12) * 5 : 0;
+      return;
+    }
+    this.single(ht, hn, u, 44 - 3 * Math.min(i, 4));
   }
 
   /* ---------------------------- overlay ---------------------------- */
 
-  private updateOverlay(d: number, s: { shot: Shot; u: number; i: number }) {
-    // the phone's clock: a fresh recording every take
-    const startOf: Record<string, number> = { take1: 0, take2: 0, setup: 0, final: 0 };
-    const recT = s.shot in startOf ? s.u : s.shot === 'floor' ? 11 + s.u : d + LEAD_IN;
-    const sec = Math.max(0, Math.floor(recT));
-    this.tc.textContent = `00:${String(sec).padStart(2, '0')}`;
+  private updateOverlay(d: number, s: At) {
+    // the camcorder's clock: a fresh recording every take
+    const recT = s.shot === 'take' ? s.u : d + LEAD_IN;
+    this.tc.textContent = `00:${String(Math.max(0, Math.floor(recT))).padStart(2, '0')}`;
     this.pov.classList.toggle('on', s.shot === 'hook' || s.shot === 'tail');
     // slates: TAKE n, popped at the start of each take
-    const slate = s.shot === 'take1' ? 'TAKE 1' : s.shot === 'take2' ? 'TAKE 2' : s.shot === 'setup' ? 'TAKE 3' : s.shot === 'final' && s.u < 0.6 ? 'TAKE 4' : '';
-    const showSlate = !!slate && s.u < 0.75;
+    const slate = s.shot === 'take' ? `TAKE ${s.n + 1}` : s.shot === 'final' && s.u < 0.6 ? `TAKE ${TAKES.length + 1}` : '';
     if (this.slate.textContent !== slate) this.slate.textContent = slate;
-    this.slate.classList.toggle('on', showSlate);
+    this.slate.classList.toggle('on', !!slate && s.u < 0.7);
     const fin = s.shot === 'final';
     this.bars.classList.toggle('on', fin && s.u >= 0.6);
     this.tag.classList.toggle('on', fin && s.u >= REPLAY_AT);
-    const callout = fin && s.u >= 0.75 && s.u < REPLAY_AT ? (s.u < 2.2 ? '360 LASER FLIP' : '360 LASER FLIP<small>+ FOUNTAIN GAP · 600</small>') : '';
+    const callout = fin && s.u >= 0.75 && s.u < REPLAY_AT ? (s.u < 2.1 ? '360 LASER FLIP' : '360 LASER FLIP<small>+ FOUNTAIN GAP · 600</small>') : '';
     if (this.trick.innerHTML !== callout) {
       // the game's own score sounds, as each callout lands
       if (callout.includes('GAP')) this.host.audio.gap();
@@ -709,18 +769,19 @@ export class FilmThis {
       this.trick.innerHTML = callout;
     }
     this.trick.classList.toggle('on', !!callout);
-    this.root.classList.toggle('slow', fin && s.u >= 0.6 && s.u < 2.5);
+    this.root.classList.toggle('slow', fin && s.u >= 0.6 && s.u < 2.4);
     this.updateCaptions(d, s);
   }
 
-  private updateCaptions(d: number, s: { shot: Shot }) {
+  private updateCaptions(d: number, s: At) {
     const c = this.cues && s.shot !== 'tail' ? captionAt(this.cues, d) : null;
     let html = '';
     let key = '';
     if (c) {
       key = `${c.line}:${c.chunk[0].t0}`;
       html = c.chunk.map((w, k) => `<span class="${wordClass(w.w, MARKED)}${k < c.lit ? ' on' : ''}">${w.w.replace(/[<>&]/g, '')}</span>`).join(' ');
-      this.cap.className = 'op-cap ' + this.cues!.lines[c.line].who;
+      // under the phone on the insert, clear of his messages
+      this.cap.className = 'op-cap ' + this.cues!.lines[c.line].who + (s.shot === 'insert' ? ' low' : '');
     }
     if (key !== this.chunk) {
       this.chunk = key;

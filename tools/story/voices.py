@@ -70,22 +70,20 @@ SCENES = {
     ),
     'plaza': dict(
         cut_gap=0.06,
-        # 'a' = Nico (the skater, hyped, then baffled), 'b' = Theo (the filmer, completely flat)
+        # 'a' = Nico (the skater, hyped, then fed up), 'b' = Theo (the filmer, completely flat)
         voices='am_fenrir,am_onyx',
         ref={
             'a': "Yo, this is gonna be crazy, watch. I've been landing this all week, I swear. You ready? Okay, okay, here we go!",
             'b': "Hm. Okay. I mean, it's fine. It's just not really what I was going for. Let's go again. From the top.",
         },
         script=[
-            dict(who='a', text="Yo, film this real quick.", speed=1.15, exag=0.6, gap=0.0, cut=('take1', 1.75)),
-            dict(who='b', text="Nah, that wasn't it. Do it again.", speed=1.0, exag=0.25, gap=0.05),
-            dict(who='a', text="What do you mean?", speed=1.12, exag=0.6, gap=0.05, cut=('take2', 1.7)),
-            dict(who='b', text="You gotta catch it more naturally.", speed=1.0, exag=0.25, gap=0.04),
-            dict(who='a', text="Catch what naturally? I did the trick.", speed=1.1, exag=0.6, tempo=1.06, gap=0.02),
-            dict(who='b', text="Yeah, but it didn't look accidental.", speed=1.0, exag=0.25, gap=0.06, cut=('setup', 1.0)),
-            dict(who='b', text="Okay, this time pretend you don't know I'm filming.", speed=1.05, exag=0.3, tempo=1.08, gap=0.0),
-            dict(who='a', text="You're literally talking to me.", speed=1.15, exag=0.8, gap=0.02, cut=('final', 4.2)),
-            dict(who='b', text="Dude. You weren't even in frame.", speed=0.95, exag=0.25, gap=0.15),
+            dict(who='a', text="Yo, film this real quick.", speed=1.15, exag=0.6, gap=0.0, cut=('take1', 1.6)),
+            dict(who='b', text="Do it more naturally.", speed=1.0, exag=0.25, gap=0.05, cut=('take2', 1.6)),
+            dict(who='b', text="That was too natural. Do it more clean.", speed=1.05, exag=0.3, tempo=1.06, gap=0.05, cut=('take3', 1.6)),
+            dict(who='b', text="Eh, a little too clean. Add a little life to it.", speed=1.05, exag=0.3, tempo=1.08, gap=0.05, cut=('take4', 1.6)),
+            dict(who='b', text="Okay, now you're just too creative. Hit the big gap with something harder.", speed=1.08, exag=0.35, tempo=1.1, gap=0.05, cut=('final', 4.0)),
+            dict(who='a', text="Dude, that was so sick! Tell me you got it!", speed=1.18, exag=1.0, tempo=1.06, gap=0.1),
+            dict(who='b', text="Oh, sorry dude. I was texting my girl.", speed=1.0, exag=0.25, gap=0.2, cut=('leave', 1.9)),
         ],
     ),
 }

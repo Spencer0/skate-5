@@ -2817,6 +2817,9 @@ body {
 .op-w.hi.on {
   color: #ffe14a;
 }
+.op-cap.low {
+  top: 84%;
+}
 /* Theo's phone: corner marks, REC and the clock */
 .fm-rec {
   position: absolute;
