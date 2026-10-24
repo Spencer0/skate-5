@@ -125,6 +125,44 @@ const SHOTS = {
     }
   },
 
+  // a flat kickflip on the flick stick, the flick and catch slowed right down (SLOW
+  // frames per game frame): the trick pad's trail is on screen
+  async flick(g, mark) {
+    const E = (k, d) => +(process.env[k] ?? d);
+    const SLOW = E('SLOW', 3);
+    // close in behind and to the side, so the rider and the board fill the frame above the pad
+    await g.director({ d0: 2.4, h0: 1.25, side: 1.1, k: 0.3, hk: 0.1, fov: 56, lookUp: 0.7, maxD: 4, anchor: 0.3, gh: 1.1 });
+    await place(g, BRAZIL, E('FX', -22), E('FZ', 33), 0, E('FV', 7));
+    await g.sim(1);
+    g.rec();
+    await leftStick(g, 0, true);
+    let pop = -1, caught = -1;
+    const step = () => (pop >= 0 && (caught < 0 || g.frame < caught + SLOW * 8) ? g.tickSlow(SLOW) : g.tick());
+    for (let i = 0; i < 200; i++) {
+      const st = await stat(g);
+      if (pop < 0 && st.x > E('FP', -14)) {
+        mark('flick');
+        await leftUp(g);
+        // the flick itself, one point a game frame, captured slow
+        const pts = [[0, -0.8], [0, -1.2], [-0.6, 0.6], [-1, 1.3]];
+        const r = 56, R = { x: 410, y: 700 };
+        await g.touch('pointerdown', 2, R.x, R.y);
+        for (const [x, y] of pts) {
+          await g.touch('pointermove', 2, R.x + x * r, R.y - y * r);
+          await g.tickSlow(SLOW);
+        }
+        await g.touch('pointerup', 2, R.x + pts[3][0] * r, R.y - pts[3][1] * r);
+        pop = g.frame;
+        mark('pop');
+        continue;
+      }
+      if (pop >= 0 && caught < 0 && g.frame >= pop + E('FC', 11) * SLOW) { mark('catch'); await tap(g, 480, 880); caught = g.frame; }
+      if (caught >= 0 && st.m === 'ground' && !mark.has('land')) mark('land');
+      if (mark.has('land') && g.frame > mark.get('land') + 18) break;
+      await step();
+    }
+  },
+
   // 4. down the 6-stair at speed, kickflip never caught: the slam
   async bail(g, mark) {
     await g.director({ d0: 3.4, h0: 1.7, side: 2.6, k: 0.2, hk: 0.1, fov: 56, lookUp: 0.8, maxD: 5, anchor: 0.4, gh: 1.2 });
@@ -149,10 +187,10 @@ const SHOTS = {
 };
 
 SHOTS.bail.late = true;
-SHOTS.grind.late = SHOTS.laser.late = SHOTS.mega.late = true;
+SHOTS.grind.late = SHOTS.laser.late = SHOTS.mega.late = SHOTS.flick.late = true;
 
-const riders = { grind: 'voss', laser: 'coral', mega: 'brock', bail: 'voss' };
-const cams = { grind: 'chase', laser: 'classic', mega: 'filmer', bail: 'classic', ...JSON.parse(process.env.CAMS ?? '{}') };
+const riders = { grind: 'voss', laser: 'coral', mega: 'brock', bail: 'voss', flick: 'coral' };
+const cams = { grind: 'chase', laser: 'classic', mega: 'filmer', bail: 'classic', flick: 'classic', ...JSON.parse(process.env.CAMS ?? '{}') };
 fs.mkdirSync(outDir, { recursive: true });
 for (const name of Object.keys(SHOTS)) {
   if (only.length && !only.includes(name)) continue;

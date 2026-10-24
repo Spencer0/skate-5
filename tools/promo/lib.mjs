@@ -62,6 +62,17 @@ export async function open({ w = 540, h = 960, scale = 2, state = {}, init = nul
         await page.screenshot({ path: f, type: 'jpeg', quality: 93 });
       }
     },
+    /**
+     * one game frame (1/30 s) captured as k frames: slow motion that the game itself
+     * plays at normal speed, so inputs and physics are untouched
+     */
+    async tickSlow(k) {
+      for (let i = 0; i < k; i++) {
+        await page.evaluate((ms) => { window.__step(ms, true); }, 1000 / 30 / k);
+        g.frame++;
+        if (g.out) await page.screenshot({ path: path.join(g.out, `f${String(g.frame).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 93 });
+      }
+    },
     /** run n frames without drawing or capturing (fast-forward to a start point) */
     async sim(n) {
       for (let i = 0; i < n; i++) await page.evaluate(() => { window.__step(1000 / 60, false); window.__step(1000 / 60, false); });

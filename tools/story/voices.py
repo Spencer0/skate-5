@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Voice a story scene and time every word.
 
-usage: voices.py <kokoro .onnx> <voices .bin> <out dir> [--scene opening|plaza] [--engine kokoro|chatterbox] [--takes N] [--try A,B] [--pace X]
+usage: voices.py <kokoro .onnx> <voices .bin> <out dir> [--scene opening|plaza|promo] [--engine kokoro|chatterbox] [--takes N] [--try A,B] [--pace X]
 
 Scenes: 'opening' is the career opening ("Who's on the rail"), 'plaza' is
 Chapter 2's "Bro, can you film this?".
@@ -84,6 +84,18 @@ SCENES = {
             dict(who='b', text="Okay, now you're just too creative. Hit the big gap with something harder.", speed=1.08, exag=0.35, tempo=1.1, gap=0.05, cut=('final', 4.0)),
             dict(who='a', text="Dude, that was so sick! Tell me you got it!", speed=1.18, exag=1.0, tempo=1.06, gap=0.1),
             dict(who='b', text="Oh, sorry dude. I was texting my girl.", speed=1.0, exag=0.25, gap=0.2, cut=('leave', 3.5)),
+        ],
+    ),
+    # the TikTok cut's intro (tools/promo/tiktok.py): the dev, over gameplay
+    'promo': dict(
+        voices='am_michael,am_michael',
+        ref={
+            'a': "So I've been making this game for about a year now, and honestly, it's finally starting to feel really good.",
+            'b': "So I've been making this game for about a year now, and honestly, it's finally starting to feel really good.",
+        },
+        script=[
+            dict(who='a', text="I made a skate game for your mobile.", speed=1.05, exag=0.5, gap=0.0),
+            dict(who='a', text="Here's a cutscene I'm working on.", speed=1.05, exag=0.5, gap=0.25),
         ],
     ),
 }

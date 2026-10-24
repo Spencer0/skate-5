@@ -74,3 +74,15 @@ STORY=plaza AUDIO=1 CLEAN=1 node tools/story/preview.mjs out/plaza 2
 ffmpeg -framerate 30 -i out/plaza/f%05d.jpg -i out/plaza/audio.wav -map 0:v -map 1:a \
   -c:v libx264 -pix_fmt yuv420p -af loudnorm=I=-14:TP=-1 -c:a aac -shortest film-this.mp4
 ```
+
+## The TikTok cut
+
+`tools/promo/tiktok.py` makes the post: a voiced gameplay intro ("I made a
+skate game for your mobile. Here's a cutscene I'm working on."), the Plaza
+cold open, then an end card (Skate Nation / Play for Free / Link in comments).
+
+```sh
+node tools/promo/record.mjs out/tk 2 grind flick          # the rail line; the slowed flick (SLOW=3) with the trick pad on screen
+python voices.py kokoro-v1.0.onnx voices-v1.0.bin out/promo --scene promo --engine chatterbox --takes 4
+python tools/promo/tiktok.py out/tk out/promo film-this.mp4 skate-nation-tiktok.mp4
+```
