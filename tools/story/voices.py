@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Voice the story-mode opening ("Who's on the rail") and time every word.
+"""Voice a story scene and time every word.
 
-usage: voices.py <kokoro .onnx> <voices .bin> <out dir> [--engine kokoro|chatterbox] [--takes N] [--try A,B] [--pace X]
+usage: voices.py <kokoro .onnx> <voices .bin> <out dir> [--scene opening|plaza] [--engine kokoro|chatterbox] [--takes N] [--try A,B] [--pace X]
+
+Scenes: 'opening' is the career opening ("Who's on the rail"), 'plaza' is
+Chapter 2's "Bro, can you film this?".
 
 Kokoro (Apache-2.0) gives each character a voice. With --engine chatterbox
 (MIT) a short Kokoro read becomes each character's reference voice and
@@ -11,7 +14,7 @@ each take unprompted, and the take it hears word-for-word closest to a quick
 delivery wins. Takes are cached in <out>/work, so re-runs only render what
 changed.
 
-Writes <out>/opening.mp3 (the mixed dialogue) and <out>/opening.json (each
+Writes <out>/<scene>.mp3 (the mixed dialogue) and <out>/<scene>.json (each
 line's start/end and per-word times for the burned-in captions).
 """
 import hashlib, json, os, subprocess, sys
@@ -35,32 +38,60 @@ work = os.path.join(out, 'work')
 os.makedirs(work, exist_ok=True)
 SR = 24000
 
-# 'a' = Tonho (deadpan, explains it), 'b' = Rafa (lost, getting louder)
-VOICE = dict(zip('ab', opt('--try', 'am_michael,am_puck').split(',')))
-REF_TEXT = {
-    'a': "Nah man, listen. It's easy. I've told you like five times already. You just gotta pay attention for once.",
-    'b': "Are you kidding me right now? I asked you one simple question! Just one! Why is this so hard for you?",
-}
+SCENE = opt('--scene', 'opening')
 
 # gap: seconds after the previous line ends (negative = talks over it)
-# cut: (skater, seconds) a cutaway to that skater's trick right after this line,
-#      silent on the dialogue track (the opening shows the trick and the park sound)
+# cut: (name, seconds) a stretch right after this line with no dialogue, where the
+#      scene shows something else (a trick, a walk); the scene has its own sound there
 # speed: Kokoro speed; exag: how hard Chatterbox pushes it; tempo: final time-stretch
 # CAPS are only for the captions (TTS would spell them out)
-SCRIPT = [
-    dict(who='a', text="Who's on the rail, What's on the ramp, and Both's on the kicker.", speed=1.12, exag=0.4, tempo=1.12, gap=0.0),
-    dict(who='b', text="Who's on the rail?", speed=1.12, exag=0.6, gap=0.1),
-    dict(who='a', text="Yep.", speed=1.0, exag=0.35, gap=0.05, cut=('rail', 2.4)),
-    dict(who='b', text="I'm asking you!", speed=1.18, exag=0.8, tempo=1.1, gap=-0.05),
-    dict(who='a', text="Who.", speed=1.0, exag=0.35, gap=0.06),
-    dict(who='b', text="The guy on the rail!", speed=1.22, exag=0.85, tempo=1.08, gap=-0.04),
-    dict(who='a', text="Who's on the rail.", speed=1.1, exag=0.4, gap=0.05),
-    dict(who='b', text="What?", speed=1.0, exag=0.75, gap=0.12),
-    dict(who='a', text="Ramp.", speed=1.0, exag=0.35, gap=0.04, cut=('ramp', 2.6)),
-    dict(who='b', text="Okay. Then who's on the kicker?", speed=1.22, exag=0.9, tempo=1.1, gap=0.08),
-    dict(who='a', text="Both.", speed=1.0, exag=0.35, gap=0.06),
-    dict(who='b', text="Both of WHO?!", speed=1.2, exag=1.1, gap=-0.04, cut=('kicker', 2.4)),
-]
+SCENES = {
+    'opening': dict(
+        # 'a' = Tonho (deadpan, explains it), 'b' = Rafa (lost, getting louder)
+        voices='am_michael,am_puck',
+        ref={
+            'a': "Nah man, listen. It's easy. I've told you like five times already. You just gotta pay attention for once.",
+            'b': "Are you kidding me right now? I asked you one simple question! Just one! Why is this so hard for you?",
+        },
+        script=[
+            dict(who='a', text="Who's on the rail, What's on the ramp, and Both's on the kicker.", speed=1.12, exag=0.4, tempo=1.12, gap=0.0),
+            dict(who='b', text="Who's on the rail?", speed=1.12, exag=0.6, gap=0.1),
+            dict(who='a', text="Yep.", speed=1.0, exag=0.35, gap=0.05, cut=('rail', 2.4)),
+            dict(who='b', text="I'm asking you!", speed=1.18, exag=0.8, tempo=1.1, gap=-0.05),
+            dict(who='a', text="Who.", speed=1.0, exag=0.35, gap=0.06),
+            dict(who='b', text="The guy on the rail!", speed=1.22, exag=0.85, tempo=1.08, gap=-0.04),
+            dict(who='a', text="Who's on the rail.", speed=1.1, exag=0.4, gap=0.05),
+            dict(who='b', text="What?", speed=1.0, exag=0.75, gap=0.12),
+            dict(who='a', text="Ramp.", speed=1.0, exag=0.35, gap=0.04, cut=('ramp', 2.6)),
+            dict(who='b', text="Okay. Then who's on the kicker?", speed=1.22, exag=0.9, tempo=1.1, gap=0.08),
+            dict(who='a', text="Both.", speed=1.0, exag=0.35, gap=0.06),
+            dict(who='b', text="Both of WHO?!", speed=1.2, exag=1.1, gap=-0.04, cut=('kicker', 2.4)),
+        ],
+    ),
+    'plaza': dict(
+        # 'a' = Nico (the skater, hyped, then baffled), 'b' = Theo (the filmer, completely flat)
+        voices='am_fenrir,am_onyx',
+        ref={
+            'a': "Yo, this is gonna be crazy, watch. I've been landing this all week, I swear. You ready? Okay, okay, here we go!",
+            'b': "Hm. Okay. I mean, it's fine. It's just not really what I was going for. Let's go again. From the top.",
+        },
+        script=[
+            dict(who='a', text="Yo, film this real quick.", speed=1.15, exag=0.6, gap=0.0, cut=('take1', 2.0)),
+            dict(who='b', text="Nah, that wasn't it. Do it again.", speed=1.0, exag=0.25, gap=0.1),
+            dict(who='a', text="What do you mean?", speed=1.12, exag=0.6, gap=0.05, cut=('take2', 2.0)),
+            dict(who='b', text="You gotta catch it more naturally.", speed=1.0, exag=0.25, gap=0.1),
+            dict(who='a', text="Catch what naturally? I did the trick.", speed=1.1, exag=0.6, tempo=1.06, gap=0.02),
+            dict(who='b', text="Yeah, but it didn't look accidental.", speed=1.0, exag=0.25, gap=0.08, cut=('setup', 1.2)),
+            dict(who='b', text="Okay, this time pretend you don't know I'm filming.", speed=1.05, exag=0.3, tempo=1.08, gap=0.0),
+            dict(who='a', text="You're literally talking to me.", speed=1.15, exag=0.8, gap=0.02, cut=('final', 4.4)),
+            dict(who='b', text="Dude. You weren't even in frame.", speed=0.95, exag=0.25, gap=0.15),
+        ],
+    ),
+}
+SC = SCENES[SCENE]
+VOICE = dict(zip('ab', opt('--try', SC['voices']).split(',')))
+REF_TEXT = SC['ref']
+SCRIPT = SC['script']
 
 tts = Kokoro(model, voices)
 wm = WhisperModel('small.en', device='cpu', compute_type='int8')
@@ -185,14 +216,14 @@ for L in lines:
     L['words'] = [dict(w=w, t0=round(L['t0'] + a, 3), t1=round(L['t0'] + b, 3)) for w, (a, b) in zip(words, spans)]
 
 # a phone-mic feel: cut the rumble, tame the peaks, even out the levels
-mp3 = os.path.join(out, 'opening.mp3')
+mp3 = os.path.join(out, SCENE + '.mp3')
 subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', raw, '-af',
                 'highpass=f=90,acompressor=threshold=-20dB:ratio=3:attack=5:release=80,loudnorm=I=-16:TP=-1.5:LRA=7',
                 '-ar', '44100', '-ac', '1', '-b:a', '96k', mp3], check=True)
 
 cues = dict(duration=round(total, 3), engine=ENGINE, voices=VOICE, cuts=cuts,
             lines=[dict(who=L['who'], text=L['text'], t0=round(L['t0'], 3), t1=round(L['t1'], 3), words=L['words']) for L in lines])
-json.dump(cues, open(os.path.join(out, 'opening.json'), 'w'), indent=1)
+json.dump(cues, open(os.path.join(out, SCENE + '.json'), 'w'), indent=1)
 for L in lines:
     print('ok ' if L['miss'] == 0 else '?? ', f"{L['t0']:5.2f}-{L['t1']:5.2f}", L['who'], L['text'], '| heard:', ' '.join(w.word.strip() for w in L['heard']))
 print('total', round(total, 2), 's')

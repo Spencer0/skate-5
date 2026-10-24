@@ -7,6 +7,7 @@ import { CAMERAS } from './settings';
 import { Creator } from './creator';
 import { EXTRA_AUTHORS, defaultLook } from './custom';
 import { OPENING_ID } from './opening';
+import { FILM_ID } from './filmthis';
 
 export type RunMode = 'career' | 'free' | 'comp';
 
@@ -19,6 +20,8 @@ export interface UIHooks {
   playIntro(levelIndex: number, then: () => void): void;
   /** the story opening; with no `then` it drops you straight into a chapter 1 run */
   playOpening(then?: () => void): void;
+  /** chapter 2's cold open; with no `then` it drops you straight into a chapter 2 run */
+  playFilmThis(then?: () => void): void;
   previewGoal(levelIndex: number, goal: GoalDef, back: () => void): void;
   toggleSound(): boolean;
   isMuted(): boolean;
@@ -198,8 +201,9 @@ export class UI {
         el('div', 'chapter-fill', b).style.width = `${(done / L.goals.length) * 100}%`;
         item.addEventListener('click', () => {
           // a brand new story starts with the opening and goes straight into a run;
-          // chapter 1's intro then plays after that first run
+          // chapter 1's intro then plays after that first run. Chapter 2 does the same with its cold open.
           if (i === 0 && !this.career.seen(L.intro.id) && !this.career.seen(OPENING_ID)) this.hooks.playOpening();
+          else if (i === 1 && !this.career.seen(L.intro.id) && !this.career.seen(FILM_ID)) this.hooks.playFilmThis();
           else if (!this.career.seen(L.intro.id) && i !== 0) this.hooks.playIntro(i, () => this.showLevel(i));
           else this.showLevel(i);
         });
@@ -230,6 +234,7 @@ export class UI {
     else this.button(btns, `Start run · ${Math.floor(L.runTime / 60)}:${String(L.runTime % 60).padStart(2, '0')}`, () => this.hooks.startRun(i, 'career'), 'primary');
     this.button(btns, 'Free skate here', () => this.hooks.startRun(i, 'free'));
     if (i === 0) this.button(btns, 'Replay opening', () => this.hooks.playOpening(() => this.showLevel(i)));
+    if (i === 1) this.button(btns, 'Replay cold open', () => this.hooks.playFilmThis(() => this.showLevel(i)));
     this.button(btns, 'Replay intro', () => this.hooks.playIntro(i, () => this.showLevel(i)));
     if (L.kind === 'street') el('p', 'menu-p small', this.card, i < LEVELS.length - 1 ? `Complete ${L.unlockAt} goals to unlock ${LEVELS[i + 1].name}. Every goal earns a stat point.` : '');
   }

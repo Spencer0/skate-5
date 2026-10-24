@@ -17,6 +17,7 @@ import { Career, GoalTracker, applyStats, Medal } from './career';
 import { UI, RunMode, GAP_NAMES, Standing, bestTwo } from './ui';
 import { CutscenePlayer, previewScene } from './cutscene';
 import { Opening, OPENING_ID } from './opening';
+import { FilmThis, FILM_ID } from './filmthis';
 import { Props } from './props';
 import { HumanRider } from './humanrider';
 import { CAMERAS, loadOptions, saveOptions } from './settings';
@@ -125,7 +126,11 @@ function swapRider() {
 const fall = { on: false, t: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), q: new THREE.Quaternion(), side: 1 };
 let tracker: GoalTracker | null = null;
 const cut = new CutscenePlayer(app, camera);
-const opening = new Opening(app, { scene, camera, audio, groundAt: (x, z) => terrain.height(x, z) });
+const storyHost = { scene, camera, audio, groundAt: (x: number, z: number) => terrain.height(x, z) };
+const opening = new Opening(app, storyHost);
+const filmThis = new FilmThis(app, storyHost);
+/** the story scene playing (or last played): the opening, or chapter 2's "film this" */
+let story: Opening | FilmThis = opening;
 
 const fade = document.createElement('div');
 fade.className = 'fade';
@@ -208,6 +213,7 @@ const ui = new UI(app, career, {
     else ui.showTitle();
   },
   playOpening,
+  playFilmThis,
   playIntro(i, then) {
     loadLevel(i);
     playScene(LEVELS[i].intro, () => {
@@ -367,14 +373,24 @@ cut.onLine = () => audio.blip();
  * straight from it into the first run; `then` replaces that (replays).
  */
 function playOpening(then?: () => void) {
+  playStory(opening, 0, OPENING_ID, then);
+}
+
+/** Chapter 2's cold open at the Plaza ("Bro, can you film this?"), then its first run. */
+function playFilmThis(then?: () => void) {
+  playStory(filmThis, 1, FILM_ID, then);
+}
+
+function playStory(sc: Opening | FilmThis, level: number, id: string, then?: () => void) {
+  story = sc;
   playing = false;
   stopRecording();
   ui.hide();
   hud.root.classList.add('cine');
-  loadLevel(0);
+  loadLevel(level);
   audio.start();
   fade.classList.add('on');
-  opening.load().then(() => {
+  sc.load().then(() => {
     // straight from black into the first shot, no fade
     fade.style.transition = 'none';
     fade.classList.remove('on');
@@ -386,7 +402,7 @@ function playOpening(then?: () => void) {
     fog.near = near * 2;
     fog.far = far * 1.8;
     board.root.visible = blob.visible = rider.group.visible = false;
-    opening.play(() => {
+    sc.play(() => {
       fog.near = near;
       fog.far = far;
       board.root.visible = blob.visible = true;
@@ -396,17 +412,17 @@ function playOpening(then?: () => void) {
       renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
-      career.markSeen(OPENING_ID);
+      career.markSeen(id);
       cam.init = false;
       // the models are big and only needed again for a replay
-      opening.dispose();
+      sc.dispose();
       if (then) then();
-      else startRun(0, 'career');
+      else startRun(level, 'career');
     });
   });
 }
 
-/** Chapter 1's intro waits until after your first run there (the opening comes first). */
+/** A chapter's intro waits until after your first run there when a story scene came first (chapters 1 and 2). */
 function introFirst(i: number, then: () => void) {
   const L = LEVELS[i];
   if (career.seen(L.intro.id)) return then();
@@ -1536,8 +1552,8 @@ function frame(now: number) {
   bed[1] = !playing || grindKind === 'none' ? 0 : grindKind === 'grind' ? 1 : 2;
   bed[2] = skater.grind ? Math.abs(skater.grind.spd) : 0;
   bed[3] = skater.braking && skater.speed > 1.5 ? 1 : 0;
-  // the opening runs the wheel sounds itself (the skaters in the park)
-  if (!opening.active) audio.update(bed[0], playing ? grindKind : 'none', bed[2], bed[3] > 0);
+  // a story scene runs the wheel sounds itself (its own skaters)
+  if (!story.active) audio.update(bed[0], playing ? grindKind : 'none', bed[2], bed[3] > 0);
 
   // HUD
   hud.setScore(combo.total, session ? session.bestCombo : 0);
@@ -1551,13 +1567,13 @@ function frame(now: number) {
   minimap?.draw(bx, bz, cam.yaw, props?.letterDots ?? []);
   hud.root.classList.toggle('dim', !playing);
 
-  if (opening.active) opening.update(realDt);
+  if (story.active) story.update(realDt);
   else if (cut.active) cut.update(dt);
   else if (!debug.freeCam) {
     if (!playing && ui.open) cam.yaw += dt * 0.12;
     updateCamera(dt);
   }
-  const lit = opening.active ? opening.focus : cut.active ? camera.position : skater.pos;
+  const lit = story.active ? story.focus : cut.active ? camera.position : skater.pos;
   sun.position.copy(lit).add(SUN_OFFSET);
   sun.target.position.copy(lit);
   input.grabZone = playing && skater.mode === 'air' && !cut.active ? grabZone() : null;
@@ -1567,7 +1583,7 @@ function frame(now: number) {
   mats.water.map?.offset.set(ambient.value * 0.012, ambient.value * 0.02);
   for (const f of (levelGroup?.userData.ticks ?? []) as ((dt: number, t: number) => void)[]) f(dt, ambient.value);
   skyDome.position.copy(camera.position);
-  if (opening.active) renderPortrait();
+  if (story.active) renderPortrait();
   else renderer.render(scene, camera);
   if (recorder.active && playing && !cut.active) {
     const mode = Math.max(0, MODES.indexOf(skater.mode as (typeof MODES)[number]));
@@ -1579,11 +1595,11 @@ function frame(now: number) {
   hud.setRec(options.recording && playing && session ? (recorder.active ? recorder.time : -1) : null);
 }
 
-/** The opening is a phone video: on a wide screen it plays in a 9:16 window. */
+/** The story scenes are phone videos: on a wide screen they play in a 9:16 window. */
 function renderPortrait() {
   const W = window.innerWidth;
   const H = window.innerHeight;
-  const v = opening.layout(W, H);
+  const v = story.layout(W, H);
   if (camera.aspect !== v.w / v.h) {
     camera.aspect = v.w / v.h;
     camera.updateProjectionMatrix();
@@ -1709,4 +1725,6 @@ requestAnimationFrame(frame);
   recorder,
   opening,
   playOpening,
+  filmThis,
+  playFilmThis,
 };

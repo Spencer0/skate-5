@@ -1,5 +1,7 @@
-// Records the background skaters for the story opening (usage: node ghosts.mjs <out.bin> [line ...]).
-// Needs the dev server on :5199 (npx vite --port 5199) and Playwright, like tools/promo.
+// Records the skaters for a story scene (usage: [SCENE=plaza] node ghosts.mjs <out.bin> [line ...]).
+// SCENE=opening (the default) is the opening's background park; SCENE=plaza is
+// Chapter 2's "film this" skater. Needs the dev server on :5199 (npx vite --port 5199)
+// and Playwright, like tools/promo.
 // File: u32 header length, JSON header [{name, rider, frames, sfx}], padding to 4 bytes,
 // then every clip's frames back to back (Float32, STRIDE floats per frame).
 // Each line is a scripted player in Brazil Park; the in-game replay recorder
@@ -7,24 +9,25 @@
 // plays back on extra riders (see src/opening.ts).
 import fs from 'node:fs';
 import { open } from '../promo/lib.mjs';
-import { stat, leftStick, leftSet, flick, arc, tap } from '../promo/scenes.mjs';
+import { stat, leftStick, leftSet, leftUp, flick, arc, tap } from '../promo/scenes.mjs';
 
 const [out, ...only] = process.argv.slice(2);
 const E = (k, d) => +(process.env[k] ?? d);
-const BRAZIL = 0;
+const SCENE = process.env.SCENE ?? 'opening';
+const LEVEL = { opening: 0, plaza: 1 }[SCENE];
 const OLLIE = [[0, -0.8], [0, -1], [0, 0.4], [0, 1.2]];
 const KICKFLIP = [[0, -0.8], [0, -1.2], [-0.6, 0.6], [-1, 1.3]];
 const HEEL = [[0, -0.8], [0, -1.2], [0.6, 0.6], [1, 1.3]];
 const TRE = [[0, -1.2], ...arc(-90, 200, 8, 1.3)];
 
-const place = (g, x, z, deg, v) => g.sk(([x, z, h, v]) => {
+const place = (g, x, z, deg, v) => g.sk(([x, z, h, v, lv]) => {
   const s = window.__skate;
-  s.startRun(0, 'free');
+  s.startRun(lv, 'free');
   s.skater.spawn(x, z, h);
   s.skater.vel.set(Math.cos(h) * v, 0, Math.sin(h) * v);
   // startRun stops any recording, so the take starts here
   s.recorder.start();
-}, [x, z, (deg * Math.PI) / 180, v]);
+}, [x, z, (deg * Math.PI) / 180, v, LEVEL]);
 
 /** a flip trick: flick, then tap to catch it `ct` frames later */
 async function flip(g, pts, ct = 11) {
@@ -33,7 +36,7 @@ async function flip(g, pts, ct = 11) {
   await tap(g, 480, 880);
 }
 
-const LINES = {
+const OPENING = {
   // 50-50 down the long flat rail, kickflip out
   async rail(g, log) {
     await place(g, 14, E('RZ0', 46), -90, E('RV', 7.5));
@@ -105,8 +108,59 @@ const LINES = {
   },
 };
 
+const LASER = [[0, -1.2], ...arc(-90, 200, 10, 1.3)];
+const TREFLIP = [[0, -1.2], ...arc(-90, -380, 8, 1.3)];
+
+const PLAZA = {
+  // rolls in from the west, coasting, and powerslides to a stop by the filmer
+  async rollin(g, log) {
+    await place(g, E('IX0', -9), E('IZ', 14.2), 0, E('IV', 5.6));
+    let braking = false, still = 0;
+    for (let i = 0; i < 150; i++) {
+      const st = await stat(g);
+      log(st);
+      if (!braking && st.x > E('IB', -0.6)) { braking = true; await g.touch('pointerdown', 1, 130, 760); await g.touch('pointermove', 1, 130, 760 + 60); }
+      if (braking && st.v < 0.3 && ++still > 12) break;
+      await g.tick();
+    }
+    await leftUp(g);
+  },
+  // one flat-ground kickflip rolling east to west past the filmer: every "take" is this same clip
+  async kickflip(g, log) {
+    await place(g, E('KX0', 9), E('KZ', 13.6), 180, E('KV', 6.4));
+    let popped = false;
+    for (let i = 0; i < 120; i++) {
+      const st = await stat(g);
+      log(st);
+      if (!popped && st.x < E('KP', 2.2)) { popped = true; await flip(g, KICKFLIP, E('KC', 11)); continue; }
+      if (popped && st.m === 'ground' && i > 66) break;
+      await g.tick();
+    }
+  },
+  // the big one: 360 laser flip over the fountain, then a 360 flip rolling away
+  async final(g, log) {
+    await place(g, 0, E('LZ0', 26), -90, E('LV', 10));
+    await leftStick(g, 0, true);
+    let pop = -1, landed = -1, tre = -1;
+    for (let i = 0; i < 200; i++) {
+      const st = await stat(g);
+      log(st);
+      if (pop < 0 && st.z < E('LS', 7)) { await flick(g, LASER); pop = g.frame; continue; }
+      if (pop >= 0 && g.frame === pop + E('SP', 1)) await leftSet(g, 1, false);
+      if (pop >= 0 && g.frame === pop + E('CT', 13)) await tap(g, 480, 880);
+      if (pop >= 0 && g.frame === pop + E('SE', 26)) await leftSet(g, 0, false);
+      if (pop >= 0 && landed < 0 && st.m === 'ground' && g.frame > pop + 8) landed = g.frame;
+      if (landed >= 0 && tre < 0 && g.frame > landed + E('TW', 8)) { await flip(g, TREFLIP, E('TC', 12)); tre = g.frame; continue; }
+      if (tre >= 0 && st.m === 'ground' && g.frame > tre + 30) break;
+      await g.tick();
+    }
+    await leftUp(g);
+  },
+};
+
+const LINES = { opening: OPENING, plaza: PLAZA }[SCENE];
 // who rides each line: the pose is solved for that body, so playback must use the same rider
-const RIDER = { rail: 'coral', kicker: 'brock', ramp: 'voss', stairs: 'brock', flat: 'coral' };
+const RIDER = { rail: 'coral', kicker: 'brock', ramp: 'voss', stairs: 'brock', flat: 'coral', rollin: 'brock', kickflip: 'brock', final: 'brock' };
 const clips = [];
 for (const name of Object.keys(LINES)) {
   if (only.length && !only.includes(name)) continue;

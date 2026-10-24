@@ -1,14 +1,9 @@
 import * as THREE from 'three';
-import { BoardModel } from './board';
-import { HumanRider, StandState } from './humanrider';
-import type { RiderId } from './rider';
-import { Clip, F, STRIDE, Sfx, sampleFrame, clipDuration } from './replay/clip';
-import { applyFrame, lens, Lens } from './replay/rig';
-import { shadowTexture } from './textures';
+import { clipDuration } from './replay/clip';
+import { lens, Lens } from './replay/rig';
 import { sanitizeLook } from './custom';
-import type { Audio } from './audio';
 import { Cues, captionAt, wordClass } from './captions';
-import { Jaw, rigJaw } from './jaw';
+import { Ghost, Intent, Person, StoryHost, easeOut, flapJaw, handheld, headOf, person, phoneView, poseGhost, posePerson, smooth, talkLevel, unpackGhosts, wheels } from './storykit';
 
 /**
  * The story-mode opening, in engine and shot for a phone: two locals at
@@ -29,20 +24,6 @@ export const OPENING_ID = 'story-opening';
 const LEAD_IN = 0.35;
 /** hold after the last cutaway before the player drops in */
 const TAIL = 0.1;
-/** phone framing on wide screens */
-const PORTRAIT = 9 / 16;
-
-interface Ghost {
-  clip: Clip;
-  board: BoardModel;
-  rider: HumanRider;
-  blob: THREE.Mesh;
-  /** clip time at dialogue time 0 */
-  offset: number;
-  frame: Float32Array;
-  sfxAt: number;
-}
-
 /**
  * For the skaters with a cutaway: the clip time their cutaway starts at (so the
  * trick lands mid-shot). Their background loop runs in step with it, so the
@@ -91,9 +72,6 @@ const LOOK_B = sanitizeLook({
 
 /** Where the argument happens: just off the spawn, looking north over the park. */
 const SPOT = { a: new THREE.Vector3(6.55, 0, 47.1), b: new THREE.Vector3(5.45, 0, 47.25) };
-
-const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
-const easeOut = (t: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 
 /** A brown paper bag twisted round the neck of a big bottle. Origin at the neck, body down -Y. */
 function paperBagBottle() {
@@ -147,62 +125,7 @@ function paperBagBottle() {
   return g;
 }
 
-interface Person {
-  rider: HumanRider;
-  st: StandState;
-  /** eased hand targets */
-  hl: THREE.Vector3;
-  hr: THREE.Vector3;
-  jaw: Jaw | null;
-  /** the current gesture and when it started */
-  aimKey: string;
-  aimT: number;
-}
-
-function person(look: ReturnType<typeof sanitizeLook>, at: THREE.Vector3): Person {
-  const rider = new HumanRider('custom', look);
-  rider.setStyle('solid');
-  rider.group.position.copy(at);
-  return {
-    rider,
-    st: { time: 0, look: new THREE.Vector3(), talk: 0, handL: new THREE.Vector3(), reachL: 0, handR: new THREE.Vector3(), reachR: 0, lean: 0, shrug: 0 },
-    hl: new THREE.Vector3(),
-    hr: new THREE.Vector3(),
-    jaw: null,
-    aimKey: '',
-    aimT: 0,
-  };
-}
-
-/** What a person is doing right now: the targets their hands, head and body ease toward. */
-interface Intent {
-  look: THREE.Vector3;
-  /** a world point to point at (with whichever hand is on that side) */
-  point?: THREE.Vector3 | null;
-  /**
-   * an "over there" point, in the body's own frame: ang radians from straight ahead
-   * (+ toward the left hand), up how high. Things behind them get pointed at like
-   * this, out to the side, the way people do, not with an arm wrenched backwards.
-   */
-  aim?: { ang: number; up: number };
-  /** both palms up and out */
-  palms?: number;
-  /** hands to the head */
-  head?: number;
-  /** both arms flung up */
-  fling?: number;
-  /** a hand over the face */
-  face?: number;
-  lean?: number;
-  shrug?: number;
-}
-
-export interface OpeningHost {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  audio: Audio;
-  groundAt(x: number, z: number): number;
-}
+export type OpeningHost = StoryHost;
 
 export class Opening {
   private root: HTMLElement;
@@ -262,7 +185,7 @@ export class Opening {
     ]).catch(() => [null, null, null] as const);
     this.cues = cues;
     if (mp3) this.voice = await this.host.audio.decode(mp3);
-    if (bin) this.ghosts = this.unpack(bin);
+    if (bin) this.ghosts = unpackGhosts(bin, this.group);
     this.a = person(LOOK_A, SPOT.a);
     this.b = person(LOOK_B, SPOT.b);
     for (const p of [this.a, this.b]) this.group.add(p.rider.group);
@@ -271,28 +194,6 @@ export class Opening {
     const riders = [...this.ghosts.map((g) => g.rider), this.a.rider, this.b.rider];
     const t0 = performance.now();
     while (riders.some((r) => !r.ready) && performance.now() - t0 < 12000) await new Promise((r) => setTimeout(r, 100));
-  }
-
-  private unpack(buf: ArrayBuffer): Ghost[] {
-    const n = new DataView(buf).getUint32(0, true);
-    const head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, n))) as { name: string; rider: RiderId; frames: number; sfx?: Sfx[] }[];
-    let off = 4 + n + ((4 - ((4 + n) % 4)) % 4);
-    const decks = ['brazil', 'atlas', 'compass', 'japan', 'airmail', 'mosaic'];
-    return head.map((h, i) => {
-      const data = new Float32Array(buf, off, h.frames * STRIDE);
-      off += h.frames * STRIDE * 4;
-      const clip = { id: h.name, name: h.name, created: 0, level: 0, levelName: '', rider: h.rider, look: null, deck: decks[i % decks.length], frames: h.frames, data, sfx: h.sfx ?? [] } as Clip;
-      const board = new BoardModel();
-      board.setDeck(clip.deck);
-      const rider = new HumanRider(h.rider);
-      rider.setStyle('solid');
-      const blob = new THREE.Mesh(
-        new THREE.PlaneGeometry(1, 1),
-        new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
-      );
-      this.group.add(board.root, rider.group, blob);
-      return { clip, board, rider, blob, offset: 0, frame: new Float32Array(STRIDE), sfxAt: -1 };
-    });
   }
 
   get ready() {
@@ -409,35 +310,17 @@ export class Opening {
   /* ---------------------------- skaters ---------------------------- */
 
   private updateGhosts(d: number) {
-    const cam = this.host.camera.position;
     let near: Ghost | null = null;
     let nearD = Infinity;
     for (const g of this.ghosts) {
-      const ct = this.clipT(g, d);
-      sampleFrame(g.clip, ct, g.frame);
-      applyFrame({ board: g.board, rider: g.rider, blob: g.blob, camera: this.host.camera }, g.frame);
-      const dist = g.board.root.position.distanceTo(cam);
+      const dist = poseGhost(g, this.clipT(g, d), this.host);
       if (dist < nearD) {
         near = g;
         nearD = dist;
       }
-      // the line's own sounds, quieter with distance
-      if (ct < g.sfxAt) g.sfxAt = ct - 1e-3; // looped
-      const level = Math.min(1, 7 / Math.max(1, dist)) * 0.9;
-      for (const s of g.clip.sfx) {
-        if (s.t > g.sfxAt && s.t <= ct) {
-          const fn = (this.host.audio as unknown as Record<string, (...a: unknown[]) => void>)[s.n];
-          if (fn) this.host.audio.distant(level, () => fn.apply(this.host.audio, s.a));
-        }
-      }
-      g.sfxAt = ct;
     }
     // wheels: the closest skater's roll and grind
-    if (near) {
-      const f = near.frame;
-      const k = Math.min(1, 6 / Math.max(1, nearD));
-      this.host.audio.update(f[F.sound] * k, f[F.sound + 1] === 2 ? 'slide' : f[F.sound + 1] === 1 ? 'grind' : 'none', f[F.sound + 2] * k, false);
-    }
+    if (near) wheels(near, this.host, Math.min(1, 6 / Math.max(1, nearD)));
   }
 
   private ghost(name: string) {
@@ -470,16 +353,12 @@ export class Opening {
     b: { rail: { ang: -0.95, up: 0.3 }, ramp: { ang: -1.3, up: 0.1 }, kicker: { ang: -1.1, up: 0.5 } },
   };
 
-  private headOf(p: Person) {
-    return p.rider.joint('head', new THREE.Vector3());
-  }
-
   /** Who does what, line by line. */
   private intents(d: number): { a: Intent; b: Intent } {
     const A = this.a!;
     const B = this.b!;
-    const ha = this.headOf(A);
-    const hb = this.headOf(B);
+    const ha = headOf(A);
+    const hb = headOf(B);
     const a: Intent = { look: hb };
     const b: Intent = { look: ha };
     const camP = this.host.camera.position;
@@ -561,83 +440,10 @@ export class Opening {
       [this.a, a, 'a'],
       [this.b, b, 'b'],
     ] as const) {
-      const st = p.st;
-      st.time = t + (who === 'a' ? 0 : 1.7);
-      st.talk = this.talkLevel(who, d);
-      // the jaw flaps with the syllables inside each word
-      if (!p.jaw && p.rider.ready) p.jaw = rigJaw(p.rider.group);
-      p.jaw?.set(st.talk * (0.45 + 0.55 * Math.abs(Math.sin(d * 17 + (who === 'a' ? 0 : 1)))));
-      const k = 1 - Math.exp(-dt * 11);
-      st.lean += ((it.lean ?? 0) - st.lean) * k;
-      st.shrug += ((it.shrug ?? 0) - st.shrug) * k;
-      const g = p.rider.group;
-      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(g.quaternion);
-      const left = new THREE.Vector3(1, 0, 0).applyQuaternion(g.quaternion);
-      const head = this.headOf(p);
-      const chest = head.clone().setY(head.y - 0.42);
-      // decide each hand's target
-      let wl: THREE.Vector3 | null = null;
-      let wr: THREE.Vector3 | null = null;
-      // pointing: the chest turns toward it, the arm covers the rest within reach of a
-      // real shoulder (never back behind the body), angled up over anything in the way
-      let turn = 0;
-      if (it.point || it.aim) {
-        let ang: number;
-        let lift: number;
-        if (it.aim) {
-          ({ ang, up: lift } = it.aim);
-        } else {
-          const toT = it.point!.clone().sub(chest);
-          ang = Math.max(-1.1, Math.min(1.1, Math.atan2(toT.dot(left), toT.dot(fwd)))); // + toward the left hand
-          lift = Math.max(-0.2, Math.min(0.4, toT.y / Math.max(0.3, Math.hypot(toT.x, toT.z))));
-        }
-        turn = ang * 0.4;
-        const side = ang >= 0 ? 'l' : 'r';
-        const yawF = Math.atan2(fwd.x, fwd.z);
-        const horiz = new THREE.Vector3(Math.sin(yawF + ang), 0, Math.cos(yawF + ang));
-        const dir = horiz.add(new THREE.Vector3(0, lift, 0)).normalize();
-        // glance along the arm as the point goes out, then back to the other guy
-        const key = `${ang},${lift}`;
-        if (key !== p.aimKey) {
-          p.aimKey = key;
-          p.aimT = t;
-        }
-        if (it.aim && t - p.aimT < 0.45) it.look = chest.clone().addScaledVector(dir, 8);
-        const turnedLeft = left.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), turn);
-        const sh = chest.clone().addScaledVector(turnedLeft, side === 'l' ? 0.17 : -0.17).setY(chest.y + 0.12);
-        // just short of full reach: the arm reads straight, the elbow isn't locked
-        const target = sh.addScaledVector(dir, 0.62);
-        if (side === 'l') wl = target;
-        else wr = target;
-      }
-      st.turn = (st.turn ?? 0) + (turn - (st.turn ?? 0)) * k;
-      st.look.lerp(it.look, st.look.lengthSq() ? k : 1);
-      if (it.palms) {
-        const lo = chest.clone().setY(chest.y - 0.2).addScaledVector(fwd, 0.3);
-        wl ??= lo.clone().addScaledVector(left, 0.32 * it.palms);
-        wr ??= lo.clone().addScaledVector(left, -0.32 * it.palms);
-      }
-      if (it.head) {
-        // palms on the sides of the head, elbows out
-        wl = head.clone().addScaledVector(left, 0.1).addScaledVector(fwd, -0.01).setY(head.y + 0.07);
-        wr = head.clone().addScaledVector(left, -0.1).addScaledVector(fwd, -0.01).setY(head.y + 0.07);
-      }
-      if (it.fling) {
-        // arms thrown up and out, a bit forward: "what do you want from me"
-        wl = head.clone().addScaledVector(left, 0.5).setY(head.y + 0.12).addScaledVector(fwd, 0.22);
-        wr = head.clone().addScaledVector(left, -0.5).setY(head.y + 0.12).addScaledVector(fwd, 0.22);
-      }
-      if (it.face) wl = head.clone().addScaledVector(fwd, 0.12).setY(head.y + 0.02);
-      // ease: quick to throw a hand out, slower to let it drop
-      const ease = (cur: THREE.Vector3, want: THREE.Vector3 | null, r: number, curReach: number) => {
-        if (want) cur.lerp(want, curReach < 0.05 ? 1 : 1 - Math.exp(-dt * 16));
-        return curReach + ((want ? 1 : 0) - curReach) * (1 - Math.exp(-dt * (want ? r : 6)));
-      };
-      st.reachL = ease(p.hl, wl, 12, st.reachL);
-      st.reachR = ease(p.hr, wr, 12, st.reachR);
-      st.handL!.copy(p.hl);
-      st.handR!.copy(p.hr);
-      p.rider.stand(st);
+      p.st.time = t + (who === 'a' ? 0 : 1.7);
+      p.st.talk = talkLevel(this.cues, who, d);
+      flapJaw(p, p.st.talk, d, who === 'a' ? 0 : 1);
+      posePerson(p, it, dt, t);
     }
   }
 
@@ -651,20 +457,6 @@ export class Opening {
     this.bottle.position.set(at.x, this.host.groundAt(at.x, at.z) + 0.3 * 0.85, at.z);
     this.bottle.rotation.set(0.05, 0.6, -0.04);
     this.bottle.scale.setScalar(0.85);
-  }
-
-  /** 0..1 mouth-and-head energy for a speaker: a pulse on every word they say. */
-  private talkLevel(who: 'a' | 'b', d: number) {
-    let v = 0;
-    for (const L of this.cues?.lines ?? []) {
-      if (L.who !== who || d < L.t0 - 0.1 || d > L.t1 + 0.1) continue;
-      for (const w of L.words) {
-        if (d < w.t0 - 0.05 || d > w.t1 + 0.05) continue;
-        const k = (d - w.t0) / Math.max(0.08, w.t1 - w.t0);
-        v = Math.max(v, Math.sin(Math.min(1, Math.max(0, k)) * Math.PI) * (/[!?]|[A-Z]{2,}/.test(w.w) ? 1 : 0.7));
-      }
-    }
-    return v;
   }
 
   /* ----------------------------- camera ----------------------------- */
@@ -714,15 +506,7 @@ export class Opening {
       this.focus.copy(SPOT.a).lerp(SPOT.b, 0.5);
     }
     // handheld: a phone in somebody's hand
-    const shake = cut ? 0.012 : 0.006;
-    const n1 = Math.sin(t * 7.3) * 0.6 + Math.sin(t * 13.1) * 0.4;
-    const n2 = Math.sin(t * 5.9 + 1.3) * 0.6 + Math.sin(t * 11.7 + 0.4) * 0.4;
-    cam.position.copy(L.pos);
-    cam.position.x += n1 * shake * 4;
-    cam.position.y += n2 * shake * 3;
-    cam.lookAt(L.look.x + n2 * shake, L.look.y + n1 * shake, L.look.z);
-    cam.fov = L.fov;
-    cam.updateProjectionMatrix();
+    handheld(cam, L.pos, L.look, L.fov, t, cut ? 0.012 : 0.006);
   }
 
   /** Cut to whoever is talking; punch in on the loud ones. */
@@ -730,8 +514,8 @@ export class Opening {
     const L = this.lens;
     const A = this.a!;
     const B = this.b!;
-    const ha = this.headOf(A);
-    const hb = this.headOf(B);
+    const ha = headOf(A);
+    const hb = headOf(B);
     const mid = ha.clone().lerp(hb, 0.5);
     const { i, line, u } = this.lineAt(d);
     // which framing: 'two' (both, waist up), 'a' or 'b' (one face)
@@ -791,9 +575,7 @@ export class Opening {
 
   /** The phone-shaped rectangle the opening renders into (CSS pixels, top-left origin). */
   static view(w: number, h: number) {
-    if (w / h <= PORTRAIT + 0.01) return { x: 0, y: 0, w, h };
-    const vw = Math.round(h * PORTRAIT);
-    return { x: Math.round((w - vw) / 2), y: 0, w: vw, h };
+    return phoneView(w, h);
   }
 
   /** Keep the overlay over the picture. */

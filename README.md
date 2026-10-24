@@ -18,6 +18,14 @@ Moreno (Atlas Skateboards team manager) and Officer Pete (plaza security).
   straight into your first run (Mara's intro follows it). 9:16 on wide
   screens, skippable, replayable from Brazil Park's menu. Assets come from
   `tools/story/`.
+- **Chapter 2 cold open:** "Bro, can you film this?" at the Plaza. Nico asks
+  Theo to film one kickflip, and Theo turns into the most demanding director
+  alive. Every take is the same recorded kickflip, only the camera gets
+  fancier: phone POV, then a low fisheye, then the phone on the ground. The
+  last take is a 360 laser flip over the fountain in slow motion with a
+  replay, and then the reveal that the phone was filming the floor. It ends
+  on the first frame, so the clip loops. It plays before your first Plaza
+  run (the Plaza intro follows it), and you can replay it from the Plaza menu.
 - **Runs:** each session is a 2:00 run. Goals save the moment you land them.
   When the clock hits zero your current line gets to finish.
 - **Goals (≈13 per spot):** High / Pro / Sick score, collect N-A-T-I-O-N in one run,

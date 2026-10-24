@@ -1,7 +1,8 @@
-// Renders the story opening frame by frame (usage: node preview.mjs <out dir> [scale] [every] [from] [to]).
+// Renders a story scene frame by frame (usage: [STORY=plaza] node preview.mjs <out dir> [scale] [every] [from] [to]).
+// STORY=opening (the default) is the career opening, STORY=plaza chapter 2's "film this" cold open.
 // Same virtual clock as tools/promo: frames are exact 30 fps, however slow the
 // software renderer is. `every` keeps one frame in N (quick looks); `from`/`to`
-// limit the seconds rendered. With every = 1 the frames plus public/story/opening.mp3
+// limit the seconds rendered. With every = 1 the frames plus public/story/<scene>.mp3
 // make the preview video: ffmpeg -framerate 30 -i f%05d.jpg ...
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,8 +27,9 @@ const clean = () => {
 const init = process.env.CLEAN ? clean : quiet;
 const g = await open({ w: +(process.env.W ?? 540), h: +(process.env.H ?? 960), scale: +scaleArg, init, state: { 'skate5.tutorial': '1', 'skate5.career.v1': { rider: 'coral' } } });
 await g.tick();
-await g.sk(() => window.__skate.playOpening(() => (window.__done = true)));
-await g.page.waitForFunction(() => window.__skate.opening.active, null, { timeout: 120000, polling: 250 });
+const [play, scene] = process.env.STORY === 'plaza' ? ['playFilmThis', 'filmThis'] : ['playOpening', 'opening'];
+await g.sk((play) => window.__skate[play](() => (window.__done = true)), play);
+await g.page.waitForFunction((scene) => window.__skate[scene].active, scene, { timeout: 120000, polling: 250 });
 let n = 0;
 for (let f = 0; f < 30 * 30; f++) {
   const t = f / 30;

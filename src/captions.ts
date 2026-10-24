@@ -1,7 +1,7 @@
 /**
- * Burned-in, phone-video captions for the story opening: a few words at a
+ * Burned-in, phone-video captions for the story scenes: a few words at a
  * time, each lighting up as it's spoken. Times come from the voice pipeline
- * (tools/story/voices.py writes public/story/opening.json).
+ * (tools/story/voices.py writes public/story/<scene>.json).
  */
 
 export interface Word {
@@ -31,14 +31,16 @@ export interface Cues {
   cuts?: Cutaway[];
 }
 
-/** CSS classes for a word: the bit's three "names" get a colour each, CAPS shout. */
-export function wordClass(w: string) {
+/** The opening's three "names", each with its own colour. */
+export const OPENING_WORDS: Record<string, string> = { who: 'who', what: 'what', both: 'both' };
+
+/** CSS classes for a word: words in `marked` get their class (the bit's "names" in the opening), CAPS shout. */
+export function wordClass(w: string, marked: Record<string, string> = OPENING_WORDS) {
   const bare = w.replace(/[^A-Za-z']/g, '');
   const k = bare.toLowerCase().replace(/'s$/, '');
-  if (k === 'who') return bare === 'WHO' ? 'op-w who shout' : 'op-w who';
-  if (k === 'what') return 'op-w what';
-  if (k === 'both') return 'op-w both';
-  return 'op-w';
+  const c = marked[k];
+  if (!c) return 'op-w';
+  return bare.length > 1 && bare === bare.toUpperCase() ? `op-w ${c} shout` : `op-w ${c}`;
 }
 
 /** Split a line into caption chunks of up to three words, breaking after punctuation. */

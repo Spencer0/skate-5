@@ -2810,3 +2810,185 @@ body {
     opacity: 0;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Chapter 2 cold open, "Bro, can you film this?": the phone's screen  */
+/* ------------------------------------------------------------------ */
+.op-w.hi.on {
+  color: #ffe14a;
+}
+/* Theo's phone: corner marks, REC and the clock */
+.fm-rec {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+.fm-rec.on {
+  opacity: 1;
+}
+.fm-rec i {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 0 solid rgba(255, 255, 255, 0.85);
+}
+.fm-rec .tl {
+  top: 9%;
+  left: 7%;
+  border-width: 3px 0 0 3px;
+}
+.fm-rec .tr {
+  top: 9%;
+  right: 7%;
+  border-width: 3px 3px 0 0;
+}
+.fm-rec .bl {
+  bottom: 6%;
+  left: 7%;
+  border-width: 0 0 3px 3px;
+}
+.fm-rec .br {
+  bottom: 6%;
+  right: 7%;
+  border-width: 0 3px 3px 0;
+}
+.fm-recl,
+.fm-hd {
+  position: absolute;
+  top: calc(9% + 8px);
+  font: 700 clamp(12px, 3.6vmin, 18px) / 1 var(--mono, ui-monospace, monospace);
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.fm-recl {
+  left: calc(7% + 12px);
+}
+.fm-hd {
+  right: calc(7% + 12px);
+  opacity: 0.8;
+}
+.fm-recl b,
+.fm-tag b {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.4em;
+  border-radius: 50%;
+  background: #ff3b30;
+  animation: fm-blink 1s steps(2, start) infinite;
+}
+@keyframes fm-blink {
+  to {
+    visibility: hidden;
+  }
+}
+/* the hook, TikTok text: black on a white box */
+.fm-pov {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 18%;
+  text-align: center;
+  font: 800 clamp(17px, 5.4vmin, 28px) / 1.5 var(--sans);
+  color: #141413;
+  opacity: 0;
+}
+.fm-pov.on {
+  opacity: 1;
+}
+.fm-pov span {
+  padding: 0.2em 0.45em;
+  border-radius: 0.3em;
+  background: #fff;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+/* TAKE n */
+.fm-slate {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 22%;
+  text-align: center;
+  font: 900 clamp(30px, 11vmin, 60px) / 1 var(--sans);
+  letter-spacing: 0.04em;
+  color: #fff;
+  -webkit-text-stroke: 0.08em #000;
+  paint-order: stroke fill;
+  opacity: 0;
+  transform: scale(1.4) rotate(-4deg);
+  transition:
+    opacity 0.08s,
+    transform 0.14s ease-out;
+}
+.fm-slate.on {
+  opacity: 1;
+  transform: scale(1) rotate(-4deg);
+}
+/* the last take goes widescreen */
+.fm-bars i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 13%;
+  background: #000;
+  transform: scaleY(0);
+  transition: transform 0.25s ease-out;
+}
+.fm-bars i:first-child {
+  top: 0;
+  transform-origin: top;
+}
+.fm-bars i:last-child {
+  bottom: 0;
+  transform-origin: bottom;
+}
+.fm-bars.on i {
+  transform: scaleY(1);
+}
+.fm-tag {
+  position: absolute;
+  top: calc(13% + 14px);
+  left: 7%;
+  font: 900 clamp(14px, 4.4vmin, 22px) / 1 var(--sans);
+  letter-spacing: 0.12em;
+  color: #fff;
+  opacity: 0;
+}
+.fm-tag.on {
+  opacity: 1;
+}
+/* the game's own trick text, huge */
+.fm-trick {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: 24%;
+  text-align: center;
+  font: italic 900 clamp(28px, 9.5vmin, 54px) / 1 var(--sans);
+  color: #ffe14a;
+  -webkit-text-stroke: 0.08em #000;
+  paint-order: stroke fill;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 0.1s,
+    transform 0.2s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.fm-trick.on {
+  opacity: 1;
+  transform: scale(1);
+}
+.fm-trick small {
+  display: block;
+  margin-top: 0.3em;
+  font-size: 0.45em;
+  color: #fff;
+}
+/* slow motion: a touch of grade */
+.fm.slow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35));
+}
