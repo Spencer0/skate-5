@@ -63,3 +63,14 @@ STORY=plaza node tools/story/preview.mjs out/plaza 2   # the Chapter 2 cold open
 ffmpeg -framerate 30 -i out/frames/f%05d.jpg -itsoffset 3.3 -i public/story/opening.mp3 \
   -map 0:v -map 1:a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest opening.mp4
 ```
+
+`AUDIO=1` renders the game's own sound along with the frames: the voice, wheels,
+pops and whooshes, mixed the way the game mixes them. It runs offline on the
+same virtual clock, and `<out dir>/audio.wav` lines up with the frames from
+frame 0:
+
+```sh
+STORY=plaza AUDIO=1 CLEAN=1 node tools/story/preview.mjs out/plaza 2
+ffmpeg -framerate 30 -i out/plaza/f%05d.jpg -i out/plaza/audio.wav -map 0:v -map 1:a \
+  -c:v libx264 -pix_fmt yuv420p -af loudnorm=I=-14:TP=-1 -c:a aac -shortest film-this.mp4
+```

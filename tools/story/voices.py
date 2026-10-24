@@ -69,6 +69,7 @@ SCENES = {
         ],
     ),
     'plaza': dict(
+        cut_gap=0.06,
         # 'a' = Nico (the skater, hyped, then baffled), 'b' = Theo (the filmer, completely flat)
         voices='am_fenrir,am_onyx',
         ref={
@@ -76,19 +77,21 @@ SCENES = {
             'b': "Hm. Okay. I mean, it's fine. It's just not really what I was going for. Let's go again. From the top.",
         },
         script=[
-            dict(who='a', text="Yo, film this real quick.", speed=1.15, exag=0.6, gap=0.0, cut=('take1', 2.0)),
-            dict(who='b', text="Nah, that wasn't it. Do it again.", speed=1.0, exag=0.25, gap=0.1),
-            dict(who='a', text="What do you mean?", speed=1.12, exag=0.6, gap=0.05, cut=('take2', 2.0)),
-            dict(who='b', text="You gotta catch it more naturally.", speed=1.0, exag=0.25, gap=0.1),
+            dict(who='a', text="Yo, film this real quick.", speed=1.15, exag=0.6, gap=0.0, cut=('take1', 1.75)),
+            dict(who='b', text="Nah, that wasn't it. Do it again.", speed=1.0, exag=0.25, gap=0.05),
+            dict(who='a', text="What do you mean?", speed=1.12, exag=0.6, gap=0.05, cut=('take2', 1.7)),
+            dict(who='b', text="You gotta catch it more naturally.", speed=1.0, exag=0.25, gap=0.04),
             dict(who='a', text="Catch what naturally? I did the trick.", speed=1.1, exag=0.6, tempo=1.06, gap=0.02),
-            dict(who='b', text="Yeah, but it didn't look accidental.", speed=1.0, exag=0.25, gap=0.08, cut=('setup', 1.2)),
+            dict(who='b', text="Yeah, but it didn't look accidental.", speed=1.0, exag=0.25, gap=0.06, cut=('setup', 1.0)),
             dict(who='b', text="Okay, this time pretend you don't know I'm filming.", speed=1.05, exag=0.3, tempo=1.08, gap=0.0),
-            dict(who='a', text="You're literally talking to me.", speed=1.15, exag=0.8, gap=0.02, cut=('final', 4.4)),
+            dict(who='a', text="You're literally talking to me.", speed=1.15, exag=0.8, gap=0.02, cut=('final', 4.2)),
             dict(who='b', text="Dude. You weren't even in frame.", speed=0.95, exag=0.25, gap=0.15),
         ],
     ),
 }
 SC = SCENES[SCENE]
+# the beat between a line and the cutaway after it
+CUT_GAP = SC.get('cut_gap', 0.12)
 VOICE = dict(zip('ab', opt('--try', SC['voices']).split(',')))
 REF_TEXT = SC['ref']
 SCRIPT = SC['script']
@@ -190,8 +193,8 @@ for L in lines:
     t = L['t1']
     if 'cut' in L:
         name, length = L['cut']
-        cuts.append(dict(name=name, t0=round(t + 0.12, 3), t1=round(t + 0.12 + length, 3)))
-        t += 0.12 + length
+        cuts.append(dict(name=name, t0=round(t + CUT_GAP, 3), t1=round(t + CUT_GAP + length, 3)))
+        t += CUT_GAP + length
 total = t
 mix = np.zeros(int(total * SR) + 1, dtype=np.float32)
 for L in lines:

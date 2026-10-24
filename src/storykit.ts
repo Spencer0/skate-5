@@ -76,12 +76,12 @@ export function unpackGhosts(buf: ArrayBuffer, group: THREE.Group): Ghost[] {
 }
 
 /** Pose a skater at clip time ct and play the line's own sounds since the last call, quieter with distance. */
-export function poseGhost(g: Ghost, ct: number, host: StoryHost, near = 7) {
+export function poseGhost(g: Ghost, ct: number, host: StoryHost, near = 7, gain = 1) {
   sampleFrame(g.clip, ct, g.frame);
   applyFrame({ board: g.board, rider: g.rider, blob: g.blob, camera: host.camera }, g.frame);
   const dist = g.board.root.position.distanceTo(host.camera.position);
   if (ct < g.sfxAt) g.sfxAt = ct - 1e-3; // looped, or a replay
-  const level = Math.min(1, near / Math.max(1, dist)) * 0.9;
+  const level = Math.min(1, near / Math.max(1, dist)) * 0.9 * gain;
   for (const s of g.clip.sfx) {
     if (s.t > g.sfxAt && s.t <= ct) {
       const fn = (host.audio as unknown as Record<string, (...a: unknown[]) => void>)[s.n];
@@ -149,8 +149,9 @@ export interface Intent {
   fling?: number;
   /** a hand over the face */
   face?: number;
-  /** the right hand held here (world), e.g. holding a phone up to film */
+  /** the hands held here (world), e.g. both on a phone, filming */
   holdR?: THREE.Vector3;
+  holdL?: THREE.Vector3;
   lean?: number;
   shrug?: number;
 }
@@ -224,6 +225,7 @@ export function posePerson(p: Person, it: Intent, dt: number, t: number) {
   st.turn = (st.turn ?? 0) + (turn - (st.turn ?? 0)) * k;
   st.look.lerp(it.look, st.look.lengthSq() ? k : 1);
   if (it.holdR) wr = it.holdR;
+  if (it.holdL) wl = it.holdL;
   if (it.palms) {
     const lo = chest.clone().setY(chest.y - 0.2).addScaledVector(fwd, 0.3);
     wl ??= lo.clone().addScaledVector(left, 0.32 * it.palms);

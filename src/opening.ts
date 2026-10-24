@@ -286,7 +286,7 @@ export class Opening {
   /** Dialogue time: the voice's own clock when it's playing, so captions never drift. */
   private dialogT() {
     const ctx = this.host.audio.ctx;
-    if (this.voiceStop && ctx) return ctx.currentTime - this.voiceAt;
+    if (this.voiceStop && ctx) return this.host.audio.time - this.voiceAt;
     return this.t - LEAD_IN;
   }
 

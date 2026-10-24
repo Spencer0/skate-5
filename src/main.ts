@@ -1723,6 +1723,7 @@ requestAnimationFrame(frame);
   loadLevel,
   tut,
   recorder,
+  audio,
   opening,
   playOpening,
   filmThis,

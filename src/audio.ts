@@ -41,6 +41,11 @@ export class Audio {
     return this.at ?? this.ctx!.currentTime;
   }
 
+  /** The clock sounds are scheduled on (offline renders set it with `at`). */
+  get time() {
+    return this.now;
+  }
+
   private build(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.master = ctx.createGain();
@@ -331,7 +336,8 @@ export class Audio {
     src.connect(g).connect(this.master);
     const at = this.now + delay;
     src.start(at);
-    return { at, stop: () => src.stop() };
+    // stop on the scheduling clock too: an offline render's context clock sits at 0 until it renders
+    return { at, stop: () => src.stop(Math.max(at, this.now)) };
   }
 
   /** A fast air whoosh for a hard cut. */
