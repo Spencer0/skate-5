@@ -111,17 +111,46 @@ const OPENING = {
 const LASER = [[0, -1.2], ...arc(-90, 200, 10, 1.3)];
 const TREFLIP = [[0, -1.2], ...arc(-90, -380, 8, 1.3)];
 
-/** a kickflip rolling west past the filmer at speed v, popping as it passes x = pop */
+const bodySpin = (g) => g.sk(() => window.__skate.skater.bodySpin);
+
+/**
+ * Spin the body `deg` degrees in the air (+ = 'd'), holding the steer key until the
+ * skater's own count says it's there. Call every air frame; returns true once done.
+ */
+async function spin(g, st, deg, state) {
+  if (!deg || st.m !== 'air') return;
+  const done = Math.abs(await bodySpin(g)) >= (Math.abs(deg) * Math.PI) / 180 - 0.12;
+  const key = deg > 0 ? 'd' : 'a';
+  if (!done && !state.held) { await g.key('keydown', key); state.held = true; }
+  if (done && state.held) { await g.key('keyup', key); state.held = false; }
+}
+
+/**
+ * A kickflip rolling west past the filmer at speed v, popping as it passes x = pop.
+ * `spin`: body rotation in the air, degrees. `double`: a higher pop and a faster
+ * board, caught after two turns (a flat-ground pop is too short for one otherwise).
+ */
 async function kickflip(g, log, o) {
   await place(g, E('KX0', 9), o.z ?? 13.6, 180, o.v);
-  let popped = false;
-  for (let i = 0; i < 120; i++) {
+  let popped = false, caught = !o.double;
+  const st8 = { held: false };
+  for (let i = 0; i < 140; i++) {
     const st = await stat(g);
     log(st);
-    if (!popped && st.x < o.pop) { popped = true; await flip(g, o.flick, o.catch); continue; }
-    if (popped && st.m === 'ground' && i > 66) break;
+    await spin(g, st, o.spin, st8);
+    if (!popped && st.x < o.pop) {
+      popped = true;
+      if (o.double) {
+        await flick(g, o.flick);
+        await g.sk(([up, k]) => { const s = window.__skate.skater; s.vel.y += up; s.trick.flipRate *= k; }, [E('DU', 0.85), E('DK', 1.35)]);
+      } else await flip(g, o.flick, o.catch);
+      continue;
+    }
+    if (!caught && (await g.sk(() => window.__skate.skater.trick.flip)) >= 2 * 2 * Math.PI - E('DC', 0.9)) { caught = true; await tap(g, 480, 880); }
+    if (popped && st.m === 'ground' && i > 70) break;
     await g.tick();
   }
+  if (st8.held) await g.key('keyup', o.spin > 0 ? 'd' : 'a');
 }
 
 const PLAZA = {
@@ -140,16 +169,23 @@ const PLAZA = {
   },
   // four flat-ground kickflips rolling east to west past the filmer, one per take: the same
   // trick every time, each a little different (pace, pop, flick, a later, sloppier catch)
-  kf1: (g, log) => kickflip(g, log, { v: 6.4, pop: 2.2, catch: 11, flick: KICKFLIP }),
-  kf2: (g, log) => kickflip(g, log, { v: 6.9, pop: 2.6, catch: 10, flick: [[0, -0.8], [0, -1.2], [-0.5, 0.7], [-0.9, 1.35]] }),
-  kf3: (g, log) => kickflip(g, log, { v: 6.0, pop: 1.9, catch: 13, flick: [[0, -0.8], [0, -1.2], [-0.7, 0.5], [-1.1, 1.2]], z: 13.75 }),
-  kf4: (g, log) => kickflip(g, log, { v: 6.6, pop: 2.4, catch: 9, flick: [[0, -0.9], [0, -1.3], [-0.55, 0.65], [-0.95, 1.3]], z: 13.45 }),
-  // storms off: from a standstill where he argued, pushing hard away west (back the way he came in)
+  // a touch of body twist, a kickflip 180, a twist the other way, then the double that's "too creative"
+  kf1: (g, log) => kickflip(g, log, { v: 6.4, pop: 2.2, catch: 11, flick: KICKFLIP, spin: E('S1', 10) }),
+  kf2: (g, log) => kickflip(g, log, { v: 6.9, pop: 2.6, catch: 10, flick: [[0, -0.8], [0, -1.2], [-0.5, 0.7], [-0.9, 1.35]], spin: E('S2', 180) }),
+  kf3: (g, log) => kickflip(g, log, { v: 6.0, pop: 1.9, catch: 13, flick: [[0, -0.8], [0, -1.2], [-0.7, 0.5], [-1.1, 1.2]], z: 13.75, spin: E('S3', -15) }),
+  kf4: (g, log) => kickflip(g, log, { v: 6.6, pop: 2.6, flick: [[0, -0.9], [0, -1.3], [-0.55, 0.65], [-0.95, 1.3]], z: 13.45, double: true }),
+  // storms off: from a standstill where he argued, pushing hard away west (back the way he came
+  // in), flicks an angry kickflip, never catches it, and slams
   async leave(g, log) {
-    await place(g, E('LX0', 2.3), E('LZ', 14.25), 180, E('LV0', 0.6));
+    await place(g, E('LX0', 2.3), E('LZ', 14.25), 180, E('LV0', 4.2));
     await leftStick(g, 0, true);
-    for (let i = 0; i < E('LN', 75); i++) {
-      log(await stat(g));
+    let pop = -1, bail = -1;
+    for (let i = 0; i < 150; i++) {
+      const st = await stat(g);
+      log(st);
+      if (pop < 0 && i >= E('LP', 28)) { await leftUp(g); await flick(g, KICKFLIP); pop = i; continue; }
+      if (bail < 0 && st.m === 'bail') bail = i;
+      if (bail >= 0 && i > bail + E('LB', 40)) break;
       await g.tick();
     }
     await leftUp(g);
@@ -159,14 +195,18 @@ const PLAZA = {
     await place(g, 0, E('LZ0', 26), -90, E('LV', 10));
     await leftStick(g, 0, true);
     let pop = -1, landed = -1, tre = -1;
+    const fs = { held: false };
     for (let i = 0; i < 200; i++) {
       const st = await stat(g);
       log(st);
       if (pop < 0 && st.z < E('LS', 7)) { await flick(g, LASER); pop = g.frame; continue; }
-      if (pop >= 0 && g.frame === pop + E('SP', 1)) await leftSet(g, 1, false);
+      if (pop === g.frame - 1) await leftUp(g);
+      if (pop >= 0 && landed < 0) await spin(g, st, E('FS', 360), fs);
       if (pop >= 0 && g.frame === pop + E('CT', 13)) await tap(g, 480, 880);
-      if (pop >= 0 && g.frame === pop + E('SE', 26)) await leftSet(g, 0, false);
-      if (pop >= 0 && landed < 0 && st.m === 'ground' && g.frame > pop + 8) landed = g.frame;
+      if (pop >= 0 && landed < 0 && st.m === 'ground' && g.frame > pop + 8) {
+        landed = g.frame;
+        if (fs.held) { await g.key('keyup', 'd'); fs.held = false; }
+      }
       if (landed >= 0 && tre < 0 && g.frame > landed + E('TW', 8)) { await flip(g, TREFLIP, E('TC', 12)); tre = g.frame; continue; }
       if (tre >= 0 && st.m === 'ground' && g.frame > tre + 30) break;
       await g.tick();

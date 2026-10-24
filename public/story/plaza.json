@@ -1,5 +1,5 @@
 {
- "duration": 27.366,
+ "duration": 28.966,
  "engine": "chatterbox",
  "voices": {
   "a": "am_fenrir",
@@ -34,7 +34,7 @@
   {
    "name": "leave",
    "t0": 25.466,
-   "t1": 27.366
+   "t1": 28.966
   }
  ],
  "lines": [

@@ -20,11 +20,12 @@ Moreno (Atlas Skateboards team manager) and Officer Pete (plaza security).
   `tools/story/`.
 - **Chapter 2 cold open:** "Bro, can you film this?" at the Plaza. Nico asks
   Theo to film one kickflip. He lands it four times through Theo's camcorder,
-  each take a real, slightly different kickflip, and each one gets a worse
+  each take a real, slightly different kickflip (a little twist, a 180, a
+  double), and each one gets a worse
   note: too natural, too clean, too creative, now hit the big gap. Nico sends
   a 360 laser flip over the fountain, shown in slow motion with a replay, and
-  asks "tell me you got it!" Theo was texting his girl. Nico skates off,
-  and the clip loops to its first frame. It plays before your first Plaza run
+  asks "tell me you got it!" Theo was texting his girl. Nico storms off,
+  flicks an angry kickflip, slams, and the clip loops to its first frame. It plays before your first Plaza run
   (the Plaza intro follows it), and you can replay it from the Plaza menu.
 - **Runs:** each session is a 2:00 run. Goals save the moment you land them.
   When the clock hits zero your current line gets to finish.

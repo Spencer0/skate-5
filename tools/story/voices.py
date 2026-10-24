@@ -83,7 +83,7 @@ SCENES = {
             dict(who='b', text="Eh, a little too clean. Add a little life to it.", speed=1.05, exag=0.3, tempo=1.08, gap=0.05, cut=('take4', 1.6)),
             dict(who='b', text="Okay, now you're just too creative. Hit the big gap with something harder.", speed=1.08, exag=0.35, tempo=1.1, gap=0.05, cut=('final', 4.0)),
             dict(who='a', text="Dude, that was so sick! Tell me you got it!", speed=1.18, exag=1.0, tempo=1.06, gap=0.1),
-            dict(who='b', text="Oh, sorry dude. I was texting my girl.", speed=1.0, exag=0.25, gap=0.2, cut=('leave', 1.9)),
+            dict(who='b', text="Oh, sorry dude. I was texting my girl.", speed=1.0, exag=0.25, gap=0.2, cut=('leave', 3.5)),
         ],
     ),
 }

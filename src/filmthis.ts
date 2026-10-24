@@ -13,8 +13,8 @@ import { Ghost, Intent, Person, StoryHost, easeOut, flapJaw, handheld, headOf, p
  * (a little faster, a later catch...), every one fine. Theo has a new note each time,
  * each one more unreasonable than the last, until Nico sends a 360 laser flip
  * over the fountain (bullet time, trick callouts, replay). "Tell me you got
- * it!" Theo was texting. Nico skates off, back the way he rolled in, and the
- * clip loops to its first frame.
+ * it!" Theo was texting. Nico storms off the way he rolled in, flicks an angry
+ * kickflip, slams, and the clip loops to its first frame.
  *
  * Assets (public/story/, made by tools/story/ with --scene plaza / SCENE=plaza):
  * plaza-ghosts.bin (Nico's lines), plaza.mp3 and plaza.json (the dialogue,
@@ -699,7 +699,7 @@ export class FilmThis {
     }
   }
 
-  /** Nico stares at him a beat; then, from behind Theo (still texting), he pushes off the way he came. */
+  /** Nico stares at him a beat; then he pushes off the way he came, flicks an angry kickflip, and slams. */
   private leaveCamera(u: number, hn: THREE.Vector3, ht: THREE.Vector3) {
     const L = this.lens;
     if (u < STARE) {
@@ -708,11 +708,11 @@ export class FilmThis {
       return;
     }
     this.setShot('leave', false);
-    const { fwd, left, at } = this.frame();
-    L.pos.copy(at).addScaledVector(fwd, -1.3).addScaledVector(left, -0.55).setY(at.y + 1.55);
+    // side on, panning with him across the plaza, so the slam lands mid-frame
     const b = this.follow('leave', u - STARE, new THREE.Vector3());
-    L.look.copy(ht).setY(ht.y - 0.35).lerp(b.setY(0.9), 0.65);
-    L.fov = 50;
+    L.pos.set(-0.6, this.host.groundAt(-0.6, 19.6) + 1.15, 19.6);
+    L.look.copy(b).setY(b.y + 0.55);
+    L.fov = 44;
   }
 
   /** a single from just off the other one's eyeline: head and shoulders, three-quarters on */
