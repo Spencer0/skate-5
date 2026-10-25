@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BoardModel } from './board';
-import { HumanRider, modelRequested } from './humanrider';
+import { HumanRider } from './humanrider';
 import type { RiderId, RiderState } from './rider';
 import type { Skater } from './skater';
 import type { Terrain } from './terrain';
@@ -17,8 +17,7 @@ import type { NpcSetting } from './settings';
  * riding its own Skater, drawn with the game's own rider and board models.
  *
  * Cheap by construction: they spawn a second or so into a run, one at a time;
- * share the rider GLBs already loaded (preset riders, or the player's custom
- * body); skip real shadows for a blob; are culled against the camera frustum
+ * share the create-a-skater GLBs (one download per body, dressed per NPC); skip real shadows for a blob; are culled against the camera frustum
  * and a distance cap; pose their skeletons at a lower rate the further away
  * they are; and drop the board's truck hardware at distance. With the setting
  * off nothing is created and update() returns at once.
@@ -54,7 +53,6 @@ export function crewSize(setting: NpcSetting, levelId: string) {
 const FIXED = 1 / 240;
 const VIS_DIST = 70;
 const DETAIL_DIST = 10;
-const PRESETS: RiderId[] = ['brock', 'coral', 'voss'];
 /** one seed per page load: the same locals all session, a new crew next time */
 const SESSION = (Math.random() * 2 ** 31) | 0;
 
@@ -88,15 +86,12 @@ class Npc {
 
   constructor(
     public brain: NpcBrain,
-    look: { id: RiderId; custom: CustomLook | null; tint: string | null; deck: string },
+    look: { id: RiderId; custom: CustomLook | null; deck: string },
     geo: THREE.BufferGeometry,
     tex: THREE.Texture,
   ) {
     this.rider = new HumanRider(look.id, look.custom);
     this.rider.shadows = false;
-    if (look.tint) {
-      this.rider.tint(/suit/i, look.tint);
-    }
     this.rider.setStyle('solid');
     this.board.setDeck(look.deck);
     this.board.root.traverse((o) => {
@@ -270,7 +265,7 @@ export class NpcCrew {
     // a mixed crew: a street skater, a vert skater, a tech skater (which one comes first changes per session)
     const style = STYLE_IDS[(i + SESSION) % STYLE_IDS.length];
     const brain = new NpcBrain(t, this.features, this.seq++, seeded(SESSION ^ (this.seq * 104729 + 17)), data.spawn, style);
-    const npc = new Npc(brain, pickLook(i, r, ctx.look()), this.blobGeometry(), this.blobTexture());
+    const npc = new Npc(brain, pickLook(r, ctx.look()), this.blobGeometry(), this.blobTexture());
     // start somewhere off camera, away from the player
     brain.place(data.spawn.x, data.spawn.z, data.spawn.heading);
     this.npcs.push(npc);
@@ -489,48 +484,47 @@ export class NpcCrew {
 /* ------------------------------------------------------------------ */
 
 const pick = <T>(r: () => number, list: readonly T[]) => list[Math.floor(r() * list.length) % list.length];
-/** clothes tints for a preset rider worn twice: light, so the multiply keeps the texture readable */
-const TINTS = ['#ffd2c2', '#c9e6ff', '#d8f0c8', '#fff0b8', '#e6d2ff', '#ffd8ea', '#d0f4ee'];
+/** a themed part (beach, party, cowboy) now and then: it pulls the small extras model */
+const THEMED = 0.12;
 
-/** A random create-a-skater outfit (plain parts only: the themed extras are a separate download). */
+/** A random create-a-skater outfit: any body, shape, colours and parts. */
 export function randomLook(r: () => number, body: Body): CustomLook {
-  const plain = (list: Option[]) => forBody(list, body).filter((o) => !o.theme);
+  const part = (list: Option[]) => {
+    const all = forBody(list, body);
+    const plain = all.filter((o) => !o.theme);
+    const themed = all.filter((o) => o.theme);
+    const o = themed.length && r() < THEMED ? pick(r, themed) : pick(r, plain);
+    return o;
+  };
+  const colorOf = (o: Option | null) => o?.color ?? pick(r, CLOTH_COLORS);
+  const hat = r() < 0.3 ? part(HATS) : null;
+  const top = part(TOPS);
+  const bottom = part(BOTTOMS);
+  const shoes = part(SHOES);
   return {
     body,
-    height: 0.2 + r() * 0.6,
-    shape: Object.fromEntries(SHAPES.map((d) => [d.id, 0.3 + r() * 0.4])),
+    height: r(),
+    shape: Object.fromEntries(SHAPES.map((d) => [d.id, 0.1 + r() * 0.8])),
     skin: pick(r, SKIN_TONES),
-    hair: r() < 0.08 ? null : pick(r, plain(HAIR)).id,
+    hair: r() < 0.08 ? null : pick(r, forBody(HAIR, body)).id,
     hairColor: pick(r, HAIR_COLORS),
-    hat: r() < 0.3 ? pick(r, plain(HATS)).id : null,
-    hatColor: pick(r, CLOTH_COLORS),
-    top: pick(r, plain(TOPS)).id,
-    topColor: pick(r, CLOTH_COLORS),
-    bottom: pick(r, plain(BOTTOMS)).id,
-    bottomColor: pick(r, CLOTH_COLORS),
-    shoes: pick(r, plain(SHOES)).id,
-    shoesColor: pick(r, CLOTH_COLORS),
+    hat: hat?.id ?? null,
+    hatColor: colorOf(hat),
+    top: top.id,
+    topColor: colorOf(top),
+    bottom: bottom.id,
+    bottomColor: colorOf(bottom),
+    shoes: shoes.id,
+    shoesColor: colorOf(shoes),
   };
 }
 
-/**
- * NPC i's look, stable for the session. Preset riders the player isn't using
- * come first (small downloads); a custom outfit when the player's custom body
- * is already loaded; otherwise a preset again, re-tinted.
- */
-export function pickLook(i: number, r: () => number, player: PlayerLook): { id: RiderId; custom: CustomLook | null; tint: string | null; deck: string } {
-  const presets = PRESETS.filter((id) => id !== player.rider);
-  // a session-stable shuffle
-  const order = presets.map((id, k) => ({ id, k: seeded(SESSION + k * 31)() })).sort((a, b) => a.k - b.k).map((x) => x.id);
+/** NPC i's look, stable for the session: a fresh random skater, never dressed like the player. */
+export function pickLook(r: () => number, player: PlayerLook): { id: RiderId; custom: CustomLook | null; deck: string } {
   const decks = DECKS.filter((d) => d.id !== player.deck && d.id !== 'gold');
   const deck = pick(r, decks).id;
-  const body: Body | null = modelRequested('custom_m') ? 'm' : modelRequested('custom_f') ? 'f' : null;
-  if (body && (i === 0 || i >= order.length)) {
-    let look = randomLook(r, body);
-    if (player.look && look.top === player.look.top && look.topColor === player.look.topColor) look = randomLook(r, body);
-    return { id: 'custom', custom: look, tint: null, deck };
-  }
-  const k = body ? i - 1 : i;
-  if (k < order.length) return { id: order[k], custom: null, tint: null, deck };
-  return { id: order[k % order.length], custom: null, tint: pick(r, TINTS), deck };
+  const body: Body = r() < 0.5 ? 'm' : 'f';
+  let look = randomLook(r, body);
+  if (player.look && look.top === player.look.top && look.topColor === player.look.topColor) look = randomLook(r, body);
+  return { id: 'custom', custom: look, deck };
 }

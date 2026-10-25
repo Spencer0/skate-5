@@ -21,8 +21,6 @@ const HEIGHT: Record<RiderId, number> = { brock: 1.86, coral: 1.64, voss: 1.72, 
 const HUNCH: Record<RiderId, number> = { brock: 0.05, coral: 0, voss: 0.2, custom: 0 };
 
 const cache = new Map<string, Promise<THREE.Group>>();
-/** Has this model already been requested (so another rider wearing it costs no download)? */
-export const modelRequested = (file: string) => cache.has(file);
 function loadModel(file: string) {
   let p = cache.get(file);
   if (!p) {
