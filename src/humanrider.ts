@@ -21,6 +21,15 @@ import { Ragdoll, RAG, Ground } from './ragdoll';
 const HUNCH: Record<RiderId, number> = { brock: 0.05, coral: 0, voss: 0.2, custom: 0 };
 
 const cache = new Map<string, Promise<THREE.Group>>();
+
+/**
+ * Set by main.ts: compiles an object's shaders in the background so the first
+ * frame a model appears doesn't stall on the compiler. Resolves when ready.
+ */
+export let compileHook: ((model: THREE.Object3D, owner: THREE.Object3D) => Promise<unknown>) | null = null;
+export function setCompileHook(fn: typeof compileHook) {
+  compileHook = fn;
+}
 function loadModel(file: string) {
   let p = cache.get(file);
   if (!p) {
@@ -190,7 +199,7 @@ export class HumanRider {
             if (m) root.add(m);
           }
         }
-        this.attach(root);
+        return this.attach(root);
       },
       (e) => console.warn('rider model failed to load', e),
     );
@@ -260,8 +269,17 @@ export class HumanRider {
     this.recolor(this.look);
     this.reshape(this.look);
     for (const [re, c] of this.tints) for (const m of this.mats) if (re.test(m.name)) m.color.set(c);
-    this.ready = true;
+    // material flags (alpha test, sides, shadows) are part of the shader: settle them before compiling
     this.setStyle(this.style);
+    const show = () => {
+      if (this.disposed) return;
+      this.group.add(scene);
+      this.ready = true;
+    };
+    // nothing is drawn while the model's shaders compile off the main thread
+    this.group.remove(scene);
+    if (compileHook) return compileHook(scene, this.group).then(show, show);
+    show();
   }
 
   /** Multiply a colour into every material whose name matches (preset riders' clothes). */
@@ -616,7 +634,7 @@ export class HumanRider {
   /**
    * Snapshot the posed skeleton for a replay: pelvis position then each named
    * bone's local rotation (every other bone stays at rest). Returns false
-   * while the stand-in capsule is still showing.
+   * while the model is still loading.
    */
   writePose(out: Float32Array, o: number) {
     if (!this.ready) return false;
