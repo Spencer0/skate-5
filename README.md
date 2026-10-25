@@ -166,6 +166,9 @@ Code map:
 - `src/rider.ts`, `src/humanrider.ts`, `src/settings.ts` – skater IK, the MakeHuman riders and saved options
 - `src/custom.ts`, `src/creator.ts`, `src/data/skater-options.json` – the create-a-skater look, its menu and the shared option list
 - `tools/riders/` – Blender + MPFB pipeline that generates `public/riders/*.glb`
+- `src/quality.ts`, `src/perf.ts` – graphics tiers with the frame-rate governor, and the
+  debug performance overlay: open the game with `?perf` for frame time by section,
+  draw calls, triangles and GPU time (`__skate.perf.snapshot()` in the console)
 - `src/main.ts` – loop, level loading, camera, combo scoring, effects
 
 ## Deploying to GitHub Pages

@@ -21,6 +21,15 @@ const HEIGHT: Record<RiderId, number> = { brock: 1.86, coral: 1.64, voss: 1.72, 
 const HUNCH: Record<RiderId, number> = { brock: 0.05, coral: 0, voss: 0.2, custom: 0 };
 
 const cache = new Map<string, Promise<THREE.Group>>();
+
+/**
+ * Set by main.ts: compiles an object's shaders in the background so the first
+ * frame a model appears doesn't stall on the compiler. Resolves when ready.
+ */
+export let compileHook: ((model: THREE.Object3D, owner: THREE.Object3D) => Promise<unknown>) | null = null;
+export function setCompileHook(fn: typeof compileHook) {
+  compileHook = fn;
+}
 function loadModel(file: string) {
   let p = cache.get(file);
   if (!p) {
@@ -233,15 +242,24 @@ export class HumanRider {
     frameQ(P('thigh_l').sub(P('thigh_r')), up, this.restHipQ);
     frameQ(P('upperarm_l').sub(P('upperarm_r')), up, this.restChestQ);
 
-    this.group.remove(this.fallback.group);
-    this.fallback.dispose();
     if (this.look) {
       this.recolor(this.look);
       this.reshape(this.look);
     }
     for (const [re, c] of this.tints) for (const m of this.mats) if (re.test(m.name)) m.color.set(c);
-    this.ready = true;
+    // material flags (alpha test, sides, shadows) are part of the shader: settle them before compiling
     this.setStyle(this.style);
+    const show = () => {
+      if (this.disposed) return;
+      this.group.remove(this.fallback.group);
+      this.fallback.dispose();
+      this.group.add(scene);
+      this.ready = true;
+    };
+    // the stand-in keeps skating while the model's shaders compile off the main thread
+    this.group.remove(scene);
+    if (compileHook) compileHook(scene, this.group).then(show, show);
+    else show();
   }
 
   /** Multiply a colour into every material whose name matches (preset riders' clothes). */

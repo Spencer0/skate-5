@@ -22,13 +22,18 @@ export interface TierSpec {
   softShadows: boolean;
   /** MSAA is fixed when the WebGL context is created: applies on next launch */
   antialias: boolean;
+  /** cap on texture anisotropy: the ground at grazing angles is most of the fill cost on a phone */
+  anisotropy: number;
 }
 
 export const TIERS: Record<Tier, TierSpec> = {
-  high: { maxRatio: 2, minRatio: 1.25, shadows: true, shadowSize: 2048, softShadows: true, antialias: true },
-  medium: { maxRatio: 1.5, minRatio: 1, shadows: true, shadowSize: 1024, softShadows: false, antialias: true },
-  low: { maxRatio: 1, minRatio: 0.75, shadows: false, shadowSize: 512, softShadows: false, antialias: false },
+  high: { maxRatio: 2, minRatio: 1.25, shadows: true, shadowSize: 2048, softShadows: true, antialias: true, anisotropy: 16 },
+  medium: { maxRatio: 1.5, minRatio: 1, shadows: true, shadowSize: 1024, softShadows: false, antialias: true, anisotropy: 4 },
+  low: { maxRatio: 1, minRatio: 0.75, shadows: false, shadowSize: 512, softShadows: false, antialias: false, anisotropy: 2 },
 };
+
+/** Caps the current tier puts on things made elsewhere (textures.ts reads this as it makes textures). */
+export const limits = { anisotropy: 16 };
 
 export const QUALITY_NAMES: Record<QualitySetting, string> = { auto: 'Auto', low: 'Low', medium: 'Medium', high: 'High' };
 
@@ -154,6 +159,33 @@ export class Graphics {
     }
     // shadow on/off and filter type are compiled into every lit material
     if (changed) this.recompile();
+    if (limits.anisotropy !== s.anisotropy) {
+      limits.anisotropy = s.anisotropy;
+      this.capTextures();
+    }
+  }
+
+  /** Clamp the anisotropy of every texture already in the scene to the tier's cap (a re-upload, so only on a tier change). */
+  private capTextures() {
+    const seen = new Set<THREE.Texture>();
+    this.scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (!m) return;
+      for (const x of Array.isArray(m) ? m : [m]) {
+        for (const v of Object.values(x) as unknown[]) {
+          const t = v as THREE.Texture;
+          if (!t || !(t as THREE.Texture).isTexture || seen.has(t)) continue;
+          seen.add(t);
+          const want = t.userData.anisotropy as number | undefined;
+          if (want === undefined) continue;
+          const next = Math.min(want, limits.anisotropy);
+          if (t.anisotropy !== next) {
+            t.anisotropy = next;
+            t.needsUpdate = true;
+          }
+        }
+      }
+    });
   }
 
   private recompile() {
