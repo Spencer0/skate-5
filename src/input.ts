@@ -5,6 +5,7 @@ export type Action =
   | { type: 'flick'; spec: TrickSpec }
   | { type: 'catch' }
   | { type: 'respawn' }
+  | { type: 'special' }
   | { type: 'grab'; idx: number }
   | { type: 'release' };
 
@@ -219,6 +220,7 @@ export class Input {
       }
       if (k === 'k' || k === 'enter') this.actions.push({ type: 'catch' });
       else if (k === 'r') this.actions.push({ type: 'respawn' });
+      else if (k === 'e') this.actions.push({ type: 'special' });
       else if (map[k]) {
         // keyboard: space catches if something is spinning, otherwise pops
         if (k === ' ') this.actions.push({ type: 'catch' });

@@ -190,6 +190,8 @@ export class Hud {
   }
 
   popup(text: string, sub?: string, kind: 'perfect' | 'clean' | 'sketchy' | 'bail' | 'grind' = 'clean') {
+    // the same trick again (catch, then land) replaces its card instead of stacking a copy
+    for (const c of [...this.popups.children]) if (c.firstChild?.textContent === text) c.remove();
     // keep at most 2 popups so fast lines don't spam the screen
     while (this.popups.children.length > 1) this.popups.firstChild!.remove();
     const p = el('div', 'popup ' + kind, this.popups);
@@ -247,6 +249,12 @@ export class Hud {
       card,
       'Grinds: ollie onto a rail or ledge edge. Board angle picks the grind (straight = 50-50, sideways = boardslide/lipslide, in between = feeble). Hold the trick stick UP for nose variants, DOWN for tail variants. Flick to pop out.',
     );
+    el(
+      'p',
+      'guide-p',
+      card,
+      'Specials: landing tricks fills the special meter under your score (bail and it empties). When it glows, a ★ button appears: tap it on the ground or in the air to throw your special, then tap to catch it like any flip. Your first special unlocks after 4 career goals; pick which one under Career → Skater → Specials.',
+    );
     const grid = el('div', 'guide-grid', card);
     for (const g of GUIDE) {
       const item = el('div', 'guide-item', grid);
@@ -254,7 +262,7 @@ export class Hud {
       el('div', 'guide-name', item, g.name);
       if (g.note) el('div', 'guide-note', item, g.note);
     }
-    el('p', 'guide-p small', card, 'Keyboard: A/D steer · W push · S brake · Space ollie/catch · J kickflip · L heelflip · U/O shove-its · 1–9 combos · Shift = nollie · N/M nose/tail grinds · G/H/T/Y grabs (Indy, Melon, Nose, Tail) · R reset');
+    el('p', 'guide-p small', card, 'Keyboard: A/D steer · W push · S brake · Space ollie/catch · J kickflip · L heelflip · U/O shove-its · 1–9 combos · Shift = nollie · N/M nose/tail grinds · G/H/T/Y grabs (Indy, Melon, Nose, Tail) · E special · R reset');
     wrap.addEventListener('pointerdown', (e) => {
       if (e.target === wrap) wrap.classList.remove('on');
     });

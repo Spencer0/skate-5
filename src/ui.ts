@@ -401,7 +401,7 @@ export class UI {
   }
 
   private specialsTab(back: () => void) {
-    el('p', 'menu-p', this.card, 'Land tricks to fill the special meter. When it glows, tap ★ in the air for your special. Catch it like any flip!');
+    el('p', 'menu-p', this.card, 'Land tricks to fill the special meter. When it glows, tap ★ (or press E) for your special. Catch it like any flip!');
     const list = el('div', 'chapter-list', this.card);
     const eq = this.career.equippedSpecial();
     for (const s of SPECIALS) {

@@ -5,7 +5,7 @@ import { buildMeshes, makeMaterials } from './park';
 import { LEVELS, PARKS, LevelData, GapDef, GoalDef, inRect, V3, LETTERS } from './levels';
 import { BoardModel, DECK } from './board';
 import { Skater, SkaterEvent, TrickRecord, Quality, GRAB_LIFT } from './skater';
-import { Input } from './input';
+import { Input, trickAnywhere } from './input';
 import { grabForDirection, GRABS } from './tricks';
 import { Audio } from './audio';
 import { Hud } from './hud';
@@ -195,6 +195,8 @@ let session: Session | null = null;
 let started = false; // audio unlocked, first tap done
 let playing = false; // physics + input live
 let special = 0;
+/** the 'special ready' how-to shows once per run */
+let specialHinted = false;
 const runCounts = new Map<string, number>();
 
 const CPU = [
@@ -663,6 +665,7 @@ function startRun(i: number, mode: RunMode) {
   combo.total = 0;
   runCounts.clear();
   special = 0;
+  specialHinted = false;
   props?.reset();
   props?.setPickupsVisible(mode === 'career');
   tracker = mode === 'free' ? null : new GoalTracker(L, career, onGoal);
@@ -1498,6 +1501,7 @@ function frame(now: number) {
         audio.flipWhoosh(Math.abs(sp.flip) + Math.abs(sp.shove) * 0.5 + Math.abs(sp.wrap));
       }
     } else if (a.type === 'respawn') respawnAtStart();
+    else if (a.type === 'special') fireSpecial();
     else if (a.type === 'grab') pendingGrab = a.idx;
     else if (a.type === 'release') {
       pendingGrab = null;
@@ -1556,6 +1560,12 @@ function frame(now: number) {
   skater.boost = special >= 1 ? 0.8 : 0;
   const ready = hasSpecial && special >= 1 && playing && skater.mode !== 'bail' && !(skater.trick.active && !skater.trick.caught);
   hud.setSpecial(session ? special : null, ready);
+  if (session && playing && special >= 1 && !specialHinted) {
+    specialHinted = true;
+    const sp = career.equippedSpecial();
+    if (sp) hud.toast(`${sp.name} ready`, trickAnywhere() ? 'Press E (or click ★), then catch it' : 'Tap ★ in the air, then tap to catch', 'letter');
+    else hud.toast('Special meter full', 'Finish 4 career goals to unlock your first special', 'letter');
+  }
   if (special >= 1 && playing && Math.random() < 0.5) {
     tmpV.set((Math.random() - 0.5) * 0.4, 0.3, (Math.random() - 0.5) * 0.4);
     glow.emit(board.root.position, tmpV, 0.3, GLOW, 0.5);
