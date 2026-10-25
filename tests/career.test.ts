@@ -72,12 +72,13 @@ test('stats nudge the tuning and stat 5 is stock', () => {
   applyStats({ speed: 5, ollie: 5, spin: 5, flip: 5, balance: 5 });
 });
 
-test('specials unlock as goals pile up', () => {
+test('first special needs no goals, the rest unlock as goals pile up', () => {
   const c = new Career();
   c.reset();
-  assert.equal(c.equippedSpecial(), null);
-  for (const g of park.goals.slice(0, SPECIALS[0].needs)) c.complete(park, g.id);
   assert.equal(c.equippedSpecial()?.id, SPECIALS[0].id);
+  assert.ok(!c.specialUnlocked(SPECIALS[1]));
+  for (const g of park.goals.slice(0, SPECIALS[1].needs)) c.complete(park, g.id);
+  assert.ok(c.specialUnlocked(SPECIALS[1]));
 });
 
 test('saves from before the rebrand keep their deck and special', () => {
