@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { PARKS } from '../src/levels';
 import { Terrain } from '../src/terrain';
 import type { SkaterEvent } from '../src/skater';
-import { NpcBrain, NpcStats, StyleId, buildFeatures, npcLimit, seeded } from '../src/npcai';
+import { Feature, NpcBrain, NpcStats, StyleId, buildFeatures, npcLimit, seeded } from '../src/npcai';
 import { npcSetting } from '../src/settings';
 
 const SECONDS = 60;
@@ -20,6 +20,11 @@ interface Session {
   combos: number[];
   closest: number;
   byStyle: Record<StyleId, NpcStats>;
+  /** slams by the feature the bot was riding at the time ('-': none) */
+  bailsBy: Map<string, number>;
+  /** times a bot rode into a solid rail (a wall hit against one, not a grind) */
+  railBumps: number;
+  features: Feature[];
 }
 
 const zero = (): NpcStats => ({ pops: 0, lands: 0, bails: 0, grinds: 0, tricks: 0, respawns: 0, attempts: 0, vert: 0, megas: 0, megaGaps: 0, transfers: 0, specials: 0, lifts: 0, seenRespawns: 0 });
@@ -42,13 +47,22 @@ function ride(L: (typeof PARKS)[number], seed: number, seconds: number, styles?:
   const world = { others: [{ pos: player, vel: new THREE.Vector3() }, ...bots.map((b) => ({ pos: b.sk.pos, vel: b.sk.vel }))], player, visible: () => false };
   for (const b of bots) b.respawnNow(world);
   const lim = npcLimit(t);
-  const s: Session = { stats: zero(), names: new Map(), grinds: new Set(), combos: [], closest: Infinity, byStyle: { street: zero(), vert: zero(), tech: zero() } };
+  const s: Session = { stats: zero(), names: new Map(), grinds: new Set(), combos: [], closest: Infinity, byStyle: { street: zero(), vert: zero(), tech: zero() }, bailsBy: new Map(), railBumps: 0, features: feats };
+  const solid = t.rails.filter((r) => r.kind === 'rail');
+  const againstRail = (p: THREE.Vector3) =>
+    solid.some((r) => {
+      const vx = r.b.x - r.a.x;
+      const vz = r.b.z - r.a.z;
+      const k = Math.max(0, Math.min(1, ((p.x - r.a.x) * vx + (p.z - r.a.z) * vz) / (vx * vx + vz * vz || 1)));
+      return Math.hypot(r.a.x + vx * k - p.x, r.a.z + vz * k - p.z) < 0.6 && Math.max(r.a.y, r.b.y) - p.y > 0.08 && Math.min(r.a.y, r.b.y) - p.y < 1.7;
+    });
   const combo = bots.map(() => ({ n: 0, ground: 0 }));
   const name = (n: string) => s.names.set(n, (s.names.get(n) ?? 0) + 1);
   for (let i = 0; i < seconds * 240; i++) {
     for (let k = 0; k < bots.length; k++) {
       const b = bots[k];
       const c = combo[k];
+      const f = b.feature;
       b.step(STEP, world);
       for (const e of b.sk.events as SkaterEvent[]) {
         if (e.type === 'land' || e.type === 'grindStart') {
@@ -60,7 +74,12 @@ function ride(L: (typeof PARKS)[number], seed: number, seconds: number, styles?:
           s.grinds.add(e.record.name);
           c.n++;
         } else if (e.type === 'revert') c.n++;
-        else if (e.type === 'bail') c.n = 0;
+        else if (e.type === 'bail') {
+          c.n = 0;
+          const key = f ? `${f.id}:${f.tag}` : '-';
+          s.bailsBy.set(key, (s.bailsBy.get(key) ?? 0) + 1);
+        }
+        if ((e.type === 'wall' || (e.type === 'bail' && e.reason === 'wall')) && againstRail(b.sk.mode === 'bail' ? b.sk.bpos : b.sk.pos)) s.railBumps++;
       }
       b.sk.events.length = 0;
       if (b.sk.mode === 'ground' && (c.ground += STEP) > 0.75) {
@@ -104,6 +123,47 @@ for (const L of PARKS) {
     assert.equal(st.seenRespawns, 0, 'popped back up in view of the camera');
   });
 }
+
+test('NPCs on the Mega Park rails: round the 100 m rail, not into it, and no one rail eats the slams', () => {
+  // The 100 m rail runs across the middle of the park: the tabletop's run-up starts
+  // 6 m past it and the pipe and the lifts are on the far side. Bots used to aim
+  // straight through it (the whiskers see a rail only a couple of metres out, and a
+  // committed run-up doesn't steer round anything), bump it every few runs and slam
+  // into it now and then.
+  const mega = PARKS.find((L) => L.id === 'mega')!;
+  let bumps = 0;
+  let lands = 0;
+  let slams = 0;
+  const rails = new Map<string, { tries: number; slams: number }>();
+  for (const seed of [21, 22, 23, 24, 25, 26]) {
+    const s = ride(mega, seed, 120);
+    bumps += s.railBumps;
+    lands += s.stats.lands;
+    slams += s.stats.bails;
+    for (const f of s.features) {
+      if (f.kind !== 'rail') continue;
+      const k = `${f.id}:${f.tag}`;
+      const r = rails.get(k) ?? { tries: 0, slams: 0 };
+      r.tries += f.tries;
+      r.slams += s.bailsBy.get(k) ?? 0;
+      rails.set(k, r);
+    }
+  }
+  assert.ok(bumps <= 15, `rode into a rail ${bumps} times in 6 x 2 min`);
+  const rate = slams / (slams + lands);
+  assert.ok(rate > 0.04 && rate < 0.3, `slam rate ${rate.toFixed(2)}`);
+  // the slams on the rails come at the designed rate (blown flip-outs, lost balance), not off one bad exit
+  let railTries = 0;
+  let railSlams = 0;
+  for (const [k, r] of rails) {
+    railTries += r.tries;
+    railSlams += r.slams;
+    // (a rail whose exit or approach dooms the line would sit well above this)
+    if (r.tries >= 10) assert.ok(r.slams / r.tries <= 0.6, `${k}: ${r.slams} slams in ${r.tries} lines`);
+  }
+  assert.ok(railTries >= 30, `rail lines ${railTries}`);
+  assert.ok(railSlams / railTries < 0.3, `rail slams ${railSlams} of ${railTries} lines`);
+});
 
 const count = (re: RegExp) => [...names].filter(([n]) => re.test(n)).reduce((a, [, v]) => a + v, 0);
 

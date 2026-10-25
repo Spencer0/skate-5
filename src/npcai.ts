@@ -210,6 +210,70 @@ function segHit(p0x: number, p0z: number, p1x: number, p1z: number, q0x: number,
 
 const near = (a: THREE.Vector3, b: THREE.Vector3) => a.distanceToSquared(b) < 0.0025;
 
+/** Is rail `r` solid for a board rolling at height y (not underfoot, not overhead)? */
+function railBlocks(r: Rail, y: number) {
+  return r.kind === 'rail' && Math.min(r.a.y, r.b.y) - y <= TUNE.railHead && Math.max(r.a.y, r.b.y) - y >= 0.08;
+}
+
+/** The first solid rail the 2D segment (x0,z0)-(x1,z1) runs into at height y, if any. */
+function railAcross(t: Terrain, x0: number, z0: number, x1: number, z1: number, y: number): Rail | null {
+  const pad = 0.3;
+  for (const r of t.rails) {
+    if (Math.max(x0, x1) < r.minX - pad || Math.min(x0, x1) > r.maxX + pad || Math.max(z0, z1) < r.minZ - pad || Math.min(z0, z1) > r.maxZ + pad) continue;
+    if (!railBlocks(r, y)) continue;
+    if (segHit(x0, z0, x1, z1, r.a.x, r.a.z, r.b.x, r.b.z, pad)) return r;
+  }
+  return null;
+}
+
+/**
+ * A rail is a wall you can't roll through, and a long one (the 100 m rail)
+ * is a long wall: the way past it is round one of its ends. Follows the
+ * rail run `r` belongs to (kinks and all, as far as it stays solid at height
+ * y) to both ends and puts a waypoint just past whichever end makes the
+ * shorter trip from (px,pz) to (tx,tz). False when neither end can be ridden
+ * to (or the way there runs through `keepClear`).
+ */
+function aroundRail(t: Terrain, r: Rail, y: number, px: number, pz: number, tx: number, tz: number, out: { x: number; z: number }, keepClear: THREE.Vector3 | null) {
+  let best = Infinity;
+  for (let side = 0; side < 2; side++) {
+    let cur = r;
+    let at = side === 0 ? r.a : r.b;
+    let from = side === 0 ? r.b : r.a;
+    for (let i = 0; i < 64; i++) {
+      let next: Rail | null = null;
+      for (const q of t.rails) {
+        if (q === cur || !railBlocks(q, y)) continue;
+        if (near(q.a, at) || near(q.b, at)) {
+          next = q;
+          break;
+        }
+      }
+      if (!next) break;
+      from = at;
+      at = near(next.a, at) ? next.b : next.a;
+      cur = next;
+    }
+    let ox = at.x - from.x;
+    let oz = at.z - from.z;
+    const l = Math.hypot(ox, oz) || 1;
+    ox /= l;
+    oz /= l;
+    // past the end, and a little out to our side of the line
+    const s = ox * (pz - at.z) - oz * (px - at.x) >= 0 ? 1 : -1;
+    const wx = at.x + ox * 2.5 - oz * s * 1.2;
+    const wz = at.z + oz * 2.5 + ox * s * 1.2;
+    const cost = Math.hypot(wx - px, wz - pz) + Math.hypot(tx - wx, tz - wz);
+    if (cost >= best || railAcross(t, px, pz, wx, wz, y) || wet(t, wx, wz)) continue;
+    // (and not a line that runs through the player standing about)
+    if (keepClear && Math.min(ptSeg(px, pz, wx, wz, keepClear.x, keepClear.z), ptSeg(wx, wz, tx, tz, keepClear.x, keepClear.z)) < 2) continue;
+    best = cost;
+    out.x = wx;
+    out.z = wz;
+  }
+  return best < Infinity;
+}
+
 /** Rail length from `start` along `r`, following kinks onto continuing rails (negative: it runs on uphill, where you'd stall). */
 function chainLength(rails: Rail[], r: Rail, fromA: boolean) {
   let len = 0;
@@ -1274,11 +1338,11 @@ export class NpcBrain {
       if (this.cooldown <= 0 && this.choose(world)) {
         this.phase = 'goto';
         this.planT = 0;
-      } else if (!this.hasTarget || Math.hypot(this.tx - p.x, this.tz - p.z) < 3) this.pickCruise(world);
+      } else if (!this.hasTarget || Math.hypot(this.tx - p.x, this.tz - p.z) < 3 || railAcross(t, p.x, p.z, this.tx, this.tz, p.y)) this.pickCruise(world);
     }
     if (this.phase === 'goto' && this.f) {
       this.approach(dt, world);
-      if (this.phase === 'goto') this.detour(dt);
+      if (this.phase === 'goto') this.detour(dt, world);
     }
     else if (this.phase === 'cruise') this.target = 4.6;
     if (this.phase === 'goto' || this.phase === 'cruise') {
@@ -1305,7 +1369,7 @@ export class NpcBrain {
   }
 
   /** A long way to go and no straight shot: head off at an angle that is clear for a bit. */
-  private detour(dt: number) {
+  private detour(dt: number, world: WorldView) {
     const p = this.sk.pos;
     if (this.detourT > 0) {
       this.detourT -= dt;
@@ -1314,9 +1378,19 @@ export class NpcBrain {
       this.tz = this.dZ;
       return;
     }
-    if (Math.hypot(this.tx - p.x, this.tz - p.z) < 14) return;
     if ((this.detourCheck -= dt) > 0) return;
-    this.detourCheck = 0.6;
+    this.detourCheck = 0.3;
+    // a rail in the way, however close: ride round its end (the whiskers only see it when it's too late to turn)
+    const rail = railAcross(this.terrain, p.x, p.z, this.tx, this.tz, p.y);
+    if (rail && aroundRail(this.terrain, rail, p.y, p.x, p.z, this.tx, this.tz, _w, world.player)) {
+      this.dX = _w.x;
+      this.dZ = _w.z;
+      this.detourT = 2 + Math.hypot(_w.x - p.x, _w.z - p.z) / 3;
+      this.tx = _w.x;
+      this.tz = _w.z;
+      return;
+    }
+    if (Math.hypot(this.tx - p.x, this.tz - p.z) < 14) return;
     if (this.reachable(this.tx, this.tz)) return;
     const base = Math.atan2(this.tz - p.z, this.tx - p.x);
     const pref = wrapPi(this.heading() - base) >= 0 ? 1 : -1;
@@ -1415,7 +1489,10 @@ export class NpcBrain {
     const dist = Math.hypot(rx, rz);
     const minRun = f.kind === 'qp' || f.kind === 'pipe' ? 2.5 : 3.5;
     // on the line and pointing down it: commit
-    if (Math.abs(lat) < 0.9 && along > -7 && along < f.at - minRun && this.headingErr(Math.atan2(f.dz, f.dx)) < 0.5 && Math.abs(p.y - f.y0) < 0.2) {
+    // (not with a rail between us and the start: the line rides straight, it'd ride straight into it)
+    const onLine = Math.abs(lat) < 0.9 && along > -7 && along < f.at - minRun && this.headingErr(Math.atan2(f.dz, f.dx)) < 0.5 && Math.abs(p.y - f.y0) < 0.2;
+    const a0 = Math.max(0, along);
+    if (onLine && !railAcross(this.terrain, p.x, p.z, sx + f.dx * a0, sz + f.dz * a0, p.y)) {
       this.commit(f);
     } else if (along > -8 && along < f.at - minRun && Math.abs(lat) < 4 && this.headingErr(Math.atan2(f.dz, f.dx)) < 1.3) {
       // close and heading the right way: chase a carrot on the (extended) line so we merge onto it
@@ -1429,8 +1506,10 @@ export class NpcBrain {
       this.giveUp();
     } else {
       // out in the park, or alongside / ahead of the line: swing round to a point behind the start, staying on our side of it
-      const back = Math.min(6, 2 + dist * 0.25);
+      let back = Math.min(6, 2 + dist * 0.25);
       const side = along > -4 ? (lat >= 0 ? 1 : -1) * Math.min(4, Math.max(2.5, Math.abs(lat))) : 0;
+      // ...but not on the far side of a rail that runs behind the start
+      while (back > 1 && railAcross(this.terrain, sx, sz, sx - f.dx * back - f.dz * side, sz - f.dz * back + f.dx * side, f.y0)) back -= 1;
       this.tx = sx - f.dx * back - f.dz * side;
       this.tz = sz - f.dz * back + f.dx * side;
       this.target = dist > 25 ? 7 : dist > 10 ? 5.6 : 4.2;
@@ -2433,6 +2512,7 @@ export class NpcBrain {
 
 const _v = new THREE.Vector3();
 const _e = { x: 0, z: 0, pad: 0 };
+const _w = { x: 0, z: 0 };
 
 /** Is p within `r` of the feature's line (run-up + a bit past)? */
 function lineNear(f: Feature, p: THREE.Vector3, r: number) {
