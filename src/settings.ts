@@ -1,4 +1,5 @@
 import type { RiderStyle } from './rider';
+import type { QualitySetting } from './quality';
 
 export const CAMERAS = [
   { id: 'chase', name: 'Chase' },
@@ -21,19 +22,22 @@ export interface Options {
   autoRevert: boolean;
   /** shows the REC button so lines can be saved for the Studio */
   recording: boolean;
-  /** park locals; unset until the player picks one (the default can then follow the graphics tier) */
+  /** graphics tier; 'auto' detects and adapts to the frame rate */
+  quality: QualitySetting;
+  /** park locals; unset until the player picks one, so the default can follow the graphics tier */
   npcs?: NpcSetting;
 }
 
-/** The NPC setting in effect. */
-export function npcSetting(o: Options): NpcSetting {
-  return NPC_SETTINGS.some((x) => x.id === o.npcs) ? o.npcs! : 'normal';
+/** The NPC setting in effect: the player's pick, else Normal (Few on the low graphics tier). */
+export function npcSetting(o: Options, tier?: string): NpcSetting {
+  if (NPC_SETTINGS.some((x) => x.id === o.npcs)) return o.npcs!;
+  return tier === 'low' ? 'few' : 'normal';
 }
 
 const KEY = 'skate5.options';
 
 export function loadOptions(): Options {
-  const def: Options = { camera: 0, rider: 'solid', autoRevert: true, recording: false };
+  const def: Options = { camera: 0, rider: 'solid', autoRevert: true, recording: false, quality: 'auto' };
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return { ...def, ...(JSON.parse(raw) as Partial<Options>) };

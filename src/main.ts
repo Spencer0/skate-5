@@ -27,17 +27,17 @@ import { Recorder, SFX, writeFrame } from './replay/rig';
 import { FPS, MAX_CLIP_SECONDS, MODES } from './replay/clip';
 import { listClips, putClip, roomLeft } from './replay/store';
 import { Studio } from './replay/studio';
+import { Graphics, startTier, TIERS } from './quality';
 
 /* ------------------------------------------------------------------ */
 /* Setup                                                               */
 /* ------------------------------------------------------------------ */
 
 const app = document.getElementById('app')!;
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const options = loadOptions();
+const launchTier = startTier(options.quality);
+const renderer = new THREE.WebGLRenderer({ antialias: TIERS[launchTier].antialias, powerPreference: 'high-performance' });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 app.appendChild(renderer.domElement);
@@ -60,8 +60,6 @@ skyDome.renderOrder = -1;
 skyDome.frustumCulled = false;
 scene.add(skyDome);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
 const SH = 14;
 sun.shadow.camera.left = -SH;
 sun.shadow.camera.right = SH;
@@ -73,6 +71,7 @@ sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.02;
 scene.add(sun);
 scene.add(sun.target);
+const quality = new Graphics(renderer, scene, sun, options.quality, launchTier);
 const SUN_OFFSET = new THREE.Vector3(-14, 30, 10);
 
 const mats = makeMaterials();
@@ -115,7 +114,6 @@ let minimap: Minimap | null = null;
 const career = new Career();
 applyStats(career.effectiveStats());
 board.setDeck(career.data.deck);
-const options = loadOptions();
 skater.autoRevert = options.autoRevert;
 let rider = new HumanRider(career.data.rider ?? 'brock', career.customLook());
 rider.setStyle(options.rider);
@@ -285,11 +283,18 @@ const ui = new UI(app, career, {
     if (!v) stopRecording();
   },
   openStudio,
-  getNpcs: () => npcSetting(options),
+  getNpcs: () => npcSetting(options, quality.tier),
   setNpcs(v) {
     options.npcs = v;
     saveOptions(options);
   },
+  getQuality: () => options.quality,
+  setQuality(q) {
+    options.quality = q;
+    saveOptions(options);
+    quality.set(q);
+  },
+  qualityStatus: () => ({ tier: quality.tier, antialiasPending: quality.antialiasPending }),
 });
 
 /* ------------------------------------------------------------------ */
@@ -335,6 +340,7 @@ function resume() {
   ui.hide();
   playing = true;
   input.actions.length = 0;
+  quality.resetWindow();
 }
 function pause() {
   if (!playing || !session) return;
@@ -559,6 +565,7 @@ function respawnAtStart() {
 }
 
 function startRun(i: number, mode: RunMode) {
+  quality.resetWindow();
   stopRecording();
   stopTutorial();
   loadLevel(i);
@@ -1273,7 +1280,7 @@ const studio = new Studio(app, {
     camera.updateProjectionMatrix();
   },
   restoreRenderSize() {
-    renderer.setPixelRatio(perf.ratio);
+    renderer.setPixelRatio(quality.ratio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -1335,20 +1342,6 @@ let lastDist = 0;
 let sparkAcc = 0;
 let sprayAcc = 0;
 const joint = { x: Infinity, z: Infinity };
-
-const perf = { t: 0, frames: 0, ratio: Math.min(window.devicePixelRatio || 1, 2) };
-function adaptResolution(dt: number) {
-  perf.t += dt;
-  perf.frames++;
-  if (perf.t < 2) return;
-  const fps = perf.frames / perf.t;
-  perf.t = 0;
-  perf.frames = 0;
-  if (fps < 48 && perf.ratio > 1) {
-    perf.ratio = Math.max(1, perf.ratio - 0.25);
-    renderer.setPixelRatio(perf.ratio);
-  }
-}
 
 function runClock(dt: number) {
   const s = session;
@@ -1412,7 +1405,7 @@ function frame(now: number) {
     return;
   }
   const realDt = dt;
-  if (playing && !document.hidden) adaptResolution(dt);
+  if (playing && !document.hidden) quality.update(dt);
 
   const push = input.poll();
   input.enabled = playing;
@@ -1641,7 +1634,7 @@ const npcCtx = {
     return playing && !debug.paused;
   },
   get count() {
-    return crewSize(npcSetting(options), PARKS[levelIndex]?.id ?? '');
+    return crewSize(npcSetting(options, quality.tier), PARKS[levelIndex]?.id ?? '');
   },
   player: skater,
   camera,
@@ -1763,4 +1756,5 @@ requestAnimationFrame(frame);
   playOpening,
   filmThis,
   playFilmThis,
+  quality,
 };

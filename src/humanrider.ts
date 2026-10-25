@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { Rider, RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
 import { CustomLook, defaultLook, extraParts, heightOf, partColors, shapeInfluences } from './custom';
 import { TUNE, GRAB_LIFT } from './skater';
@@ -25,7 +26,7 @@ export const modelRequested = (file: string) => cache.has(file);
 function loadModel(file: string) {
   let p = cache.get(file);
   if (!p) {
-    p = new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}riders/${file}.glb`).then((g) => g.scene);
+    p = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(`${import.meta.env.BASE_URL}riders/${file}.glb`).then((g) => g.scene);
     cache.set(file, p);
   }
   return p;

@@ -4,6 +4,7 @@ import { deckTexture } from './textures';
 import { RIDERS, RiderId, RiderStyle } from './rider';
 import { RiderStage } from './stage';
 import { CAMERAS, NPC_SETTINGS, NpcSetting } from './settings';
+import { QUALITY_NAMES, type QualitySetting, type Tier } from './quality';
 import { Creator } from './creator';
 import { EXTRA_AUTHORS, defaultLook } from './custom';
 import { OPENING_ID } from './opening';
@@ -44,6 +45,9 @@ export interface UIHooks {
   getNpcs(): NpcSetting;
   setNpcs(v: NpcSetting): void;
   openStudio(): void;
+  getQuality(): QualitySetting;
+  setQuality(q: QualitySetting): void;
+  qualityStatus(): { tier: Tier; antialiasPending: boolean };
 }
 
 export interface RunReport {
@@ -570,6 +574,22 @@ export class UI {
     el('p', 'menu-p small', this.card, 'Adds a ● REC button while you skate (or press V). Saved clips go to the Studio on the title screen, where you cut them into a video and export an MP4.');
     seg('Park locals', NPC_SETTINGS, this.hooks.getNpcs(), (id) => this.hooks.setNpcs(id as NpcSetting));
     el('p', 'menu-p small', this.card, 'Other skaters sessioning the park with you. Turn them down on slower phones.');
+    seg(
+      'Graphics',
+      (['auto', 'low', 'medium', 'high'] as QualitySetting[]).map((id) => ({ id, name: QUALITY_NAMES[id] })),
+      this.hooks.getQuality(),
+      (id) => this.hooks.setQuality(id as QualitySetting),
+    );
+    const qs = this.hooks.qualityStatus();
+    el(
+      'p',
+      'menu-p small',
+      this.card,
+      (this.hooks.getQuality() === 'auto'
+        ? `Auto is using ${QUALITY_NAMES[qs.tier]} and lowers it if the game starts to stutter.`
+        : 'Low turns off shadows and renders at a lower resolution, for older phones.') +
+        (qs.antialiasPending ? ' Edge smoothing changes the next time you open the game.' : ''),
+    );
     seg(
       'Sound',
       [
