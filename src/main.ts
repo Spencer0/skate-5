@@ -1556,7 +1556,8 @@ function frame(now: number) {
 
   // special meter
   const hasSpecial = !!session && !!career.equippedSpecial();
-  if (playing && !combo.active) special = Math.max(0, special - dt * 0.02);
+  // a part-filled meter drains between combos; a full one stays lit until you bail
+  if (playing && !combo.active && special < 1) special = Math.max(0, special - dt * 0.02);
   skater.boost = special >= 1 ? 0.8 : 0;
   const ready = hasSpecial && special >= 1 && playing && skater.mode !== 'bail' && !(skater.trick.active && !skater.trick.caught);
   hud.setSpecial(session ? special : null, ready);
