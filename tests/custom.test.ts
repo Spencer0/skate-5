@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EXTRA_AUTHORS, BOTTOMS, extraParts, forBody, HAIR, HATS, SHAPES, SHOES, TOPS, defaultLook, heightOf, partColors, sanitizeLook, shapeInfluences, HEIGHT_MAX, HEIGHT_MIN } from '../src/custom';
+import { EXTRA_AUTHORS, BOTTOMS, extraParts, forBody, HAIR, HATS, SHAPES, SHOES, TOPS, defaultLook, heightOf, partColors, sanitizeLook, shapeInfluences, HEIGHT_MAX, HEIGHT_MIN, PRESET_LOOKS, PRINT_SPOTS } from '../src/custom';
 
 test('garbage from storage falls back to the default look', () => {
   for (const raw of [null, undefined, 5, 'x', [], {}]) assert.deepEqual(sanitizeLook(raw), defaultLook());
@@ -71,4 +71,14 @@ test('themed parts are flagged for the on-demand model', () => {
   assert.deepEqual(sanitizeLook(look).hat, 'cowboy');
   for (const list of [HATS, TOPS, BOTTOMS, SHOES]) for (const o of list.filter((x) => x.theme)) assert.match(o.color ?? '', /^#[0-9a-f]{6}$/i);
   assert.ok(EXTRA_AUTHORS.length > 0);
+});
+
+test('the story riders are valid kit looks (sanitizing changes nothing)', () => {
+  for (const [id, look] of Object.entries(PRESET_LOOKS)) assert.deepEqual(sanitizeLook(look), look, id);
+});
+
+test('a print survives storage, an unknown one is dropped, and preset prints sit on printable tops', () => {
+  assert.equal(sanitizeLook({ ...defaultLook(), print: 'atlas' }).print, 'atlas');
+  assert.equal(sanitizeLook({ ...defaultLook(), print: 'graffiti' }).print, undefined);
+  for (const look of Object.values(PRESET_LOOKS)) if (look.print) assert.ok(PRINT_SPOTS[look.top], look.top);
 });

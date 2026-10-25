@@ -139,6 +139,32 @@ const fade = document.createElement('div');
 fade.className = 'fade';
 app.appendChild(fade);
 
+const loading = document.createElement('div');
+loading.className = 'loading';
+loading.setAttribute('role', 'status');
+loading.setAttribute('aria-label', 'Loading');
+app.appendChild(loading);
+/** Show the spinner if a wait outlasts a blink; returns the call that hides it. */
+function spinner() {
+  const t = setTimeout(() => loading.classList.add('on'), 150);
+  return () => {
+    clearTimeout(t);
+    loading.classList.remove('on');
+  };
+}
+let riderWait = 0;
+/** Run `go` once the player's rider model is ready (at once if it already is), behind the spinner. */
+function withRider(go: () => void) {
+  if (rider.ready) return go();
+  const id = ++riderWait;
+  const done = spinner();
+  rider.loaded.then(() => {
+    if (id !== riderWait) return;
+    done();
+    go();
+  });
+}
+
 // gap checklist names for every level
 for (const L of PARKS) {
   const d = L.build(new Terrain());
@@ -192,7 +218,7 @@ function begin() {
 input.onFirstInput = () => audio.start();
 
 const ui = new UI(app, career, {
-  startRun,
+  startRun: (i, mode) => withRider(() => startRun(i, mode)),
   resume,
   restartRun() {
     if (!session) return;
@@ -218,10 +244,12 @@ const ui = new UI(app, career, {
   playOpening,
   playFilmThis,
   playIntro(i, then) {
-    loadLevel(i);
-    playScene(LEVELS[i].intro, () => {
-      career.markSeen(LEVELS[i].intro.id);
-      then();
+    withRider(() => {
+      loadLevel(i);
+      playScene(LEVELS[i].intro, () => {
+        career.markSeen(LEVELS[i].intro.id);
+        then();
+      });
     });
   },
   previewGoal(i, g, back) {
@@ -327,6 +355,9 @@ const tut = new Tutorial(app, {
 
 /** A no-clock ride in the first park with the coach on top. */
 function startTutorial() {
+  withRider(startTutorialNow);
+}
+function startTutorialNow() {
   startRun(0, 'free');
   tut.start();
   hud.root.classList.add('tutorial');
@@ -406,7 +437,9 @@ function playStory(sc: Opening | FilmThis, level: number, id: string, then?: () 
   loadLevel(level);
   audio.start();
   fade.classList.add('on');
+  const loaded = spinner();
   sc.load().then(() => {
+    loaded();
     // straight from black into the first shot, no fade
     fade.style.transition = 'none';
     fade.classList.remove('on');

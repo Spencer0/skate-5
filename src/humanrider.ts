@@ -1,23 +1,23 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { Rider, RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
-import { CustomLook, defaultLook, extraParts, heightOf, partColors, shapeInfluences } from './custom';
+import { RiderId, RiderState, RiderStyle, ik, DECK_TOP } from './rider';
+import { CustomLook, PRESET_LOOKS, PRINT_SPOTS, defaultLook, extraParts, heightOf, partColors, shapeInfluences } from './custom';
 import { TUNE, GRAB_LIFT } from './skater';
 import { DECK } from './board';
 import { Ragdoll, RAG, Ground } from './ragdoll';
 
 /**
  * A MakeHuman character (generated in Blender with MPFB, CC0) driven by the
- * same skate intent as the capsule rider: crouch, tuck, lean, push, grind
+ * skate intent (RiderState): crouch, tuck, lean, push, grind
  * balance. Each frame the skeleton is reset to its rest pose, the pelvis and
  * spine are rotated, then legs and arms are solved with 2-bone IK against the
  * model's own bone lengths and every bone is aimed at its target with a
  * minimal swing, so the skin deforms like a person and the feet stay on the
- * bolts. Until the GLB finishes loading, the capsule rider stands in.
+ * bolts. Every rider, the story three included, is the create-a-skater model
+ * dressed for its look; nothing is drawn until that model has loaded.
  */
 
-const HEIGHT: Record<RiderId, number> = { brock: 1.86, coral: 1.64, voss: 1.72, custom: 1.75 };
 const HUNCH: Record<RiderId, number> = { brock: 0.05, coral: 0, voss: 0.2, custom: 0 };
 
 const cache = new Map<string, Promise<THREE.Group>>();
@@ -28,6 +28,29 @@ function loadModel(file: string) {
     cache.set(file, p);
   }
   return p;
+}
+
+/** The Atlas Skateboards globe: ring, two meridian ellipses, the axis and three parallels. */
+function atlasGlobe(g: CanvasRenderingContext2D, cx: number, cy: number, R: number, col: string) {
+  g.strokeStyle = col;
+  g.lineWidth = Math.max(2, R * 0.12);
+  g.beginPath();
+  g.ellipse(cx, cy, R, R, 0, 0, Math.PI * 2);
+  g.stroke();
+  g.lineWidth = Math.max(2, R * 0.08);
+  g.beginPath();
+  for (const k of [0.38, 0.75]) {
+    g.moveTo(cx + R * k, cy);
+    g.ellipse(cx, cy, R * k, R, 0, 0, Math.PI * 2);
+  }
+  g.moveTo(cx, cy - R);
+  g.lineTo(cx, cy + R);
+  for (const t of [-0.5, 0, 0.5]) {
+    const hw = Math.sqrt(R * R - (t * R) ** 2);
+    g.moveTo(cx - hw, cy + t * R);
+    g.lineTo(cx + hw, cy + t * R);
+  }
+  g.stroke();
 }
 
 /** Hide every part of the modular model the look doesn't wear and tint the ones it does. */
@@ -113,7 +136,6 @@ const FINGERS = ['index', 'middle', 'ring', 'pinky', 'thumb'];
 
 export class HumanRider {
   group = new THREE.Group();
-  private fallback: Rider;
   private model: THREE.Object3D | null = null;
   private bones = {} as Record<BoneName, THREE.Bone>;
   private all: THREE.Bone[] = [];
@@ -142,23 +164,25 @@ export class HumanRider {
   private fingers: Record<'l' | 'r', THREE.Bone[][]> = { l: [], r: [] };
   private ground: Ground | null = null;
 
-  private look: CustomLook | null;
+  private look: CustomLook;
+  /** the top's texture before a print was drawn over it */
+  private printBase: THREE.Texture | null = null;
+  /** settles once the model is dressed and posed (or fails to load) */
+  readonly loaded: Promise<void>;
 
-  /** `look` dresses the modular create-a-skater model when id is 'custom'. */
+  /** `look` dresses the modular create-a-skater model when id is 'custom'; the story riders wear their preset. */
   constructor(
     public id: RiderId,
     look: CustomLook | null = null,
   ) {
-    this.look = id === 'custom' ? (look ?? defaultLook()) : null;
-    this.fallback = new Rider(id);
-    this.group.add(this.fallback.group);
+    this.look = id === 'custom' ? (look ?? defaultLook()) : PRESET_LOOKS[id];
     // themed parts (beach, party, cowboy) live in a second model, fetched only when worn
-    const extras = this.look && extraParts(this.look).length ? loadModel(`extras_${this.look.body}`).catch(() => null) : Promise.resolve(null);
-    Promise.all([loadModel(this.look ? `custom_${this.look.body}` : id), extras]).then(
+    const extras = extraParts(this.look).length ? loadModel(`extras_${this.look.body}`).catch(() => null) : Promise.resolve(null);
+    this.loaded = Promise.all([loadModel(`custom_${this.look.body}`), extras]).then(
       ([scene, ex]) => {
         if (this.disposed) return;
         const root = scene.clone(true);
-        if (ex && this.look) {
+        if (ex) {
           // same skeleton bone names: the rebind in attach() hooks these meshes to this rider's bones
           const spare = ex.clone(true);
           for (const name of extraParts(this.look)) {
@@ -168,12 +192,12 @@ export class HumanRider {
         }
         this.attach(root);
       },
-      (e) => console.warn('rider model failed to load, keeping the simple rider', e),
+      (e) => console.warn('rider model failed to load', e),
     );
   }
 
   private attach(scene: THREE.Object3D) {
-    if (this.look) dress(scene, this.look);
+    dress(scene, this.look);
     // skinned clones need their skeletons rebound to the cloned bones
     const byName = new Map<string, THREE.Bone>();
     scene.traverse((o) => {
@@ -214,8 +238,8 @@ export class HumanRider {
 
     // scale to the character's height; MakeHuman faces +Z with feet at y=0
     // hats and hair don't count towards how tall the character is
-    const box = new THREE.Box3().setFromObject(this.look ? (scene.getObjectByName('body') ?? scene) : scene);
-    const k = (this.look ? heightOf(this.look) : HEIGHT[this.id]) / Math.max(0.5, box.max.y - box.min.y);
+    const box = new THREE.Box3().setFromObject(scene.getObjectByName('body') ?? scene);
+    const k = heightOf(this.look) / Math.max(0.5, box.max.y - box.min.y);
     scene.scale.setScalar(k);
     this.model = scene;
     this.group.add(scene);
@@ -233,12 +257,8 @@ export class HumanRider {
     frameQ(P('thigh_l').sub(P('thigh_r')), up, this.restHipQ);
     frameQ(P('upperarm_l').sub(P('upperarm_r')), up, this.restChestQ);
 
-    this.group.remove(this.fallback.group);
-    this.fallback.dispose();
-    if (this.look) {
-      this.recolor(this.look);
-      this.reshape(this.look);
-    }
+    this.recolor(this.look);
+    this.reshape(this.look);
     for (const [re, c] of this.tints) for (const m of this.mats) if (re.test(m.name)) m.color.set(c);
     this.ready = true;
     this.setStyle(this.style);
@@ -254,6 +274,49 @@ export class HumanRider {
   recolor(look: CustomLook) {
     this.look = look;
     for (const [part, c] of Object.entries(partColors(look))) if (c) this.matByPart.get(part)?.color.set(c);
+    this.applyPrint();
+  }
+
+  /**
+   * Draw the look's chest print into this rider's copy of the top texture.
+   * The kit's cloth is greyscale tinted by the material colour, which would
+   * tint the print too, so the colour is baked into the copy instead.
+   */
+  private applyPrint() {
+    for (const m of this.mats) {
+      if (m.userData.printed) {
+        m.map?.dispose();
+        m.map = this.printBase;
+        m.userData.printed = false;
+        m.needsUpdate = true;
+      }
+    }
+    const spot = PRINT_SPOTS[this.look.top];
+    const m = this.matByPart.get('top_' + this.look.top);
+    const img = m?.map?.image as CanvasImageSource & { width: number; height: number } | undefined;
+    if (!this.look.print || !spot || !m || !img) return;
+    this.printBase = m.map;
+    const W = img.width;
+    const H = img.height;
+    const cv = document.createElement('canvas');
+    cv.width = W;
+    cv.height = H;
+    const g = cv.getContext('2d')!;
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'multiply';
+    g.fillStyle = '#' + m.color.getHexString();
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over';
+    atlasGlobe(g, spot.x * W, spot.y * H, spot.r * W, '#faf6ec');
+    const tex = new THREE.CanvasTexture(cv);
+    tex.flipY = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = this.printBase!.wrapS;
+    tex.wrapT = this.printBase!.wrapT;
+    m.map = tex;
+    m.color.set(0xffffff);
+    m.userData.printed = true;
+    m.needsUpdate = true;
   }
 
   /** Blend the body / top / bottom morph targets to the look's shape sliders. */
@@ -269,7 +332,6 @@ export class HumanRider {
 
   setStyle(style: RiderStyle) {
     this.style = style;
-    this.fallback.setStyle(style);
     this.group.visible = style !== 'off';
     const ghost = style === 'ghost';
     for (const m of this.mats) {
@@ -291,7 +353,7 @@ export class HumanRider {
 
   dispose() {
     this.disposed = true;
-    this.fallback.dispose();
+    for (const m of this.mats) if (m.userData.printed) m.map?.dispose();
     // geometry and textures are shared with the cached model; only our material clones go
     for (const m of this.mats) m.dispose();
   }
@@ -792,10 +854,7 @@ export class HumanRider {
       if (this.group.visible) this.poseRagdoll(dt);
       return;
     }
-    if (!this.ready) {
-      this.fallback.update(dt, st);
-      return;
-    }
+    if (!this.ready) return;
     if (!this.group.visible) return;
     const s = this.s;
     const ease = (cur: number, to: number, rate: number) => cur + (to - cur) * Math.min(1, dt * rate);

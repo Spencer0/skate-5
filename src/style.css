@@ -393,6 +393,38 @@ body {
   transition: opacity 0.25s;
 }
 
+/* waiting on a rider model: only appears if the wait is long enough to notice */
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(239, 231, 218, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  /* over the menus and the Studio */
+  z-index: 40;
+}
+.loading.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.loading::after {
+  content: '';
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid rgba(20, 20, 19, 0.14);
+  border-top-color: var(--accent);
+  animation: loadspin 0.8s linear infinite;
+}
+@keyframes loadspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .minimap {
   position: absolute;
   top: max(56px, calc(env(safe-area-inset-top) + 48px));
