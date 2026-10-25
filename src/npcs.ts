@@ -333,7 +333,7 @@ export class NpcCrew {
 
     _sphere.center.set(focus.x, focus.y + 0.8, focus.z);
     _sphere.radius = 1.4;
-    // nobody shows up as the capsule stand-in: an NPC appears once its model is in
+    // an NPC appears once its model is in
     const vis = n.rider.ready && n.dist < VIS_DIST && _frustum.intersectsSphere(_sphere);
     n.board.root.visible = vis;
     n.rider.group.visible = vis;
@@ -404,7 +404,7 @@ export class NpcCrew {
       return;
     }
     if (n.fall.on && sk.mode === 'bail') {
-      // model not in yet: tip the stand-in over
+      // model not in yet: the scripted tip-over still runs (nothing is drawn)
       const f = n.fall;
       f.t += dt;
       f.vel.multiplyScalar(Math.exp(-dt * 2.5));

@@ -19,7 +19,7 @@ import { CutscenePlayer, previewScene } from './cutscene';
 import { Opening, OPENING_ID } from './opening';
 import { FilmThis, FILM_ID } from './filmthis';
 import { Props } from './props';
-import { HumanRider } from './humanrider';
+import { HumanRider, setCompileHook } from './humanrider';
 import { CAMERAS, loadOptions, saveOptions, npcSetting } from './settings';
 import { NpcCrew, crewSize } from './npcs';
 import { Tutorial, tutorialPlayed } from './tutorial';
@@ -28,6 +28,7 @@ import { FPS, MAX_CLIP_SECONDS, MODES } from './replay/clip';
 import { listClips, putClip, roomLeft } from './replay/store';
 import { Studio } from './replay/studio';
 import { Graphics, startTier, TIERS } from './quality';
+import { Perf } from './perf';
 
 /* ------------------------------------------------------------------ */
 /* Setup                                                               */
@@ -72,6 +73,7 @@ sun.shadow.normalBias = 0.02;
 scene.add(sun);
 scene.add(sun.target);
 const quality = new Graphics(renderer, scene, sun, options.quality, launchTier);
+const perf = new URLSearchParams(location.search).has('perf') ? new Perf(renderer, () => ({ ratio: quality.ratio, tier: quality.tier })) : null;
 const SUN_OFFSET = new THREE.Vector3(-14, 30, 10);
 
 const mats = makeMaterials();
@@ -139,6 +141,32 @@ const fade = document.createElement('div');
 fade.className = 'fade';
 app.appendChild(fade);
 
+const loading = document.createElement('div');
+loading.className = 'loading';
+loading.setAttribute('role', 'status');
+loading.setAttribute('aria-label', 'Loading');
+app.appendChild(loading);
+/** Show the spinner if a wait outlasts a blink; returns the call that hides it. */
+function spinner() {
+  const t = setTimeout(() => loading.classList.add('on'), 150);
+  return () => {
+    clearTimeout(t);
+    loading.classList.remove('on');
+  };
+}
+let riderWait = 0;
+/** Run `go` once the player's rider model is ready (at once if it already is), behind the spinner. */
+function withRider(go: () => void) {
+  if (rider.ready) return go();
+  const id = ++riderWait;
+  const done = spinner();
+  rider.loaded.then(() => {
+    if (id !== riderWait) return;
+    done();
+    go();
+  });
+}
+
 // gap checklist names for every level
 for (const L of PARKS) {
   const d = L.build(new Terrain());
@@ -192,7 +220,7 @@ function begin() {
 input.onFirstInput = () => audio.start();
 
 const ui = new UI(app, career, {
-  startRun,
+  startRun: (i, mode) => withRider(() => startRun(i, mode)),
   resume,
   restartRun() {
     if (!session) return;
@@ -218,10 +246,12 @@ const ui = new UI(app, career, {
   playOpening,
   playFilmThis,
   playIntro(i, then) {
-    loadLevel(i);
-    playScene(LEVELS[i].intro, () => {
-      career.markSeen(LEVELS[i].intro.id);
-      then();
+    withRider(() => {
+      loadLevel(i);
+      playScene(LEVELS[i].intro, () => {
+        career.markSeen(LEVELS[i].intro.id);
+        then();
+      });
     });
   },
   previewGoal(i, g, back) {
@@ -327,6 +357,9 @@ const tut = new Tutorial(app, {
 
 /** A no-clock ride in the first park with the coach on top. */
 function startTutorial() {
+  withRider(startTutorialNow);
+}
+function startTutorialNow() {
   startRun(0, 'free');
   tut.start();
   hud.root.classList.add('tutorial');
@@ -406,7 +439,9 @@ function playStory(sc: Opening | FilmThis, level: number, id: string, then?: () 
   loadLevel(level);
   audio.start();
   fade.classList.add('on');
+  const loaded = spinner();
   sc.load().then(() => {
+    loaded();
     // straight from black into the first shot, no fade
     fade.style.transition = 'none';
     fade.classList.remove('on');
@@ -492,6 +527,12 @@ function goalView(g: GoalDef): { cam: V3; look: V3 } | null {
 
 let fountains: THREE.Vector3[] = [];
 
+/**
+ * Free a level's geometry and textures. Materials are kept: disposing the last
+ * material on a shader program deletes the program, and the next visit to the
+ * level would compile it again (a 150-400 ms stall on a phone). A material is
+ * a few hundred bytes; the programs are what cost.
+ */
 function disposeGroup(g: THREE.Group) {
   const shared = new Set<THREE.Material>(Object.values(mats));
   g.traverse((o) => {
@@ -501,9 +542,25 @@ function disposeGroup(g: THREE.Group) {
     for (const x of Array.isArray(mat) ? mat : mat ? [mat] : []) {
       if (shared.has(x)) continue;
       (x as THREE.MeshStandardMaterial).map?.dispose();
-      x.dispose();
     }
   });
+}
+
+/** false while a freshly built level's shaders compile: the frame loop holds the last picture instead of stalling */
+let levelReady = true;
+let levelGen = 0;
+
+/**
+ * Compile an object's shaders with KHR_parallel_shader_compile where the
+ * browser has it (Chrome, recent Safari) so the compiler runs on driver
+ * threads instead of stalling the first frame the object is drawn.
+ */
+const parallelCompile = renderer.extensions.has('KHR_parallel_shader_compile');
+function compileInBackground(o: THREE.Object3D): Promise<unknown> {
+  if (parallelCompile) return renderer.compileAsync(o, camera, scene);
+  // without the extension the compile blocks either way: do it now, quietly
+  renderer.compile(o, camera, scene);
+  return Promise.resolve();
 }
 
 function loadLevel(i: number) {
@@ -522,7 +579,6 @@ function loadLevel(i: number) {
   props = new Props(terrain, levelData.props, levelData.letters, hasTape ? levelData.tape : null);
   props.setPickupsVisible(false);
   levelGroup.add(props.group);
-  scene.add(levelGroup);
   const sky = new THREE.Color(L.sky);
   scene.background = sky;
   scene.fog = new THREE.Fog(sky, L.fog[0], L.fog[1]);
@@ -532,6 +588,24 @@ function loadLevel(i: number) {
   skyMat.needsUpdate = true;
   // a touch of sky blue in the fill light, so shade reads cool against warm sun
   hemi.color.set(0xfff6ea).lerp(new THREE.Color(L.zenith), 0.22);
+  // fog and lights are set: the level's shaders can compile while the group stays out of the scene
+  const group = levelGroup;
+  const gen = ++levelGen;
+  levelReady = false;
+  compileInBackground(group).then(
+    () => {
+      if (gen !== levelGen) return;
+      scene.add(group);
+      levelReady = true;
+      quality.resetWindow();
+      last = performance.now();
+    },
+    () => {
+      if (gen !== levelGen) return;
+      scene.add(group);
+      levelReady = true;
+    },
+  );
   skater.terrain = terrain;
   npcs.setLevel(terrain, levelData);
   respawnAtStart();
@@ -892,7 +966,7 @@ function handle(ev: SkaterEvent) {
       fall.q.copy(rider.group.quaternion);
       fall.vel.copy(skater.vel).multiplyScalar(0.6);
       fall.side = Math.random() < 0.5 ? 1 : -1;
-      // the full rider goes limp; the capsule stand-in keeps the scripted tip-over
+      // the full rider goes limp (the scripted tip-over still runs while its model is loading)
       rider.startRagdoll(skater.vel, fall.side, terrain);
       audio.bail();
       buzz([40, 50, 40]);
@@ -1397,11 +1471,17 @@ function updateTracker() {
 
 function frame(now: number) {
   requestAnimationFrame(frame);
+  perf?.begin();
   let dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (studio.active) {
     input.enabled = false;
     studio.update(dt);
+    return;
+  }
+  if (!levelReady) {
+    input.poll();
+    input.actions.length = 0;
     return;
   }
   const realDt = dt;
@@ -1448,6 +1528,7 @@ function frame(now: number) {
     grindMod: input.grindMod,
     crouch: input.crouch,
   };
+  perf?.mark('input');
   acc += debug.paused || !playing ? 0 : dt;
   let first = true;
   while (acc >= FIXED) {
@@ -1457,7 +1538,9 @@ function frame(now: number) {
   }
   for (const ev of skater.events) handle(ev);
   skater.events.length = 0;
+  perf?.mark('physics');
   npcs.update(dt, npcCtx);
+  perf?.mark('npcs');
 
   if (skater.mode === 'bail' && skater.bailT > 1.45) fade.classList.add('on');
   if (playing) rideLifts();
@@ -1492,6 +1575,7 @@ function frame(now: number) {
   const fsgn = skater.fwdSpeed < 0 ? -1 : 1;
   board.animate(dist * fsgn, skater.mode === 'ground' ? skater.steerS : 0);
   updateRider(dt, now / 1000, p);
+  perf?.mark('rider');
 
   // contact shadow
   const bx = skater.mode === 'bail' ? skater.bpos.x : skater.pos.x;
@@ -1562,6 +1646,7 @@ function frame(now: number) {
   if (!story.active) audio.update(bed[0], playing ? grindKind : 'none', bed[2], bed[3] > 0);
 
   // HUD
+  perf?.mark('other');
   hud.setScore(combo.total, session ? session.bestCombo : 0);
   hud.showCombo(combo.names, combo.points + (skater.grind ? skater.grind.points : 0), combo.mult + (liveGrind ? 1 : 0), liveGrind);
   hud.balance(skater.mode === 'grind' && skater.grind ? skater.grind.balance : null);
@@ -1589,8 +1674,12 @@ function frame(now: number) {
   mats.water.map?.offset.set(ambient.value * 0.012, ambient.value * 0.02);
   for (const f of (levelGroup?.userData.ticks ?? []) as ((dt: number, t: number) => void)[]) f(dt, ambient.value);
   skyDome.position.copy(camera.position);
+  perf?.mark('hud');
+  perf?.gpuBegin();
   if (story.active) renderPortrait();
   else renderer.render(scene, camera);
+  perf?.gpuEnd();
+  perf?.mark('render');
   if (recorder.active && playing && !cut.active) {
     const mode = Math.max(0, MODES.indexOf(skater.mode as (typeof MODES)[number]));
     if (!recorder.capture(realDt, (out, o) => writeFrame({ board, rider, blob, camera }, out, o, bed, mode))) {
@@ -1599,6 +1688,7 @@ function frame(now: number) {
     }
   }
   hud.setRec(options.recording && playing && session ? (recorder.active ? recorder.time : -1) : null);
+  perf?.end();
 }
 
 /** The story scenes are phone videos: on a wide screen they play in a 9:16 window. */
@@ -1715,9 +1805,18 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause();
 });
 
+// riders that live in this scene compile their shaders before they show; the creator's preview (its own renderer) doesn't
+setCompileHook((model, owner) => {
+  for (let p: THREE.Object3D | null = owner; p; p = p.parent) if (p === scene) return compileInBackground(model);
+  return Promise.resolve();
+});
 loadLevel(0);
 ui.showTitle();
-requestAnimationFrame(frame);
+// everything in the opening scene (board, sky, particles) compiles before the first frame
+(parallelCompile ? renderer.compileAsync(scene, camera) : (renderer.compile(scene, camera), Promise.resolve())).finally(() => {
+  last = performance.now();
+  requestAnimationFrame(frame);
+});
 
 // debug/test hook
 (window as unknown as { __skate: unknown }).__skate = {
@@ -1757,4 +1856,11 @@ requestAnimationFrame(frame);
   filmThis,
   playFilmThis,
   quality,
+  perf,
+  renderer,
+  scene,
+  mats,
+  skyDome,
+  sun,
+  THREE,
 };

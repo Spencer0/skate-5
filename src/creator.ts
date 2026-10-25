@@ -9,6 +9,8 @@ import {
   HEIGHT_MAX,
   HEIGHT_MIN,
   Option,
+  PRINTS,
+  PRINT_SPOTS,
   SHAPES,
   SHOES,
   SKIN_TONES,
@@ -116,6 +118,7 @@ export class Creator {
       case 'top':
         this.themed(body, 'Top', TOPS, L.top, (id) => ({ top: id }), 'topColor');
         if (L.top !== 'none') this.swatches(body, 'Colour', CLOTH_COLORS, L.topColor, (c) => this.quiet({ topColor: c }), true);
+        if (PRINT_SPOTS[L.top]) this.seg(body, 'Print', [{ id: '', label: 'None' }, ...PRINTS], L.print ?? '', (id) => this.set({ print: id ? (id as CustomLook['print']) : undefined }));
         break;
       case 'bottom':
         this.themed(body, 'Bottoms', BOTTOMS, L.bottom, (id) => ({ bottom: id }), 'bottomColor');

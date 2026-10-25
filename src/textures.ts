@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { limits } from './quality';
 import { FLAGS, flagDef } from './flags';
 
 export const PALETTE = {
@@ -67,13 +68,19 @@ function blotches(g: CanvasRenderingContext2D, w: number, h: number, count: numb
   }
 }
 
+/** Ask for `want` taps of anisotropic filtering, within the graphics tier's cap. */
+function aniso(t: THREE.Texture, want: number) {
+  t.userData.anisotropy = want;
+  t.anisotropy = Math.min(want, limits.anisotropy);
+}
+
 function tex(c: HTMLCanvasElement, repeat = true) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
   }
-  t.anisotropy = 8;
+  aniso(t, 8);
   return t;
 }
 
@@ -255,7 +262,7 @@ export function boardTopTexture() {
   // scuffs where feet go
   blotches(g, W, H, 6, 'rgba(255,255,255,0.05)', 80, 53);
   const t = tex(c, false);
-  t.anisotropy = 16;
+  aniso(t, 16);
   return t;
 }
 
@@ -744,7 +751,7 @@ export function deckTexture(id: string): THREE.CanvasTexture {
     g.stroke();
   }
   const t = tex(c, false);
-  t.anisotropy = 16;
+  aniso(t, 16);
   return t;
 }
 
@@ -990,7 +997,7 @@ export function grimeAtlas(tagColors: string[], seed: number) {
     g.stroke();
   });
   const t = tex(c, false);
-  t.anisotropy = 8;
+  aniso(t, 8);
   return t;
 }
 

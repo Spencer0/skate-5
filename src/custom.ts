@@ -24,7 +24,18 @@ export interface CustomLook {
   bottomColor: string;
   shoes: string;
   shoesColor: string;
+  /** a chest print drawn on the top (only on tops listed in PRINT_SPOTS) */
+  print?: Print;
 }
+
+export type Print = 'atlas';
+export const PRINTS: { id: Print; label: string }[] = [{ id: 'atlas', label: 'Atlas globe' }];
+
+/** where a print sits on each top's texture: centre and radius as fractions of the texture size */
+export const PRINT_SPOTS: Record<string, { x: number; y: number; r: number }> = {
+  tee: { x: 0.255, y: 0.13, r: 0.0425 },
+  baggy: { x: 0.79, y: 0.2, r: 0.0425 },
+};
 
 export interface Option {
   id: string;
@@ -135,8 +146,66 @@ export function sanitizeLook(raw: unknown): CustomLook {
     bottomColor: color('bottomColor'),
     shoes: pick('shoes', SHOES),
     shoesColor: color('shoesColor'),
+    ...(r.print === 'atlas' ? { print: 'atlas' as const } : {}),
   };
 }
+
+/**
+ * The story riders, dressed from the create-a-skater kit (they used to ship as
+ * their own models). Heights and builds follow tools/riders/generate.py.
+ */
+export const PRESET_LOOKS: Record<'brock' | 'coral' | 'voss', CustomLook> = {
+  brock: {
+    body: 'm',
+    height: 0.775,
+    shape: { weight: 0.62, muscle: 0.92, shoulders: 0.75, chest: 0.6, waist: 0.5, hips: 0.45 },
+    skin: '#8d5a3b',
+    hair: 'short02',
+    hairColor: '#3a2619',
+    hat: null,
+    hatColor: '#6b6a64',
+    top: 'tee',
+    topColor: '#de7a5a',
+    bottom: 'jeans',
+    bottomColor: '#4d6c9b',
+    shoes: 'shoes06',
+    shoesColor: '#2c3e64',
+    print: 'atlas',
+  },
+  coral: {
+    body: 'f',
+    height: 0.225,
+    shape: { weight: 0.4, muscle: 0.65, shoulders: 0.45, chest: 0.45, waist: 0.4, hips: 0.5 },
+    skin: '#ecc19c',
+    hair: 'ponytail01',
+    hairColor: '#6b4226',
+    hat: null,
+    hatColor: '#6b6a64',
+    top: 'baggy',
+    topColor: '#46b4aa',
+    bottom: 'shorts',
+    bottomColor: '#6f8fbf',
+    shoes: 'shoes05',
+    shoesColor: '#f4f1ea',
+    print: 'atlas',
+  },
+  voss: {
+    body: 'm',
+    height: 0.425,
+    shape: { weight: 0.45, muscle: 0.2, shoulders: 0.35, chest: 0.4, waist: 0.55, hips: 0.5 },
+    skin: '#f6dcc7',
+    hair: 'bob02',
+    hairColor: '#e8e6e1',
+    hat: null,
+    hatColor: '#6b6a64',
+    top: 'blazer',
+    topColor: '#f0eee8',
+    bottom: 'trousers',
+    bottomColor: '#3d3b36',
+    shoes: 'shoes01',
+    shoesColor: '#3a2619',
+  },
+};
 
 /** node name -> material colour for the parts the look keeps visible */
 export function partColors(look: CustomLook): Record<string, string> {
