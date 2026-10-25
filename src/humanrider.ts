@@ -20,6 +20,8 @@ const HEIGHT: Record<RiderId, number> = { brock: 1.86, coral: 1.64, voss: 1.72, 
 const HUNCH: Record<RiderId, number> = { brock: 0.05, coral: 0, voss: 0.2, custom: 0 };
 
 const cache = new Map<string, Promise<THREE.Group>>();
+/** Has this model already been requested (so another rider wearing it costs no download)? */
+export const modelRequested = (file: string) => cache.has(file);
 function loadModel(file: string) {
   let p = cache.get(file);
   if (!p) {
@@ -125,6 +127,10 @@ export class HumanRider {
   private s = { crouch: 0, tuck: 0, lean: 0, grind: 0, air: 0, push: 0, fakie: 0 };
   private disposed = false;
   ready = false;
+  /** cast real shadows (the park locals use a cheap blob instead) */
+  shadows = true;
+  /** [material name pattern, colour] multiplied into a preset rider's clothes for variety */
+  private tints: [RegExp, string][] = [];
   // rest measurements (rider frame, after scaling)
   private ankleH = 0.08;
   private legLen = 0.9;
@@ -234,8 +240,15 @@ export class HumanRider {
       this.recolor(this.look);
       this.reshape(this.look);
     }
+    for (const [re, c] of this.tints) for (const m of this.mats) if (re.test(m.name)) m.color.set(c);
     this.ready = true;
     this.setStyle(this.style);
+  }
+
+  /** Multiply a colour into every material whose name matches (preset riders' clothes). */
+  tint(re: RegExp, color: string) {
+    this.tints.push([re, color]);
+    for (const m of this.mats) if (re.test(m.name)) m.color.set(color);
   }
 
   /** Re-tint a create-a-skater model in place (same parts, new colours). */
@@ -271,7 +284,7 @@ export class HumanRider {
     }
     this.model?.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) {
-        o.castShadow = !ghost;
+        o.castShadow = !ghost && this.shadows;
         o.renderOrder = ghost ? 2 : 0;
       }
     });

@@ -3,7 +3,7 @@ import { Career, STATS, STAT_MAX, DECKS, SPECIALS, Medal } from './career';
 import { deckTexture } from './textures';
 import { RIDERS, RiderId, RiderStyle } from './rider';
 import { RiderStage } from './stage';
-import { CAMERAS } from './settings';
+import { CAMERAS, NPC_SETTINGS, NpcSetting } from './settings';
 import { Creator } from './creator';
 import { EXTRA_AUTHORS, defaultLook } from './custom';
 import { OPENING_ID } from './opening';
@@ -41,6 +41,8 @@ export interface UIHooks {
   setRiderStyle(s: RiderStyle): void;
   getRecording(): boolean;
   setRecording(v: boolean): void;
+  getNpcs(): NpcSetting;
+  setNpcs(v: NpcSetting): void;
   openStudio(): void;
 }
 
@@ -566,6 +568,8 @@ export class UI {
       (id) => this.hooks.setRecording(id === 'on'),
     );
     el('p', 'menu-p small', this.card, 'Adds a ● REC button while you skate (or press V). Saved clips go to the Studio on the title screen, where you cut them into a video and export an MP4.');
+    seg('Park locals', NPC_SETTINGS, this.hooks.getNpcs(), (id) => this.hooks.setNpcs(id as NpcSetting));
+    el('p', 'menu-p small', this.card, 'Other skaters sessioning the park with you. Turn them down on slower phones.');
     seg(
       'Sound',
       [

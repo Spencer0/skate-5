@@ -20,7 +20,8 @@ import { Opening, OPENING_ID } from './opening';
 import { FilmThis, FILM_ID } from './filmthis';
 import { Props } from './props';
 import { HumanRider } from './humanrider';
-import { CAMERAS, loadOptions, saveOptions } from './settings';
+import { CAMERAS, loadOptions, saveOptions, npcSetting } from './settings';
+import { NpcCrew, crewSize } from './npcs';
 import { Tutorial, tutorialPlayed } from './tutorial';
 import { Recorder, SFX, writeFrame } from './replay/rig';
 import { FPS, MAX_CLIP_SECONDS, MODES } from './replay/clip';
@@ -90,6 +91,10 @@ const blob = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
 );
 scene.add(blob);
+
+// the park locals (src/npcs.ts): never in captures driven by a virtual clock (tools/promo)
+const NPC_CAPTURE = typeof (window as { __step?: unknown }).__step === 'function' || new URLSearchParams(location.search).has('capture');
+const npcs = new NpcCrew(scene);
 
 const sparks = new Particles(260, 0.05, true, 9, 1.5);
 const dust = new Particles(160, 0.22, true, -0.4, 3);
@@ -280,6 +285,11 @@ const ui = new UI(app, career, {
     if (!v) stopRecording();
   },
   openStudio,
+  getNpcs: () => npcSetting(options),
+  setNpcs(v) {
+    options.npcs = v;
+    saveOptions(options);
+  },
 });
 
 /* ------------------------------------------------------------------ */
@@ -517,6 +527,7 @@ function loadLevel(i: number) {
   // a touch of sky blue in the fill light, so shade reads cool against warm sun
   hemi.color.set(0xfff6ea).lerp(new THREE.Color(L.zenith), 0.22);
   skater.terrain = terrain;
+  npcs.setLevel(terrain, levelData);
   respawnAtStart();
   minimap?.destroy();
   minimap = new Minimap(hud.root, terrain);
@@ -1277,6 +1288,7 @@ const studio = new Studio(app, {
 });
 
 function openStudio() {
+  npcs.clear();
   playing = false;
   stopRecording();
   ui.hide();
@@ -1452,6 +1464,7 @@ function frame(now: number) {
   }
   for (const ev of skater.events) handle(ev);
   skater.events.length = 0;
+  npcs.update(dt, npcCtx);
 
   if (skater.mode === 'bail' && skater.bailT > 1.45) fade.classList.add('on');
   if (playing) rideLifts();
@@ -1619,6 +1632,27 @@ function renderPortrait() {
   renderer.setViewport(0, 0, W, H);
 }
 
+/** What the park locals need each frame (one object, reused). */
+const npcCtx = {
+  get active() {
+    return !!session && session.mode !== 'comp' && !tut.active && !cut.active && !story.active && !NPC_CAPTURE;
+  },
+  get running() {
+    return playing && !debug.paused;
+  },
+  get count() {
+    return crewSize(npcSetting(options), PARKS[levelIndex]?.id ?? '');
+  },
+  player: skater,
+  camera,
+  look: () => ({ rider: career.data.rider ?? 'brock', look: career.customLook(), deck: career.data.deck }),
+  sound(kind: 'pop' | 'land' | 'bail', level: number, impact: number) {
+    // skate sounds also land in a clip being recorded: keep the locals out of it
+    if (recorder.active) return;
+    audio.distant(level, () => (kind === 'pop' ? audio.pop() : kind === 'land' ? audio.land(impact, 'clean') : audio.bail()));
+  },
+};
+
 let pendingGrab: number | null = null;
 const gzA = new THREE.Vector3();
 const gzB = new THREE.Vector3();
@@ -1724,6 +1758,7 @@ requestAnimationFrame(frame);
   tut,
   recorder,
   audio,
+  npcs,
   opening,
   playOpening,
   filmThis,
