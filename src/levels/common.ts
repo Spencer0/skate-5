@@ -110,6 +110,8 @@ export interface Level {
   zenith: string;
   fog: [number, number];
   ground: boolean;
+  /** tint over the ground concrete */
+  groundColor?: number;
   /** 'free' parks are free-skate only: no goals, never in the career */
   kind: 'street' | 'comp' | 'free';
   /** seconds per run */

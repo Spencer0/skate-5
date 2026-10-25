@@ -16,6 +16,7 @@ export const parkLevel: Level = {
   zenith: '#4F93D6',
   fog: [50, 330],
   ground: true,
+  groundColor: 0xd9dcdd, // cool grey cement under the warm plywood ramps
   kind: 'street',
   runTime: 120,
   unlockAt: 6,
@@ -116,6 +117,8 @@ export const parkLevel: Level = {
   },
   build(t) {
     const vis = buildLayout(t);
+    // built ramps here are plywood; the bowls stay poured concrete
+    for (const e of t.elements) if (e.mat === 'ramp') e.mat = 'ply';
     tagRails(t, rect(13, 5, 15, 31), 'longrail');
     tagRails(t, rect(37, -42, 39, -36), 'sixrail');
     return {
