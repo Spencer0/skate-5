@@ -132,7 +132,7 @@ export class Tutorial {
     this.done = el('div', 'tut-done', this.root);
     el('div', 'tut-done-title', this.done, 'You can skate!');
     el('div', 'tut-text', this.done, 'Push, steer, ollie, kickflip, catch. That’s the core of every trick. The full trick list lives under How to play.');
-    el('div', 'tut-text', this.done, 'Specials: land tricks to fill the meter under your score. When it glows, hit ★ (or E) for your special and catch it like a flip. Your first one unlocks after 4 career goals.');
+    el('div', 'tut-text', this.done, 'Specials: land tricks to fill the meter under your score. When it glows, hit ★ (or E) for your special and catch it like a flip.');
     const btns = el('div', 'tut-done-btns', this.done);
     const mk = (label: string, next: 'career' | 'again' | 'menu', cls = '') => {
       const b = el('button', 'menu-btn ' + cls, btns, label) as HTMLButtonElement;
