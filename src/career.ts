@@ -69,9 +69,9 @@ export interface SpecialDef {
   desc: string;
 }
 
-/** Special tricks: unlocked through the career, fired from the special button. */
+/** Special tricks: the first is ready from the start, the rest unlock through the career. */
 export const SPECIALS: SpecialDef[] = [
-  { id: 'samba', name: 'Samba Flip', flip: 3, shove: -2, wrap: 0, needs: 4, desc: 'Triple kickflip wrapped in a 360 shove. All rhythm.' },
+  { id: 'samba', name: 'Samba Flip', flip: 3, shove: -2, wrap: 0, needs: 0, desc: 'Triple kickflip wrapped in a 360 shove. All rhythm.' },
   { id: 'bullet', name: 'Bullet Train', flip: 0, shove: 6, wrap: 0, needs: 11, desc: 'A 1080 shove-it. It just keeps going.' },
   { id: 'aurora', name: 'Aurora Impossible', flip: 0, shove: 0, wrap: 2, needs: 19, desc: 'Double impossible, wrapping like the northern lights.' },
   { id: 'southern', name: 'Southern Cross', flip: -2, shove: 4, wrap: 0, needs: 27, desc: 'Double laser flip. The big one.' },
