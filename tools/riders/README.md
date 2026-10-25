@@ -22,6 +22,7 @@ $MH_WORK/venv/bin/python setup.py       # install MPFB into bpy, link the assets
 $MH_WORK/venv/bin/python recolor.py     # clay tee, teal tee, lab-coat white + Atlas globes
 $MH_WORK/venv/bin/python generate.py    # build brock / coral / voss, export GLB
 $MH_WORK/venv/bin/python repack.py brock coral voss   # JPEG textures -> public/riders/
+sh compress.sh brock coral voss   # WebP + meshopt, ~3x smaller (tests fail without it)
 ```
 
 `generate.py` holds each character's body sliders (gender, age, muscle,
@@ -46,6 +47,7 @@ git clone https://github.com/makehumancommunity/mpfb2 /tmp/mpfb2 && git -C /tmp/
 $MH_WORK/venv/bin/python setup.py
 $MH_WORK/venv/bin/python generate_custom.py     # ONLY=m or ONLY=f for one body
 $MH_WORK/venv/bin/python repack_custom.py m f   # greyscale textures, logos painted out -> public/riders/
+sh compress.sh custom_m custom_f   # WebP + meshopt, ~3x smaller (tests fail without it)
 ```
 
 `repack_custom.py` turns skin, cloth, shoe and hair textures greyscale so a
@@ -80,6 +82,7 @@ meshes onto the base model's bones by bone name (`src/humanrider.ts`).
 #   https://static.makehumancommunity.org/assets/assetpacks.html  (hats03, shoes03, pants03, underwear02, shirts02, shoes02)
 PACK=extras $MH_WORK/venv/bin/python generate_custom.py     # ONLY=m / QUICK=1 (skip body-shape morphs) for fast iteration
 $MH_WORK/venv/bin/python repack_custom.py extras_m extras_f
+sh compress.sh extras_m extras_f   # WebP + meshopt, ~3x smaller (tests fail without it)
 ```
 
 An item with `"single": true` is a stand-alone garment (not a suit to split);
