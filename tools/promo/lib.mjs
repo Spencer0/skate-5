@@ -45,6 +45,9 @@ export async function open({ w = 540, h = 960, scale = 2, state = {}, init = nul
   await ctx.addInitScript(INIT);
   await ctx.addInitScript((st) => {
     for (const [k, v] of Object.entries(st)) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+    // captures run on a software GPU: pin full quality instead of auto-detecting low
+    const o = JSON.parse(localStorage.getItem('skate5.options') || '{}');
+    localStorage.setItem('skate5.options', JSON.stringify({ quality: 'high', ...o }));
   }, state);
   if (init) await ctx.addInitScript(init);
   await page.goto(process.env.URL ?? 'http://127.0.0.1:5199/');
