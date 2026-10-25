@@ -6,7 +6,7 @@ import type { Skater } from './skater';
 import type { Terrain } from './terrain';
 import type { LevelData } from './levels/common';
 import { GRABS } from './tricks';
-import { NpcBrain, Feature, Obstacle, WorldView, buildFeatures, seeded } from './npcai';
+import { NpcBrain, Feature, Obstacle, WorldView, buildFeatures, seeded, STYLE_IDS } from './npcai';
 import { CustomLook, Body, HAIR, HATS, TOPS, BOTTOMS, SHOES, SHAPES, SKIN_TONES, HAIR_COLORS, CLOTH_COLORS, forBody, Option } from './custom';
 import { DECKS } from './career';
 import { shadowTexture } from './textures';
@@ -262,7 +262,9 @@ export class NpcCrew {
     if (!this.features) this.features = buildFeatures(t, data);
     const i = this.npcs.length;
     const r = seeded(SESSION + i * 7919);
-    const brain = new NpcBrain(t, this.features, this.seq++, seeded(SESSION ^ (this.seq * 104729 + 17)), data.spawn);
+    // a mixed crew: a street skater, a vert skater, a tech skater (which one comes first changes per session)
+    const style = STYLE_IDS[(i + SESSION) % STYLE_IDS.length];
+    const brain = new NpcBrain(t, this.features, this.seq++, seeded(SESSION ^ (this.seq * 104729 + 17)), data.spawn, style);
     const npc = new Npc(brain, pickLook(r, ctx.look()), this.blobGeometry(), this.blobTexture());
     // start somewhere off camera, away from the player
     brain.place(data.spawn.x, data.spawn.z, data.spawn.heading);
@@ -460,7 +462,7 @@ export class NpcCrew {
     a.clock = now;
     a.speed = sk.speed;
     a.fakie = sk.mode === 'ground' && sk.fwdSpeed < -0.4;
-    a.special = false;
+    a.special = !!tr.spec?.special && tr.active;
     if (sk.grabAmt > 0.01) {
       const g = GRABS[sk.grabIdx];
       const o = n.grab;
