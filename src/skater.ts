@@ -15,6 +15,7 @@ export const TUNE = {
   pushAccel: 7.5,
   pushTime: 0.24,
   pushCooldown: 0.5,
+  pushHoldCycle: 0.75, // holding push: one stroke per this long (each a bigger shove, same acceleration as tapping)
   pushMaxSpeed: 8.2,
   brakeDecel: 5.5,
   rollingResistance: 0.12,
@@ -123,6 +124,10 @@ export class Skater {
   steerS = 0;
   pushT = 0;
   pushCd = 0;
+  /** time since the last push started (held pushes repeat on TUNE.pushHoldCycle) */
+  sincePush = 10;
+  private pushDur = TUNE.pushTime;
+  private pushGain = 1;
   pushQueued = -1; // >= 0: a push waiting for a push-revert pivot to finish
   braking = false;
   /** gaining speed from a pump this step (drives the rider's crouch pulse) */
@@ -220,6 +225,7 @@ export class Skater {
 
   step(dt: number, inp: SkaterInput) {
     this.time += dt;
+    this.sincePush += dt;
     this.carry = inp.pushHold;
     this.pumping = false;
     this.steerS += (inp.steer - this.steerS) * Math.min(1, dt * 14);
@@ -306,16 +312,18 @@ export class Skater {
 
     // push (riding fakie: revert to forward first, then push once the pivot lands)
     this.pushCd -= dt;
-    const wantPush = (inp.push || (inp.pushHold && this.pushT <= 0)) && !inp.brake && n.y > 0.94;
+    // holding push strokes at a skater's pace; a tap pushes as soon as the cooldown allows
+    const held = !inp.push && inp.pushHold && this.pushT <= 0 && this.sincePush >= TUNE.pushHoldCycle;
+    const wantPush = (inp.push || held) && !inp.brake && n.y > 0.94;
     if (this.pushQueued >= 0) {
       this.pushQueued -= dt;
       if (inp.brake) this.pushQueued = -1;
-      else if (this.pushQueued < 0) this.startPush();
+      else if (this.pushQueued < 0) this.startPush(false);
     } else if (wantPush && vf < -0.3) {
       this.revert();
       this.pushQueued = 0.22;
     } else if (wantPush && this.pushCd <= 0) {
-      this.startPush();
+      this.startPush(held);
     }
     if (this.pushT > 0) {
       this.pushT -= dt;
@@ -323,9 +331,9 @@ export class Skater {
       const s = this.vel.length();
       const f = Math.max(0, 1 - s / (TUNE.pushMaxSpeed + this.boost));
       // the push ramps in and out for a smooth kick
-      const ph = 1 - this.pushT / TUNE.pushTime;
+      const ph = 1 - this.pushT / this.pushDur;
       const env = Math.sin(Math.PI * Math.min(1, Math.max(0, ph)));
-      this.vel.addScaledVector(this.fwd, dir * TUNE.pushAccel * f * env * 1.6 * dt);
+      this.vel.addScaledVector(this.fwd, dir * TUNE.pushAccel * this.pushGain * f * env * 1.6 * dt);
     }
 
     // brake / powerslide
@@ -400,8 +408,13 @@ export class Skater {
     }
   }
 
-  private startPush() {
-    this.pushT = TUNE.pushTime;
+  private startPush(held: boolean) {
+    // a held stroke is longer and harder, so slower strokes still add up to the tapping rate
+    const k = held ? TUNE.pushHoldCycle / TUNE.pushCooldown : 1;
+    this.pushDur = TUNE.pushTime * Math.sqrt(k);
+    this.pushGain = Math.sqrt(k);
+    this.sincePush = 0;
+    this.pushT = this.pushDur;
     this.pushCd = TUNE.pushCooldown;
     this.events.push({ type: 'push' });
     this.squashV -= 0.35;
