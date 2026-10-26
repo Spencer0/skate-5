@@ -119,7 +119,7 @@ SCENES = {
             dict(who='a', text="But you still have to catch it, like any flip. Miss it, you slam, and the meter's gone.", speed=1.1, exag=0.5, gap=0.4),
             dict(who='a', text="Why a button? On a phone, both thumbs are already busy. Steering on one side, flicking on the other.", speed=1.1, exag=0.5, gap=0.4),
             dict(who='a', text="So the meter is earned by skating clean, the button is easy, and the catch keeps it honest.", speed=1.1, exag=0.5, gap=0.4),
-            dict(who='a', text="You unlock all four in career mode, and pick the one you want.", speed=1.08, exag=0.5, gap=0.4),
+            dict(who='a', text="You start with the Samba Flip. The other three unlock in career mode.", speed=1.08, exag=0.5, gap=0.4),
             dict(who='a', text="As always, free to play on mobile. Link in bio and comments.", speed=1.05, exag=0.5, gap=0.4),
         ],
     ),
