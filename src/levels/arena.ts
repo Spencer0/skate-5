@@ -17,6 +17,8 @@ export const arenaLevel: Level = {
   zenith: '#6E93C9',
   fog: [45, 170],
   ground: true,
+  groundColor: 0xd9dcdd,
+  rampMat: 'skatelite', // dark comp-ramp surface on plywood frames
   kind: 'comp',
   runTime: 60,
   unlockAt: 99,

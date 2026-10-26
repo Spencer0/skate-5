@@ -482,8 +482,10 @@ export interface ParkMaterials {
   metal: THREE.MeshStandardMaterial;
   accent: THREE.MeshStandardMaterial;
   wood: THREE.MeshStandardMaterial;
-  /** plywood ramp surfaces, and the darker stained sides they stand on */
+  /** built ramp surfaces (bare, painted or Skatelite-topped plywood), and the darker stained sides they stand on */
   ply: THREE.MeshStandardMaterial;
+  plyPaint: THREE.MeshStandardMaterial;
+  skatelite: THREE.MeshStandardMaterial;
   plySide: THREE.MeshStandardMaterial;
   stone: THREE.MeshStandardMaterial;
   water: THREE.MeshStandardMaterial;
@@ -505,6 +507,8 @@ export function makeMaterials(): ParkMaterials {
     accent: new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.55, metalness: 0.2 }),
     wood: new THREE.MeshStandardMaterial({ map: T.plankTexture(), roughness: 0.85, side: THREE.DoubleSide }),
     ply: new THREE.MeshStandardMaterial({ map: plyTex, roughness: 0.62, metalness: 0, side: THREE.DoubleSide }),
+    plyPaint: new THREE.MeshStandardMaterial({ map: T.plywoodTexture('painted'), roughness: 0.55, metalness: 0, side: THREE.DoubleSide }),
+    skatelite: new THREE.MeshStandardMaterial({ map: T.plywoodTexture('skatelite'), roughness: 0.4, metalness: 0, side: THREE.DoubleSide }),
     plySide: new THREE.MeshStandardMaterial({ map: plyTex, color: 0x8a6a4c, roughness: 0.8, side: THREE.DoubleSide }),
     stone: new THREE.MeshStandardMaterial({ map: T.paverTexture(), roughness: 0.9, side: THREE.DoubleSide }),
     water: new THREE.MeshStandardMaterial({ map: T.waterTexture(), color: 0xffffff, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.9 }),
@@ -512,15 +516,15 @@ export function makeMaterials(): ParkMaterials {
   };
 }
 
-const TEX_SCALE: Record<Material, number> = { concrete: 4, ramp: 3, box: 1.5, paint: 4, wall: 4, wood: 3, stone: 3, ply: 2.44 };
+const TEX_SCALE: Record<Material, number> = { concrete: 4, ramp: 3, box: 1.5, paint: 4, wall: 4, wood: 3, stone: 3, ply: 2.44, plyPaint: 2.44, skatelite: 2.44 };
 
 let SKIRT_FLOOR = 0;
 
 /** Top surface plus side skirts; with `sides`, the skirts go there instead of into the result. */
-function elementGeometry(e: Element, sides?: THREE.BufferGeometry[]): THREE.BufferGeometry {
+function elementGeometry(e: Element, mat: Material, sides?: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const k = knots.get(e) ?? { uK: lin(-e.hx, e.hx, 2), vK: lin(-e.hz, e.hz, 2) };
   const { uK, vK } = k;
-  const sc = TEX_SCALE[e.mat];
+  const sc = TEX_SCALE[mat];
   const pos: number[] = [];
   const uv: number[] = [];
   const idx: number[] = [];
@@ -648,7 +652,15 @@ function stairsGeometry(e: Element): THREE.BufferGeometry {
   return geo;
 }
 
-export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, opts: { ground?: boolean; groundColor?: number } = {}): THREE.Group {
+export interface MeshOpts {
+  ground?: boolean;
+  /** tint over the ground concrete */
+  groundColor?: number;
+  /** what this park's built ramps are surfaced with, in place of the default concrete */
+  rampMat?: Material;
+}
+
+export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, opts: MeshOpts = {}): THREE.Group {
   const group = new THREE.Group();
   SKIRT_FLOOR = t.floor;
 
@@ -728,7 +740,7 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, o
 
   // Elements, batched by material
   // plywood ramps get darker sides so their shape reads against the ground
-  const SIDE: Partial<Record<Material, keyof ParkMaterials>> = { ply: 'plySide' };
+  const SIDE: Partial<Record<Material, keyof ParkMaterials>> = { ply: 'plySide', plyPaint: 'plySide', skatelite: 'plySide' };
   const byMat = new Map<keyof ParkMaterials, THREE.BufferGeometry[]>();
   const put = (key: keyof ParkMaterials, g: THREE.BufferGeometry) => {
     const arr = byMat.get(key) ?? [];
@@ -736,10 +748,11 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, o
     byMat.set(key, arr);
   };
   for (const e of t.elements) {
-    const side = SIDE[e.mat];
+    const mat = e.mat === 'ramp' && opts.rampMat ? opts.rampMat : e.mat;
+    const side = SIDE[mat];
     const sides: THREE.BufferGeometry[] = [];
-    const g = e.meshFn ? e.meshFn() : e.custom ? stairsGeometry(e) : elementGeometry(e, side ? sides : undefined);
-    const key = e.mat === 'paint' ? 'box' : e.mat;
+    const g = e.meshFn ? e.meshFn() : e.custom ? stairsGeometry(e) : elementGeometry(e, mat, side ? sides : undefined);
+    const key = mat === 'paint' ? 'box' : mat;
     put(key, g);
     for (const s of sides) put(side!, s);
   }

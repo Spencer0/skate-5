@@ -576,7 +576,7 @@ function loadLevel(i: number) {
   }
   terrain = new Terrain();
   levelData = L.build(terrain);
-  levelGroup = buildMeshes(terrain, levelData.vis, mats, { ground: L.ground, groundColor: L.groundColor });
+  levelGroup = buildMeshes(terrain, levelData.vis, mats, { ground: L.ground, groundColor: L.groundColor, rampMat: L.rampMat });
   L.decorate(levelGroup, mats, terrain);
   const hasTape = L.goals.some((g) => g.kind === 'tape');
   props = new Props(terrain, levelData.props, levelData.letters, hasTape ? levelData.tape : null);

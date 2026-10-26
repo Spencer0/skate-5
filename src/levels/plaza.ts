@@ -61,6 +61,7 @@ export const plazaLevel: Level = {
   zenith: '#5E9FDB',
   fog: [45, 175],
   ground: true,
+  rampMat: 'ply', // a skate-shop plywood kicker, banks and quarter on the stone plaza
   kind: 'street',
   runTime: 120,
   unlockAt: 6,

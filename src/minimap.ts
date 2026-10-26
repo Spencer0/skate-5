@@ -66,7 +66,7 @@ export class Minimap {
       const [cx, cz] = this.toMap(e.cx, e.cz);
       g.translate(cx, cz);
       g.rotate(e.rot);
-      g.fillStyle = e.mat === 'ramp' ? 'rgba(184,92,62,0.55)' : e.mat === 'wood' || e.mat === 'ply' ? 'rgba(150,110,70,0.55)' : e.mat === 'concrete' ? 'rgba(20,20,19,0.18)' : 'rgba(20,20,19,0.35)';
+      g.fillStyle = e.mat === 'ramp' ? 'rgba(184,92,62,0.55)' : e.mat === 'wood' ? 'rgba(150,110,70,0.55)' : e.mat === 'concrete' ? 'rgba(20,20,19,0.18)' : 'rgba(20,20,19,0.35)';
       g.fillRect(-e.hx * s, -e.hz * s, e.hx * 2 * s, e.hz * 2 * s);
       g.restore();
     }
