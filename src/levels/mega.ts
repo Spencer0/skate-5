@@ -68,6 +68,8 @@ export const megaLevel: Level = {
   zenith: '#3A7FC8',
   fog: [140, 390],
   ground: true,
+  groundColor: 0xd9dcdd,
+  rampMat: 'ply',
   kind: 'free',
   runTime: 0,
   unlockAt: 0,

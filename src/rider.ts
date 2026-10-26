@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { StatId } from './career';
+import type { Skater } from './skater';
+import { DECK } from './board';
 
 /**
  * The riders, the skate intent a rider is posed from, and the IK they share.
@@ -82,6 +84,8 @@ export interface RiderAct {
   speed: number; // board speed (m/s), for the planted push foot
   fakie?: boolean; // rolling backwards: look over the other shoulder
   special: boolean;
+  /** Around the World: where the board is (rider frame) and how much each hand has it */
+  orbit?: OrbitHold;
   /** grab in progress: which hand, where on the board, the tweak, and the 0..1 blend */
   grab?: { hand: 'front' | 'back'; x: number; z: number; pitch: number; roll: number; yaw: number; amt: number };
 }
@@ -103,4 +107,35 @@ export function ik(root: THREE.Vector3, target: THREE.Vector3, a: number, b: num
   p.normalize();
   mid.copy(root).addScaledVector(dir, x).addScaledVector(p, h);
   end.copy(root).addScaledVector(dir, L);
+}
+
+export interface OrbitHold {
+  x: number;
+  y: number;
+  z: number;
+  l: number;
+  r: number;
+}
+const orbitP = new THREE.Vector3();
+const orbitQ = new THREE.Quaternion();
+const orbitC = new THREE.Vector3();
+
+/**
+ * Around the World hand-off: the left hand (nose side) takes the board up and round
+ * the nose side, the right hand takes it behind the back and round the tail side
+ * and puts it back under the feet. Both have it for a moment behind the back.
+ */
+export function orbitHands(sk: Pick<Skater, 'orbitPose' | 'trick'>, out: OrbitHold = { x: 0, y: 0, z: 0, l: 0, r: 0 }): OrbitHold | undefined {
+  const e = sk.orbitPose(orbitP, orbitQ);
+  if (!e) return undefined;
+  const u = sk.trick.orbit - Math.floor(sk.trick.orbit);
+  const win = (a: number, b: number) => Math.max(0, Math.min(1, (u - a) / 0.08, (b - u) / 0.08));
+  // the middle of the deck, a hand's width up the edge nearest the body
+  orbitC.set(0, DECK.deckY, 0).applyQuaternion(orbitQ).add(orbitP);
+  out.x = orbitC.x;
+  out.y = orbitC.y;
+  out.z = orbitC.z;
+  out.l = e * (u < 0.1 ? 1 : win(0, 0.58));
+  out.r = e * (u > 0.9 ? 1 : win(0.42, 1));
+  return out;
 }

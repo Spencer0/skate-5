@@ -196,8 +196,8 @@ test('NPCs go big on the big stuff: the mega ramp, vert airs, 540s and doubles',
   // ...and the street parks' transitions get sessioned too
   assert.ok(total.vert >= 5, `vert airs in the parks ${total.vert}`);
   let big = 0;
-  for (const [n, v] of s.names) if (/\b(540|720|900|1080)\b|Double|Triple|Samba|Bullet|Aurora|Southern/.test(n)) big += v;
-  big += count(/\b(540|720|900|1080)\b|Double|Triple|Samba|Bullet|Aurora|Southern/);
+  for (const [n, v] of s.names) if (/\b(540|720|900|1080)\b|Double|Triple|Samba|Bullet|Around the World|Southern/.test(n)) big += v;
+  big += count(/\b(540|720|900|1080)\b|Double|Triple|Samba|Bullet|Around the World|Southern/);
   assert.ok(big >= 3, `big tricks ${big}`);
 });
 

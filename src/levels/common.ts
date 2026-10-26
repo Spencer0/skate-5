@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Terrain } from '../terrain';
+import { Terrain, Material } from '../terrain';
 import type { ParkMaterials, ParkVisuals } from '../park';
 import { rng, flagTexture } from '../textures';
 import { flagDef } from '../flags';
@@ -112,6 +112,8 @@ export interface Level {
   ground: boolean;
   /** tint over the ground concrete */
   groundColor?: number;
+  /** what the built ramps are surfaced with (bowls stay concrete); default concrete */
+  rampMat?: Material;
   /** 'free' parks are free-skate only: no goals, never in the career */
   kind: 'street' | 'comp' | 'free';
   /** seconds per run */

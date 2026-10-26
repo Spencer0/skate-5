@@ -35,6 +35,7 @@ export const pierLevel: Level = {
   zenith: '#3D8ED6',
   fog: [55, 230],
   ground: false,
+  rampMat: 'plyPaint', // sea-blue painted ply stands out on the boardwalk planks
   kind: 'street',
   runTime: 120,
   unlockAt: 6,

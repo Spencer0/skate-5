@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Terrain } from '../src/terrain';
@@ -253,4 +254,28 @@ test('grabs: you cannot grab a board that is still flipping', () => {
   sk.catchBoard();
   run(0.15);
   assert.ok(sk.startGrab(2));
+});
+
+test('Around the World: carried round the body, caught, lands; never caught, bails', () => {
+  const world: TrickSpec = { flip: 0, shove: 0, wrap: 0, orbit: true, nollie: false, speed: 1.5, label: 'Around the World', special: 'Around the World' };
+  const a = rig(0, 40, 0, -5);
+  a.run(0.1);
+  assert.ok(a.sk.flick(world));
+  assert.equal(a.sk.trick.caught, false);
+  a.run(0.45);
+  // up off the feet and round the body
+  const pos = new THREE.Vector3();
+  assert.ok(a.sk.orbitPose(pos, new THREE.Quaternion()) > 0.5);
+  assert.ok(pos.y > 0.8);
+  assert.ok(a.sk.catchBoard());
+  a.run(1);
+  assert.equal(a.sk.mode, 'ground');
+  const land = a.events.find((e) => e.type === 'land');
+  assert.ok(land && land.type === 'land' && land.tricks.some((r) => r.name === 'Around the World'));
+
+  const b = rig(0, 40, 0, -5);
+  b.run(0.1);
+  b.sk.flick(world);
+  b.run(1);
+  assert.ok(b.events.some((e) => e.type === 'bail'));
 });

@@ -20,6 +20,7 @@ export interface TrickSpec {
   speed: number; // flick speed multiplier 0.85..1.2
   label: string; // the gesture's "intended" trick (for the trick guide/debug)
   special?: string; // special trick name (from the special button)
+  orbit?: boolean; // Around the World: the board goes up to the chest and round the body by hand
 }
 
 export interface StickSample {

@@ -861,7 +861,7 @@ function atSpeed(s: TrickSpec, k: number) {
   if (!arr) specCache.set(s, (arr = SPEEDS.map((v) => ({ ...s, speed: v }))));
   return arr[k];
 }
-const SPECIAL_SPECS: TrickSpec[] = SPECIALS.map((s) => ({ flip: s.flip, shove: s.shove, wrap: s.wrap, nollie: false, speed: 1.5, label: s.name, special: s.name }));
+const SPECIAL_SPECS: TrickSpec[] = SPECIALS.map((s) => ({ flip: s.flip, shove: s.shove, wrap: s.wrap, orbit: s.orbit, nollie: false, speed: 1.5, label: s.name, special: s.name }));
 
 /** Where the air is coming from: shapes which tricks fit. */
 type AirCtx = 'flat' | 'ramp' | 'vert' | 'grind' | 'drop' | 'big';
@@ -1922,8 +1922,10 @@ export class NpcBrain {
         // the special: a highlight for when someone's watching (or the air's huge)
         const pSpecial = show ? 0.3 : ctx === 'big' || ctx === 'vert' ? 0.07 : 0.025;
         if (popped && ctx !== 'flat' && ctx !== 'grind' && room > 0.35 && amb > 0.8 && r() < pSpecial) {
-          plan.spec = SPECIAL_SPECS[Math.floor(r() * SPECIAL_SPECS.length)];
-          plan.catchAt = fd + beat / plan.spec.speed + (r() - 0.5) * 0.02;
+          // Around the World takes two beats a lap: only with the air for it
+          const pool = SPECIAL_SPECS.filter((sp) => !sp.orbit || room > 0.8);
+          plan.spec = pool[Math.floor(r() * pool.length)];
+          plan.catchAt = fd + ((plan.spec.orbit ? 2 : 1) * beat) / plan.spec.speed + (r() - 0.5) * 0.02;
           diff += 0.9;
         } else {
           const base = pickWeighted(r, st.flips);

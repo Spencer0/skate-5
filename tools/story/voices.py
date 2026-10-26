@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Voice a story scene and time every word.
 
-usage: voices.py <kokoro .onnx> <voices .bin> <out dir> [--scene opening|plaza|promo] [--engine kokoro|chatterbox] [--takes N] [--try A,B] [--pace X]
+usage: voices.py <kokoro .onnx> <voices .bin> <out dir> [--scene opening|plaza|promo|devlog3] [--engine kokoro|chatterbox] [--takes N] [--try A,B] [--pace X]
 
 Scenes: 'opening' is the career opening ("Who's on the rail"), 'plaza' is
 Chapter 2's "Bro, can you film this?".
@@ -96,6 +96,34 @@ SCENES = {
         script=[
             dict(who='a', text="I made a skate game for your mobile.", speed=1.05, exag=0.5, gap=0.0),
             dict(who='a', text="Here's a cutscene I'm working on.", speed=1.05, exag=0.5, gap=0.25),
+        ],
+    ),
+    # Dev Log #3 (tools/promo/compose_devlog3.py): the dev, on the special tricks.
+    # Each line is placed over its own shot, so gaps here only space out the mix.
+    'devlog3': dict(
+        voices='am_michael,am_michael',
+        ref={
+            'a': "So I've been making this game for about a year now, and honestly, it's finally starting to feel really good.",
+            'b': "So I've been making this game for about a year now, and honestly, it's finally starting to feel really good.",
+        },
+        script=[
+            dict(who='a', text="I'm making a skate game on mobile...", speed=1.0, exag=0.5, gap=0.0),
+            dict(who='a', text="It's harder to do than I thought.", speed=1.0, exag=0.5, gap=0.4),
+            dict(who='a', text="Dev log three. Special tricks.", speed=1.0, exag=0.5, gap=0.4),
+            dict(who='a', text="Land tricks, and your special meter fills up.", speed=1.05, exag=0.5, gap=0.4),
+            dict(who='a', text="When it's full, a star lights up. Tap it, and you throw your special.", speed=1.08, exag=0.5, gap=0.4),
+            dict(who='a', text="The Bullet Train. A ten-eighty shove-it.", speed=1.05, exag=0.5, gap=0.4),
+            dict(who='a', text="I was going to do a double impossible, but I just didn't like it.", speed=1.08, exag=0.5, gap=0.4),
+            dict(who='a', text="So I made something way crazier, and a little unrealistic. The Around the World.", speed=1.08, exag=0.5, gap=0.4),
+            dict(who='a', text="Kick it up to your chest, pass it round your back, and catch it with the other hand.", speed=1.1, exag=0.5, gap=0.4),
+            dict(who='a', text="I made the name up, so I looked it up. I couldn't find anyone doing it in real life.", speed=1.1, exag=0.5, gap=0.4),
+            dict(who='a', text="All of this still needs a lot of polish, and I'll clean up the Around the World later.", speed=1.1, exag=0.5, gap=0.4),
+            dict(who='a', text="And the Southern Cross. A double laser flip.", speed=1.05, exag=0.5, gap=0.4),
+            dict(who='a', text="But you still have to catch it, like any flip. Miss it, you slam, and the meter's gone.", speed=1.1, exag=0.5, gap=0.4),
+            dict(who='a', text="Why a button? On a phone, both thumbs are already busy. Steering on one side, flicking on the other.", speed=1.1, exag=0.5, gap=0.4),
+            dict(who='a', text="So the meter is earned by skating clean, the button is easy, and the catch keeps it honest.", speed=1.1, exag=0.5, gap=0.4),
+            dict(who='a', text="You start with one special, and the rest unlock in career mode.", speed=1.08, exag=0.5, gap=0.4),
+            dict(who='a', text="As always, free to play on mobile. Link in bio and comments.", speed=1.05, exag=0.5, gap=0.4),
         ],
     ),
 }

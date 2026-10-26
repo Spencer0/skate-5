@@ -65,6 +65,8 @@ export interface SpecialDef {
   flip: number;
   shove: number;
   wrap: number;
+  /** Around the World: carried round the body by hand instead of flipped */
+  orbit?: boolean;
   needs: number;
   desc: string;
 }
@@ -73,7 +75,7 @@ export interface SpecialDef {
 export const SPECIALS: SpecialDef[] = [
   { id: 'samba', name: 'Samba Flip', flip: 3, shove: -2, wrap: 0, needs: 0, desc: 'Triple kickflip wrapped in a 360 shove. All rhythm.' },
   { id: 'bullet', name: 'Bullet Train', flip: 0, shove: 6, wrap: 0, needs: 11, desc: 'A 1080 shove-it. It just keeps going.' },
-  { id: 'aurora', name: 'Aurora Impossible', flip: 0, shove: 0, wrap: 2, needs: 19, desc: 'Double impossible, wrapping like the northern lights.' },
+  { id: 'world', name: 'Around the World', flip: 0, shove: 0, wrap: 0, orbit: true, needs: 19, desc: 'Kick it up to your chest and pass it all the way round your body, hand to hand, back under your feet.' },
   { id: 'southern', name: 'Southern Cross', flip: -2, shove: 4, wrap: 0, needs: 27, desc: 'Double laser flip. The big one.' },
 ];
 
@@ -87,7 +89,7 @@ const KEY = 'skate5.career.v1';
 
 /** Saves from before the Skate Nations rebrand used these deck and special ids. */
 const OLD_DECKS: Record<string, string> = { claude: 'atlas', haiku: 'compass', sonnet: 'airmail', opus: 'passport', spark: 'jetstream', constitution: 'mosaic' };
-const OLD_SPECIALS: Record<string, string> = { haiku: 'samba', context: 'bullet', constitution: 'aurora', spark: 'southern' };
+const OLD_SPECIALS: Record<string, string> = { haiku: 'samba', context: 'bullet', constitution: 'world', spark: 'southern', aurora: 'world' };
 
 interface SaveData {
   done: Record<string, string[]>;

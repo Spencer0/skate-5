@@ -89,6 +89,10 @@ interface TrickState {
   target: [number, number, number];
   spec: TrickSpec | null;
   quality: Quality;
+  /** Around the World: laps of the board round the rider's body */
+  orbit: number;
+  orbitRate: number;
+  orbitTarget: number;
 }
 
 interface GrindState {
@@ -742,10 +746,13 @@ export class Skater {
     tr.flipRate = spec.flip * TAU * k;
     tr.shoveRate = spec.shove * Math.PI * k;
     tr.wrapRate = spec.wrap * TAU * k;
+    // a lap round the body takes two beats: it's carried, not flicked
+    tr.orbit = tr.orbitTarget = 0;
+    tr.orbitRate = spec.orbit ? k / ORBIT_BEATS : 0;
     tr.spec = spec;
     tr.delay = TUNE.flickDelay;
     tr.active = true;
-    tr.caught = spec.flip === 0 && spec.shove === 0 && spec.wrap === 0;
+    tr.caught = spec.flip === 0 && spec.shove === 0 && spec.wrap === 0 && !spec.orbit;
     tr.target = [tr.flip, tr.shove, tr.wrap];
     tr.quality = 'clean';
     if (tr.caught) this.recordTrick(tr, 'clean');
@@ -764,7 +771,14 @@ export class Skater {
       return tgt;
     };
     tr.target = [snap(tr.flip, TAU, tr.flipRate), snap(tr.shove, Math.PI, tr.shoveRate), snap(tr.wrap, TAU, tr.wrapRate)];
-    const err = Math.max(Math.abs(tr.target[0] - tr.flip) / TAU, Math.abs(tr.target[1] - tr.shove) / Math.PI, Math.abs(tr.target[2] - tr.wrap) / TAU);
+    // Around the World: the board comes home under the feet at the end of a lap (at least one)
+    if (tr.orbitRate) tr.orbitTarget = Math.max(1, snap(tr.orbit, 1, tr.orbitRate));
+    const err = Math.max(
+      Math.abs(tr.target[0] - tr.flip) / TAU,
+      Math.abs(tr.target[1] - tr.shove) / Math.PI,
+      Math.abs(tr.target[2] - tr.wrap) / TAU,
+      tr.orbitRate ? Math.abs(tr.orbitTarget - tr.orbit) : 0,
+    );
     // err is a fraction of a turn: 0..0.5
     const q: Quality = err < 0.07 ? 'perfect' : err < 0.2 ? 'clean' : 'sketchy';
     tr.quality = q;
@@ -801,6 +815,7 @@ export class Skater {
       tr.flip += tr.flipRate * dt;
       tr.shove += tr.shoveRate * dt;
       tr.wrap += tr.wrapRate * dt;
+      tr.orbit += tr.orbitRate * dt;
       if (Math.floor(this.catchPhase()) > Math.floor(before)) this.events.push({ type: 'spinTick' });
       return;
     }
@@ -808,9 +823,16 @@ export class Skater {
     tr.flip += (tr.target[0] - tr.flip) * k;
     tr.shove += (tr.target[1] - tr.shove) * k;
     tr.wrap += (tr.target[2] - tr.wrap) * k;
+    // the hands carry the board home at the same pace it went round
+    if (tr.orbitRate) {
+      const d = tr.orbitTarget - tr.orbit;
+      const step = Math.max(tr.orbitRate, Math.abs(d) * TUNE.catchSettle) * dt;
+      tr.orbit = Math.abs(d) <= step ? tr.orbitTarget : tr.orbit + Math.sign(d) * step;
+    }
     if (this.mode === 'ground' && this.residual() < 0.002) {
       tr.active = false;
       tr.flip = tr.shove = tr.wrap = 0;
+      tr.orbit = tr.orbitTarget = tr.orbitRate = 0;
       tr.target = [0, 0, 0];
     }
   }
@@ -821,6 +843,7 @@ export class Skater {
     const f = Math.abs((tr.flip - tr.start[0]) / TAU);
     const s = Math.abs((tr.shove - tr.start[1]) / Math.PI);
     const w = Math.abs((tr.wrap - tr.start[2]) / TAU);
+    if (tr.orbitRate !== 0) return tr.orbit + 0.06;
     if (tr.flipRate !== 0) return f + 0.06;
     if (tr.wrapRate !== 0) return w + 0.06;
     return s + 0.06;
@@ -830,7 +853,7 @@ export class Skater {
   residual() {
     const tr = this.trick;
     if (!tr.active) return 0;
-    return Math.max(Math.abs(tr.target[0] - tr.flip), Math.abs(tr.target[1] - tr.shove), Math.abs(tr.target[2] - tr.wrap));
+    return Math.max(Math.abs(tr.target[0] - tr.flip), Math.abs(tr.target[1] - tr.shove), Math.abs(tr.target[2] - tr.wrap), Math.abs(tr.orbitTarget - tr.orbit) * TAU * (tr.orbitRate ? 1 : 0));
   }
 
   /** Fold whole rotations into the base frame; keep the residual for visuals. */
@@ -1288,6 +1311,37 @@ export class Skater {
     return out;
   }
 
+  /**
+   * Around the World, in the rider frame (+X nose, +Y up, +Z toe side, the rider
+   * faces +Z): how far up and round the body the board is (0 = under the feet),
+   * where it is, and how it's turned. Returns 0 when there's no orbit going.
+   */
+  orbitPose(pos: THREE.Vector3, quat: THREE.Quaternion) {
+    const tr = this.trick;
+    if (!tr.active || !tr.orbitRate || this.mode === 'bail') return 0;
+    const sm = (x: number) => {
+      const c = Math.max(0, Math.min(1, x));
+      return c * c * (3 - 2 * c);
+    };
+    // up off the feet over the first fifth of a lap, back down over the last fifth
+    const end = tr.caught ? tr.orbitTarget : Infinity;
+    const e = Math.min(sm(tr.orbit / ORBIT_RISE), sm((end - tr.orbit) / ORBIT_RISE));
+    const th = tr.orbit * TAU;
+    // out in front of the chest first, then round the nose side, behind the back, round the tail side
+    pos.set(Math.sin(th) * ORBIT_R * e, ORBIT_H * e, (Math.cos(th) * ORBIT_R + ORBIT_Z) * e);
+    // held on edge, grip toward the body, turning with the lap
+    quat.setFromAxisAngle(AX_Y, th).multiply(tmpQ.setFromAxisAngle(AX_X, (-Math.PI / 2) * e));
+    return e;
+  }
+
+  /** Move the board model (placed from visualPos/visualQuat) out to its Around the World spot. */
+  orbitBoard(pos: THREE.Vector3, quat: THREE.Quaternion) {
+    if (!this.orbitPose(orbitP, orbitQ)) return;
+    // the rider frame (baseQuat) carries the offset; the board turns on top of its own pose
+    pos.add(orbitP.applyQuaternion(this.baseQuat(orbitBQ)));
+    quat.premultiply(orbitIQ.copy(orbitBQ).invert()).premultiply(orbitQ).premultiply(orbitBQ);
+  }
+
   /** Root position for the board model. */
   visualPos(out: THREE.Vector3) {
     if (this.mode === 'bail') return out.copy(this.bpos).addScaledVector(UP, -DECK.deckY);
@@ -1304,6 +1358,18 @@ export class Skater {
     return out;
   }
 }
+
+/** Around the World: beats per lap, the share of a lap spent lifting / lowering, chest height and lap radius (m) */
+const ORBIT_BEATS = 2;
+const ORBIT_RISE = 0.2;
+const ORBIT_H = 1.2;
+const ORBIT_R = 0.52;
+/** the rider leans forward in the air: the lap is centred a little in front */
+const ORBIT_Z = 0.1;
+const orbitP = new THREE.Vector3();
+const orbitQ = new THREE.Quaternion();
+const orbitBQ = new THREE.Quaternion();
+const orbitIQ = new THREE.Quaternion();
 
 /** how far a grab lifts the board toward the rider (m) */
 export const GRAB_LIFT = 0.3;
@@ -1335,6 +1401,9 @@ function freshTrick(): TrickState {
     target: [0, 0, 0],
     spec: null,
     quality: 'clean',
+    orbit: 0,
+    orbitRate: 0,
+    orbitTarget: 0,
   };
 }
 

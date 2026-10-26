@@ -380,26 +380,36 @@ export function plankTexture() {
   return tex(c);
 }
 
+/** How a ramp's sheets are finished: bare plywood, painted plywood, or dark Skatelite. */
+export type RampFinish = 'raw' | 'painted' | 'skatelite';
+
 /**
- * Skatepark plywood: one tile is a 2.44m square, two 1.22m sheets wide with
- * staggered butt joints, grain running up the transition, screw lines along
- * every seam and a darker polished lane where the wheels go.
+ * Skatepark sheet surface: one tile is a 2.44m square, two 1.22m sheets wide
+ * with staggered butt joints, screw lines along every seam and a worn lane
+ * where the wheels go. Plywood shows its grain running up the transition;
+ * painted ply wears through to the wood in the lanes; Skatelite is the dark,
+ * smooth phenolic board competition ramps are surfaced with.
  */
-export function plywoodTexture() {
+export function plywoodTexture(finish: RampFinish = 'raw') {
   const S = 512;
   const { c, g } = canvas(S, S);
   const r = rng(81);
   const half = S / 2;
+  const lite = finish === 'skatelite';
+  if (lite) noiseFill(g, S, S, [60, 52, 47], 8, 83);
   for (let col = 0; col < 2; col++) {
     const x0 = col * half;
-    const tone = [198, 158, 112].map((v) => v + (r() - 0.5) * 14);
-    g.fillStyle = `rgb(${tone[0]},${tone[1]},${tone[2]})`;
-    g.fillRect(x0, 0, half, S);
-    // long grain streaks with the odd wavy figure
+    if (!lite) {
+      const tone = [198, 158, 112].map((v) => v + (r() - 0.5) * 14);
+      g.fillStyle = `rgb(${tone[0]},${tone[1]},${tone[2]})`;
+      g.fillRect(x0, 0, half, S);
+    }
+    // long grain streaks with the odd wavy figure (barely there on Skatelite)
     for (let k = 0; k < 90; k++) {
       const x = x0 + r() * half;
       const dark = r() > 0.35;
-      g.strokeStyle = dark ? `rgba(120,78,38,${0.06 + r() * 0.12})` : `rgba(255,230,190,${0.05 + r() * 0.08})`;
+      const a = lite ? 0.03 : 1;
+      g.strokeStyle = dark ? `rgba(120,78,38,${(0.06 + r() * 0.12) * a})` : `rgba(255,230,190,${(0.05 + r() * 0.08) * a})`;
       g.lineWidth = 0.6 + r() * 2.2;
       const wob = (r() - 0.5) * 18;
       g.beginPath();
@@ -411,6 +421,7 @@ export function plywoodTexture() {
     for (let k = 0; k < 2; k++) {
       const kx = x0 + 20 + r() * (half - 40);
       const ky = r() * S;
+      if (lite) continue;
       const grd = g.createRadialGradient(kx, ky, 0, kx, ky, 10 + r() * 8);
       grd.addColorStop(0, 'rgba(110,70,35,0.45)');
       grd.addColorStop(1, 'rgba(110,70,35,0)');
@@ -418,28 +429,38 @@ export function plywoodTexture() {
       g.fillRect(kx - 20, ky - 20, 40, 40);
     }
   }
-  // wheel wear: a darker, smoother lane down the middle of each sheet
+  if (finish === 'painted') {
+    // sea-blue deck paint, a little uneven from sheet to sheet
+    for (let col = 0; col < 2; col++) {
+      g.fillStyle = col ? 'rgba(42,122,170,0.92)' : 'rgba(48,128,176,0.92)';
+      g.fillRect(col * half, 0, half, S);
+    }
+    blotches(g, S, S, 16, 'rgba(255,255,255,0.06)', 60, 84);
+  }
+  // wheel wear down the middle of each sheet: polished dark on wood, paint
+  // rubbed through to the ply, grey scuffing on Skatelite
+  const [wear, wearA] = finish === 'raw' ? ['70,45,25', 0.12] : finish === 'painted' ? ['198,158,112', 0.2] : ['170,160,150', 0.12];
   for (let col = 0; col < 2; col++) {
     const cx = col * half + half / 2;
     const grd = g.createLinearGradient(cx - half * 0.45, 0, cx + half * 0.45, 0);
-    grd.addColorStop(0, 'rgba(70,45,25,0)');
-    grd.addColorStop(0.5, 'rgba(70,45,25,0.12)');
-    grd.addColorStop(1, 'rgba(70,45,25,0)');
+    grd.addColorStop(0, `rgba(${wear},0)`);
+    grd.addColorStop(0.5, `rgba(${wear},${wearA})`);
+    grd.addColorStop(1, `rgba(${wear},0)`);
     g.fillStyle = grd;
     g.fillRect(cx - half * 0.45, 0, half * 0.9, S);
   }
-  blotches(g, S, S, 14, 'rgba(60,40,20,0.06)', 70, 82);
+  blotches(g, S, S, 14, lite ? 'rgba(200,190,180,0.05)' : 'rgba(60,40,20,0.06)', 70, 82);
   // seams: between the two sheets, and staggered butt joints
-  g.fillStyle = 'rgba(60,38,20,0.7)';
+  g.fillStyle = lite ? 'rgba(15,12,10,0.8)' : 'rgba(60,38,20,0.7)';
   g.fillRect(0, 0, 3, S);
   g.fillRect(half - 1, 0, 3, S);
   g.fillRect(0, 0, half, 3);
   g.fillRect(half, half - 1, half, 3);
-  g.fillStyle = 'rgba(255,235,200,0.25)';
+  g.fillStyle = lite ? 'rgba(255,255,255,0.1)' : 'rgba(255,235,200,0.25)';
   g.fillRect(3, 0, 1, S);
   g.fillRect(half + 2, 0, 1, S);
   // screws along every seam
-  g.fillStyle = 'rgba(70,66,60,0.8)';
+  g.fillStyle = lite ? 'rgba(175,170,160,0.75)' : 'rgba(70,66,60,0.8)';
   const step = S / 16;
   for (let y = step / 2; y < S; y += step) {
     for (const x of [8, half - 9, half + 7, S - 10]) g.fillRect(x, y, 3, 3);
