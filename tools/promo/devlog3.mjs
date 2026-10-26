@@ -170,8 +170,12 @@ const SHOTS = {
   async bullet(g, mark) {
     await specialShot(g, mark, 'bullet', {});
   },
-  async aurora(g, mark) {
-    await specialShot(g, mark, 'aurora', {});
+  async world(g, mark) {
+    await specialShot(g, mark, 'world', {});
+  },
+  // the same trick from the chase angle, for a second look
+  async world2(g, mark) {
+    await specialShot(g, mark, 'world', { side: true, at: E('C_WORLD2', 18) });
   },
   async southern(g, mark) {
     await specialShot(g, mark, 'southern', {});
@@ -255,13 +259,15 @@ const SHOTS = {
   },
 };
 for (const k in SHOTS) SHOTS[k].late = true;
-for (const k of ['meter', 'bullet', 'aurora', 'southern', 'drop']) SHOTS[k].cfg = { special: k === 'meter' ? 'samba' : k === 'drop' ? 'southern' : k };
+for (const k of ['meter', 'bullet', 'world', 'world2', 'southern', 'drop']) SHOTS[k].cfg = { special: k === 'meter' ? 'samba' : k === 'drop' ? 'southern' : k === 'world2' ? 'world' : k };
 
 /** catch frame (after the press) per special, tuned with DRY=1 */
-const CATCH = { samba: E('C_SAMBA', 10), bullet: E('C_BULLET', 22), aurora: E('C_AURORA', 20), southern: E('C_SOUTHERN', 14) };
+const CATCH = { samba: E('C_SAMBA', 10), bullet: E('C_BULLET', 22), world: E('C_WORLD', 16), southern: E('C_SOUTHERN', 14) };
 
-async function specialShot(g, mark, id, { fill = 1, pre = false, nocatch = false }) {
-  await g.director({ d0: 3.0, h0: 1.4, side: 1.6, k: 0.4, hk: 0.12, fov: 56, lookUp: 0.8, maxD: 5, anchor: 0.4, gh: 1.2 });
+async function specialShot(g, mark, id, { fill = 1, pre = false, nocatch = false, side = false, at = CATCH[id] }) {
+  // Around the World is shot from the rider's front, where the hands are
+  const front = id === 'world' && !side;
+  await g.director({ d0: front ? E('WD', 1.2) : 3.0, h0: 1.4, side: front ? E('WS', 2.6) : 1.6, k: 0.4, hk: 0.12, fov: 56, lookUp: 0.9, maxD: 5, anchor: 0.4, gh: 1.2 });
   await place(g, BRAZIL, -30, 33, 0, 7);
   await g.specials(id, fill);
   await g.sim(1);
@@ -287,7 +293,7 @@ async function specialShot(g, mark, id, { fill = 1, pre = false, nocatch = false
       fired = g.frame - 3;
       continue;
     }
-    if (fired >= 0 && !nocatch && !mark.has('catch') && g.frame >= fired + CATCH[id]) { mark('catch'); await tap(g, 480, 880); }
+    if (fired >= 0 && !nocatch && !mark.has('catch') && g.frame >= fired + at) { mark('catch'); await tap(g, 480, 880); }
     if (fired >= 0 && st.m === 'ground' && g.frame > fired + 6 && !mark.has('land')) mark('land');
     if (st.m === 'bail' && !mark.has('bail')) mark('bail');
     if ((mark.has('land') || mark.has('bail')) && g.frame > (mark.get('land') ?? mark.get('bail')) + (mark.has('bail') ? 50 : 26)) break;
@@ -295,7 +301,7 @@ async function specialShot(g, mark, id, { fill = 1, pre = false, nocatch = false
   }
 }
 
-const riders = { hook: process.env.RIDER ?? 'voss', miss: 'coral', meter: 'brock', bullet: 'coral', aurora: 'voss', southern: 'brock', drop: 'coral', laser: 'coral', mega: 'brock' };
+const riders = { hook: process.env.RIDER ?? 'voss', miss: 'coral', meter: 'brock', bullet: 'coral', world: 'voss', world2: 'coral', southern: 'brock', drop: 'coral', laser: 'coral', mega: 'brock' };
 const cams = { hook: 'chase', miss: 'classic', laser: 'classic', mega: 'filmer' };
 fs.mkdirSync(outDir, { recursive: true });
 for (const name of Object.keys(SHOTS)) {

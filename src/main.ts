@@ -6,6 +6,7 @@ import { LEVELS, PARKS, LevelData, GapDef, GoalDef, inRect, V3, LETTERS } from '
 import { BoardModel, DECK } from './board';
 import { Skater, SkaterEvent, TrickRecord, Quality, GRAB_LIFT } from './skater';
 import { Input, trickAnywhere } from './input';
+import { orbitHands } from './rider';
 import { grabForDirection, GRABS } from './tricks';
 import { Audio } from './audio';
 import { Hud } from './hud';
@@ -797,7 +798,7 @@ function gapsCleared(): GapDef[] {
 function fireSpecial() {
   const sp = career.equippedSpecial();
   if (!playing || !sp || special < 1) return;
-  if (skater.flick({ flip: sp.flip, shove: sp.shove, wrap: sp.wrap, nollie: false, speed: 1.5, label: sp.name, special: sp.name })) {
+  if (skater.flick({ flip: sp.flip, shove: sp.shove, wrap: sp.wrap, orbit: sp.orbit, nollie: false, speed: 1.5, label: sp.name, special: sp.name })) {
     audio.special();
     hud.popup(sp.name, 'special!', 'perfect');
     buzz([10, 20, 10]);
@@ -1111,6 +1112,7 @@ function updateRider(dt: number, t: number, boardPos: THREE.Vector3) {
       speed: skater.speed,
       fakie: skater.mode === 'ground' && skater.fwdSpeed < -0.4,
       special: !!tr.spec?.special,
+      orbit: orbitHands(skater),
       grab: skater.grabAmt > 0.01 ? { ...GRABS[skater.grabIdx], amt: skater.grabAmt } : undefined,
     },
   });
@@ -1578,6 +1580,8 @@ function frame(now: number) {
   skater.visualPos(p);
   board.root.position.copy(p);
   board.root.quaternion.copy(q);
+  // Around the World carries the board off the feet; the rider stays put
+  skater.orbitBoard(board.root.position, board.root.quaternion);
   const crouch = input.crouch && skater.mode === 'ground' ? -0.012 : 0;
   board.pivot.position.y = DECK.deckY + crouch;
   const dist = skater.distance - lastDist;

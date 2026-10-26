@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cut Dev Log #3 (the special tricks) for TikTok: 1080x1920, voiced, captioned.
 
-usage: compose_devlog3.py <devlog3.mjs frames dir> <voice dir> <out.mp4>
+usage: compose_devlog3.py <devlog3.mjs frames dir> <voice dir> <out.mp4> [--intro]
 
 - The frames dir holds devlog3.mjs's shots: frames, marks.json (events and each
   frame's game-clock time) and audio.wav (the game's own sound on that clock).
@@ -18,6 +18,8 @@ import soundfile as sf
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 shots_dir, voice_dir, out = sys.argv[1:4]
+# --intro renders only the intro (the hook and the bail), to open other videos with
+ONLY_INTRO = '--intro' in sys.argv
 FPS, W, H = 30, 1080, 1920
 SR = 48000
 FONT = '/usr/share/fonts/opentype/inter/Inter-Black.otf'
@@ -49,26 +51,38 @@ def mark(name, k, off):
 
 
 # (shot, from mark, offset, to mark, offset[, speed]): frames are 1-based like the files
-BEATS = [
-    dict(clips=[('hook', 'flick', -10, 'land', 26)], vo=0, at=0.1),
-    dict(clips=[('miss', 'flick', -4, 'bail', 42)], vo=1, at=0.2),
+# The intro (the first two beats) is speed-ramped: the tricks play at full speed, the
+# rolling and the slam's aftermath are fast-forwarded, and the laser flip out keeps
+# some of its slow motion (recorded at 1/3 speed, played back at 1/2).
+INTRO = [
+    dict(clips=[('hook', 'flick', -4, 'grind', 4), ('hook', 'grind', 4, 'out', -2, 1.6),
+                ('hook', 'out', -2, 'land', 4, 1.45), ('hook', 'land', 4, 'land', 12)], vo=0, at=0.05),
+    dict(clips=[('miss', 'flick', -2, 'pop', 0, 1.5), ('miss', 'pop', 0, 'pop', 24, 2.0),
+                ('miss', 'pop', 24, 'bail', 4), ('miss', 'bail', 4, 'bail', 24)], vo=1, at=0.1),
+]
+BEATS = INTRO + [
     dict(card='title', vo=2, at=0.25),
     dict(clips=[('meter', 'kpop', -14, 'star', -1)], vo=3),
     dict(clips=[('meter', 'star', -1, 'land', 24)], vo=4),
-    dict(clips=[('meter', 'star', 1, 'land', 4, 0.5)], vo=5, label='SAMBA FLIP'),
-    dict(clips=[('bullet', 'star', -10, 'land', 24)], vo=6, label='BULLET TRAIN'),
-    dict(clips=[('aurora', 'star', -10, 'land', 24)], vo=7, label='AURORA IMPOSSIBLE'),
-    dict(clips=[('southern', 'star', -10, 'land', 24)], vo=8, label='SOUTHERN CROSS'),
-    dict(clips=[('drop', 'star', -10, 'bail', 60)], vo=9),
-    dict(clips=[('laser', 'flick', -24, 'land', 25)], vo=10),
-    dict(clips=[('mega', 'pop', -26, 'land', 20)], vo=11),
-    dict(clips=[('menu', None, 1, None, 20)], vo=12, hold=True),
-    dict(card='end', vo=13, at=0.3),
+    dict(clips=[('bullet', 'star', -10, 'land', 24)], vo=5, label='BULLET TRAIN'),
+    # the special that got cut (the old double impossible footage), and what replaced it
+    dict(clips=[('aurora', 'star', -10, 'land', 24), ('aurora', 'star', 2, 'land', 2, 0.5)], vo=6),
+    # long lines: the trick again from the other angle and slowed, not the roll-away
+    dict(clips=[('world', 'star', -10, 'land', 10), ('world', 'star', 2, 'land', 2, 0.33)], vo=7, label='AROUND THE WORLD'),
+    dict(clips=[('world2', 'star', -4, 'land', 4, 0.3)], vo=8, label='AROUND THE WORLD'),
+    dict(clips=[('world2', 'star', -10, 'land', 6), ('world', 'star', 2, 'land', 2, 0.5), ('world2', 'star', 2, 'land', 10, 0.5)], vo=9),
+    dict(clips=[('world', 'star', -10, 'land', 10), ('world2', 'star', 2, 'land', 10, 0.4)], vo=10),
+    dict(clips=[('southern', 'star', -10, 'land', 24)], vo=11, label='SOUTHERN CROSS'),
+    dict(clips=[('drop', 'star', -10, 'bail', 60)], vo=12),
+    dict(clips=[('laser', 'flick', -24, 'land', 25)], vo=13),
+    dict(clips=[('mega', 'pop', -26, 'land', 20)], vo=14),
+    dict(clips=[('menu', None, 1, None, 20)], vo=15, hold=True),
+    dict(card='end', vo=16, at=0.3),
 ]
 
 # caption text for spoken words that read better as figures
 SHOW = {'three-sixty': '360', 'ten-eighty': '1080', 'three.': '#3.'}
-HOT = re.compile(r"^(samba|flip|bullet|train|aurora|impossible|southern|cross|special|meter|star|catch|slam|button|honest|thumbs|free|mobile|harder|skate|four|clean|easy|career|dev|log|#3)$", re.I)
+HOT = re.compile(r"^(flip|bullet|train|around|world|crazier|unrealistic|polish|impossible|southern|cross|special|meter|star|catch|slam|button|honest|thumbs|free|mobile|harder|skate|four|clean|easy|career|dev|log|#3)$", re.I)
 
 
 def font(px):
@@ -118,10 +132,13 @@ def clip_frames(c):
     s = shot(name)
     a = mark(name, ka, oa) if ka else oa
     b = mark(name, kb, ob) if kb else min(s['n'], ob)
+    # speed > 1 skips frames (a fast-forward), < 1 repeats them
     n = int(round((b - a + 1) / speed))
     return [(name, a + i * speed) for i in range(n)]
 
 
+if ONLY_INTRO:
+    BEATS = INTRO
 timeline = []  # per video frame: ('shot', name, fractional frame) | ('card', kind, beat index)
 voice = []  # (line index, start s)
 caps = []  # (words, t0, t1)
@@ -253,7 +270,7 @@ for vi, (kind, a, b) in enumerate(timeline):
                 label_cache[txt] = recolor(text_img([txt], 64, hot=lambda w: False), GOLD)
             center(img, label_cache[txt], 300)
     # "your special meter fills up": ring the meter at the top of the HUD
-    m0, m1 = beat_at[3]
+    m0, m1 = beat_at.get(3, (-1, -1))
     if m0 <= t < m1:
         d = ImageDraw.Draw(img)
         k = 0.5 + 0.5 * np.sin((t - m0) * 7)

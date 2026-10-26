@@ -1016,6 +1016,10 @@ export class HumanRider {
         const spot = new THREE.Vector3(grab.x, DECK.deckY, grab.z * 1.15).sub(pivot).applyQuaternion(tweakQ).add(pivot);
         target.lerp(spot, ga);
       }
+      // Around the World: the hand that has the board goes with it
+      const ob = st.act?.orbit;
+      const hold = ob ? (side < 0 ? ob.l : ob.r) : 0;
+      if (ob && hold > 0) target.lerp(new THREE.Vector3(ob.x, ob.y, ob.z), hold);
       const pole = toW(new THREE.Vector3(0, -0.3, -1).applyQuaternion(torsoQ)).sub(toW(new THREE.Vector3()));
       const elbow = tv();
       const end = tv();

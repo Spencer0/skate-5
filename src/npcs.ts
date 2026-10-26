@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { BoardModel } from './board';
 import { HumanRider } from './humanrider';
-import type { RiderId, RiderState } from './rider';
+import { orbitHands } from './rider';
+import type { RiderId, RiderState, OrbitHold } from './rider';
 import type { Skater } from './skater';
 import type { Terrain } from './terrain';
 import type { LevelData } from './levels/common';
@@ -83,6 +84,7 @@ class Npc {
   dist = 0;
   st: RiderState;
   grab = { hand: 'front' as 'front' | 'back', x: 0, z: 0, pitch: 0, roll: 0, yaw: 0, amt: 0 };
+  orbit: OrbitHold = { x: 0, y: 0, z: 0, l: 0, r: 0 };
 
   constructor(
     public brain: NpcBrain,
@@ -352,6 +354,7 @@ export class NpcCrew {
     sk.visualPos(_p);
     n.board.root.position.copy(_p);
     n.board.root.quaternion.copy(_q);
+    sk.orbitBoard(n.board.root.position, n.board.root.quaternion);
     const fsgn = sk.fwdSpeed < 0 ? -1 : 1;
     n.board.animate(dist * fsgn, sk.mode === 'ground' ? sk.steerS : 0);
     const detail = n.dist < DETAIL_DIST;
@@ -463,6 +466,7 @@ export class NpcCrew {
     a.speed = sk.speed;
     a.fakie = sk.mode === 'ground' && sk.fwdSpeed < -0.4;
     a.special = !!tr.spec?.special && tr.active;
+    a.orbit = orbitHands(sk, n.orbit);
     if (sk.grabAmt > 0.01) {
       const g = GRABS[sk.grabIdx];
       const o = n.grab;
