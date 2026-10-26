@@ -482,6 +482,9 @@ export interface ParkMaterials {
   metal: THREE.MeshStandardMaterial;
   accent: THREE.MeshStandardMaterial;
   wood: THREE.MeshStandardMaterial;
+  /** plywood ramp surfaces, and the darker stained sides they stand on */
+  ply: THREE.MeshStandardMaterial;
+  plySide: THREE.MeshStandardMaterial;
   stone: THREE.MeshStandardMaterial;
   water: THREE.MeshStandardMaterial;
   facade: THREE.MeshStandardMaterial;
@@ -492,6 +495,7 @@ export function makeMaterials(): ParkMaterials {
   const rampTex = T.rampTexture();
   const boxTex = T.boxTexture();
   const wallTex = T.wallTexture();
+  const plyTex = T.plywoodTexture();
   return {
     concrete: new THREE.MeshStandardMaterial({ map: concreteTex, roughness: 0.92, metalness: 0 }),
     ramp: new THREE.MeshStandardMaterial({ map: rampTex, roughness: 0.75, metalness: 0, side: THREE.DoubleSide }),
@@ -500,17 +504,20 @@ export function makeMaterials(): ParkMaterials {
     metal: new THREE.MeshStandardMaterial({ color: 0xc9c6c0, roughness: 0.3, metalness: 0.85 }),
     accent: new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.55, metalness: 0.2 }),
     wood: new THREE.MeshStandardMaterial({ map: T.plankTexture(), roughness: 0.85, side: THREE.DoubleSide }),
+    ply: new THREE.MeshStandardMaterial({ map: plyTex, roughness: 0.62, metalness: 0, side: THREE.DoubleSide }),
+    plySide: new THREE.MeshStandardMaterial({ map: plyTex, color: 0x8a6a4c, roughness: 0.8, side: THREE.DoubleSide }),
     stone: new THREE.MeshStandardMaterial({ map: T.paverTexture(), roughness: 0.9, side: THREE.DoubleSide }),
     water: new THREE.MeshStandardMaterial({ map: T.waterTexture(), color: 0xffffff, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.9 }),
     facade: new THREE.MeshStandardMaterial({ map: T.facadeTexture(), roughness: 0.9 }),
   };
 }
 
-const TEX_SCALE: Record<Material, number> = { concrete: 4, ramp: 3, box: 1.5, paint: 4, wall: 4, wood: 3, stone: 3 };
+const TEX_SCALE: Record<Material, number> = { concrete: 4, ramp: 3, box: 1.5, paint: 4, wall: 4, wood: 3, stone: 3, ply: 2.44 };
 
 let SKIRT_FLOOR = 0;
 
-function elementGeometry(e: Element): THREE.BufferGeometry {
+/** Top surface plus side skirts; with `sides`, the skirts go there instead of into the result. */
+function elementGeometry(e: Element, sides?: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const k = knots.get(e) ?? { uK: lin(-e.hx, e.hx, 2), vK: lin(-e.hz, e.hz, 2) };
   const { uK, vK } = k;
   const sc = TEX_SCALE[e.mat];
@@ -577,7 +584,7 @@ function elementGeometry(e: Element): THREE.BufferGeometry {
       const g = skirtGeometry(e, edge, sc);
       if (g) {
         g.computeVertexNormals();
-        parts.push(g);
+        (sides ?? parts).push(g);
       }
     }
   }
@@ -641,7 +648,7 @@ function stairsGeometry(e: Element): THREE.BufferGeometry {
   return geo;
 }
 
-export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, opts: { ground?: boolean } = {}): THREE.Group {
+export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, opts: { ground?: boolean; groundColor?: number } = {}): THREE.Group {
   const group = new THREE.Group();
   SKIRT_FLOOR = t.floor;
 
@@ -662,7 +669,8 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, o
   groundGeo.rotateX(-Math.PI / 2);
   const guv = groundGeo.getAttribute('uv');
   for (let i = 0; i < guv.count; i++) guv.setXY(i, guv.getX(i) / 4, guv.getY(i) / 4);
-  const ground = new THREE.Mesh(groundGeo, mats.concrete);
+  const groundMat = opts.groundColor === undefined ? mats.concrete : new THREE.MeshStandardMaterial({ map: mats.concrete.map, color: opts.groundColor, roughness: 0.92 });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
   if (opts.ground !== false) group.add(ground);
 
@@ -719,12 +727,21 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, o
   }
 
   // Elements, batched by material
-  const byMat = new Map<Material, THREE.BufferGeometry[]>();
-  for (const e of t.elements) {
-    const g = e.meshFn ? e.meshFn() : e.custom ? stairsGeometry(e) : elementGeometry(e);
-    const arr = byMat.get(e.mat) ?? [];
+  // plywood ramps get darker sides so their shape reads against the ground
+  const SIDE: Partial<Record<Material, keyof ParkMaterials>> = { ply: 'plySide' };
+  const byMat = new Map<keyof ParkMaterials, THREE.BufferGeometry[]>();
+  const put = (key: keyof ParkMaterials, g: THREE.BufferGeometry) => {
+    const arr = byMat.get(key) ?? [];
     arr.push(g.index ? g.toNonIndexed() : g);
-    byMat.set(e.mat, arr);
+    byMat.set(key, arr);
+  };
+  for (const e of t.elements) {
+    const side = SIDE[e.mat];
+    const sides: THREE.BufferGeometry[] = [];
+    const g = e.meshFn ? e.meshFn() : e.custom ? stairsGeometry(e) : elementGeometry(e, side ? sides : undefined);
+    const key = e.mat === 'paint' ? 'box' : e.mat;
+    put(key, g);
+    for (const s of sides) put(side!, s);
   }
   for (const [mat, geos] of byMat) {
     // strip attributes to the common set
@@ -732,8 +749,7 @@ export function buildMeshes(t: Terrain, vis: ParkVisuals, mats: ParkMaterials, o
       for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
     }
     const merged = mergeGeometries(geos, false)!;
-    const material = { ramp: mats.ramp, wall: mats.wall, wood: mats.wood, stone: mats.stone, box: mats.box, concrete: mats.concrete, paint: mats.box }[mat];
-    const m = new THREE.Mesh(merged, material);
+    const m = new THREE.Mesh(merged, mats[mat]);
     m.castShadow = mat !== 'wall';
     m.receiveShadow = true;
     group.add(m);
@@ -798,10 +814,10 @@ export function parkDecor(group: THREE.Group, mats: ParkMaterials) {
   // Ground zones: tinted concrete pads with painted borders break up the plaza
   const zones: [number, number, number, number, number][] = [
     // x0, z0, x1, z1, tint
-    [8, -10, 40, 30, 0xe4dccf],
-    [-72, -22, -40, 18, 0xd2ccc2],
-    [-12, -42, 30, -22, 0xefe6d6],
-    [-44, 44, -8, 70, 0xddd5c8],
+    [8, -10, 40, 30, 0xc4c8cb],
+    [-72, -22, -40, 18, 0xb6b9bb],
+    [-12, -42, 30, -22, 0xcdd0d0],
+    [-44, 44, -8, 70, 0xbfc2c4],
   ];
   const lineMat = new THREE.MeshStandardMaterial({ color: 0xe04a3b, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -3 });
   for (const [x0, z0, x1, z1, tint] of zones) {

@@ -6,7 +6,7 @@ import * as THREE from 'three';
  * the meshes are built from, so what you see is exactly what you ride.
  */
 
-export type Material = 'concrete' | 'ramp' | 'box' | 'paint' | 'wall' | 'wood' | 'stone';
+export type Material = 'concrete' | 'ramp' | 'box' | 'paint' | 'wall' | 'wood' | 'stone' | 'ply';
 
 export interface Element {
   kind: string;

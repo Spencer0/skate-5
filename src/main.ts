@@ -575,7 +575,7 @@ function loadLevel(i: number) {
   }
   terrain = new Terrain();
   levelData = L.build(terrain);
-  levelGroup = buildMeshes(terrain, levelData.vis, mats, { ground: L.ground });
+  levelGroup = buildMeshes(terrain, levelData.vis, mats, { ground: L.ground, groundColor: L.groundColor });
   L.decorate(levelGroup, mats, terrain);
   const hasTape = L.goals.some((g) => g.kind === 'tape');
   props = new Props(terrain, levelData.props, levelData.letters, hasTape ? levelData.tape : null);
@@ -1565,7 +1565,6 @@ function frame(now: number) {
     specialHinted = true;
     const sp = career.equippedSpecial();
     if (sp) hud.toast(`${sp.name} ready`, trickAnywhere() ? 'Press E (or click ★), then catch it' : 'Tap ★ in the air, then tap to catch', 'letter');
-    else hud.toast('Special meter full', 'Finish 4 career goals to unlock your first special', 'letter');
   }
   if (special >= 1 && playing && Math.random() < 0.5) {
     tmpV.set((Math.random() - 0.5) * 0.4, 0.3, (Math.random() - 0.5) * 0.4);

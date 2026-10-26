@@ -253,7 +253,7 @@ export class Hud {
       'p',
       'guide-p',
       card,
-      'Specials: landing tricks fills the special meter under your score (bail and it empties). When it glows, a ★ button appears: tap it on the ground or in the air to throw your special, then tap to catch it like any flip. Your first special unlocks after 4 career goals; pick which one under Career → Skater → Specials.',
+      'Specials: landing tricks fills the special meter under your score (bail and it empties). When it glows, a ★ button appears: tap it on the ground or in the air to throw your special, then tap to catch it like any flip. You start with the Samba Flip; more unlock through the career. Pick which one under Career → Skater → Specials.',
     );
     const grid = el('div', 'guide-grid', card);
     for (const g of GUIDE) {

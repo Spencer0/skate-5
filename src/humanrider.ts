@@ -19,6 +19,10 @@ import { Ragdoll, RAG, Ground } from './ragdoll';
  */
 
 const HUNCH: Record<RiderId, number> = { brock: 0.05, coral: 0, voss: 0.2, custom: 0 };
+/** push footwork: step down to the plant, longest kick, and how far back the planted foot reaches */
+const PUSH_STEP = 0.08;
+const PUSH_KICK = 0.22;
+const PUSH_REACH = 0.5;
 
 const cache = new Map<string, Promise<THREE.Group>>();
 
@@ -415,8 +419,10 @@ export class HumanRider {
     at: -10, // physics time of the last push event seen
     clock: 0,
     swingDur: 0.28,
+    slide: 0, // how far the planted foot has slid back along the board this kick
     // eased, so nothing snaps between phases
     into: 0,
+    sink: 0, // the standing knee bends into the kick and rises through the swing
     yawR: -0.15,
     pitchR: 0,
     arm: 0,
@@ -443,6 +449,7 @@ export class HumanRider {
       arms: 0,
       armsUp: 0,
       armSwing: 0,
+      pushLean: 0,
     };
     if (!a) {
       out.fL.y += st.tuck * 0.3;
@@ -465,8 +472,9 @@ export class HumanRider {
       P.phase = phase;
       P.t0 = a.clock;
       P.from.copy(this.lastR);
-      // arrive at the plant point just as the next held push fires
-      if (phase === 'swing') P.swingDur = Math.min(0.3, Math.max(0.14, P.at + TUNE.pushCooldown - a.clock));
+      P.slide = 0;
+      // arrive at the plant point just as the next held push fires (a quick kick at speed leaves a long swing)
+      if (phase === 'swing') P.swingDur = Math.min(0.42, Math.max(0.14, P.at + TUNE.pushCooldown - a.clock));
     };
     if (!a.ground || a.popT >= 0) P.phase = 'board';
     else if (a.pushAt > P.at) {
@@ -475,8 +483,12 @@ export class HumanRider {
       else if (P.phase === 'swing') go('kick');
     }
     let u = a.clock - P.t0;
-    if (P.phase === 'step' && u >= 0.12) go('kick');
-    else if (P.phase === 'kick' && u >= 0.22) go(a.pushHold ? 'swing' : 'return');
+    // the planted foot slides back along the board at exactly the board's speed
+    // (a shove from a standstill still extends the leg)
+    const kickStep = Math.max(a.speed, 0.6) * dtc;
+    if (P.phase === 'step' && u >= PUSH_STEP) go('kick');
+    // toe-off when the leg runs out of reach (quick at speed) or the kick runs its course
+    else if (P.phase === 'kick' && (u >= PUSH_KICK || P.slide + kickStep > PUSH_REACH)) go(a.pushHold ? 'swing' : 'return');
     // released mid-swing, or the next push isn't coming (braking, slope): step back on
     else if (P.phase === 'swing' && (!a.pushHold || u > P.swingDur + 0.35)) go('return');
     else if (P.phase === 'return' && u >= 0.28) P.phase = 'board';
@@ -489,25 +501,30 @@ export class HumanRider {
     let yawR = -0.15;
     let pitchR = 0;
     let arm = 0;
+    let sink = 0;
     if (P.phase === 'step') {
-      const k = seg(u, 0, 0.12);
+      // quick, so the foot is down by the time the board starts rolling
+      const k = seg(u, 0, PUSH_STEP);
       p = P.from.clone().lerp(plant, k);
       p.y += Math.sin(k * Math.PI) * 0.09;
       into = 1;
       yawR = 1.35;
       arm = -1;
     } else if (P.phase === 'kick') {
-      // planted on the ground: slides back as the board rolls forward
+      // planted: the foot stays put on the ground while the board rolls on
+      P.slide = Math.min(PUSH_REACH, P.slide + kickStep);
+      const k = Math.min(1, Math.max(u / PUSH_KICK, P.slide / PUSH_REACH));
       p = P.from.clone();
-      p.x -= Math.min(0.55, a.speed * u * 0.55 + u * 0.4);
-      p.y += (this.ankleH - p.y) * seg(u, 0, 0.05);
-      p.z += (plant.z - p.z) * seg(u, 0, 0.08);
-      // toe-off: the heel peels up at the end of the kick
-      p.y += seg(u, 0.14, 0.22) * 0.03;
+      p.x -= P.slide;
+      p.y += (this.ankleH - p.y) * seg(u, 0, 0.04);
+      p.z += (plant.z - p.z) * seg(u, 0, 0.06);
+      // toe-off: the heel peels up as the leg straightens
+      p.y += seg(k, 0.65, 1) * 0.03;
       into = 1;
       yawR = 1.35;
-      pitchR = 0.55 * seg(u, 0.12, 0.22);
+      pitchR = 0.55 * seg(k, 0.55, 1);
       arm = -1;
+      sink = k;
     } else if (P.phase === 'swing') {
       // knee bends and the foot swings low past the board to plant again
       const k = sm(u / P.swingDur);
@@ -517,6 +534,7 @@ export class HumanRider {
       yawR = 1.35;
       pitchR = 0.55 * (1 - seg(u / P.swingDur, 0, 0.5));
       arm = 1;
+      sink = 1 - k;
     } else if (P.phase === 'return') {
       // the knee lifts and swings the foot forward over the tail,
       // then it sets down onto the deck from above
@@ -533,6 +551,7 @@ export class HumanRider {
     P.yawR = ease(P.yawR, yawR, 16);
     P.pitchR = ease(P.pitchR, pitchR, 20);
     P.arm = ease(P.arm, arm, 7);
+    P.sink = ease(P.sink, sink, 12);
     if (p) {
       // front foot turns to point down the board and shifts to the middle
       fL.lerp(new THREE.Vector3(0.13, deck, -0.03), P.into);
@@ -540,7 +559,9 @@ export class HumanRider {
       fR.copy(p);
       out.yawR = P.yawR;
       out.pitchR = P.pitchR;
-      out.hipDrop = 0.15 * P.into; // standing knee bends deep
+      // standing knee: soft, then bends deeper into the kick for reach
+      out.hipDrop = 0.07 * P.sink * P.into;
+      out.pushLean = 0.1 * P.sink * P.into; // and the chest tips forward with it
       out.hipX = 0.13 * P.into; // weight over the front (standing) foot
       out.armSwing = P.arm; // against the kick, then back
       this.lastR.copy(fR);
@@ -915,7 +936,7 @@ export class HumanRider {
     // intent (rider frame: +X nose, +Y up, +Z toe side; the rider faces +Z)
     // pushing turns the whole body (hips first) to face down the board
     const twist = s.push * 1.25;
-    const bend = 0.06 + HUNCH[this.id] + s.crouch * 0.42 + s.push * 0.18 + s.lean * 0.8 + ga * 0.55;
+    const bend = 0.06 + HUNCH[this.id] + s.crouch * 0.42 + s.push * 0.18 + c.pushLean + s.lean * 0.8 + ga * 0.55;
     const roll = s.grind * 0.25;
     const hipYaw = 0.15 + twist;
     const hipQ = tq().setFromEuler(new THREE.Euler(bend * 0.35, hipYaw, -roll * 0.5, 'YXZ'));
@@ -977,8 +998,8 @@ export class HumanRider {
       const shL = sh.clone().applyMatrix4(g2l);
       const relaxed = shL
         .clone()
-        .addScaledVector(right, side * 0.1)
-        .addScaledVector(up, -(a + b) * 0.92)
+        .addScaledVector(right, side * (0.1 - 0.06 * s.push)) // in close while pushing
+        .addScaledVector(up, -(a + b) * (0.92 - 0.06 * s.push)) // elbows stay soft through the swing
         .addScaledVector(front, 0.1 + swingT * side);
       const out = shL
         .clone()
@@ -987,7 +1008,7 @@ export class HumanRider {
         .addScaledVector(front, 0.06);
       // pushing: arms swing against the kicking leg
       if (c.armSwing) relaxed.addScaledVector(new THREE.Vector3(1, 0, 0), side * c.armSwing * 0.22);
-      const target = relaxed.lerp(out, Math.min(1, wide + s.crouch * 0.35));
+      const target = relaxed.lerp(out, Math.min(1, wide + s.crouch * 0.35 * (1 - s.push)));
       // the grabbing hand goes to its spot on the board edge
       const grabbing = grab && (grab.hand === 'front' ? side < 0 : side > 0);
       if (grabbing && tweakQ) {

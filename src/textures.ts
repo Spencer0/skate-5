@@ -380,6 +380,77 @@ export function plankTexture() {
   return tex(c);
 }
 
+/**
+ * Skatepark plywood: one tile is a 2.44m square, two 1.22m sheets wide with
+ * staggered butt joints, grain running up the transition, screw lines along
+ * every seam and a darker polished lane where the wheels go.
+ */
+export function plywoodTexture() {
+  const S = 512;
+  const { c, g } = canvas(S, S);
+  const r = rng(81);
+  const half = S / 2;
+  for (let col = 0; col < 2; col++) {
+    const x0 = col * half;
+    const tone = [198, 158, 112].map((v) => v + (r() - 0.5) * 14);
+    g.fillStyle = `rgb(${tone[0]},${tone[1]},${tone[2]})`;
+    g.fillRect(x0, 0, half, S);
+    // long grain streaks with the odd wavy figure
+    for (let k = 0; k < 90; k++) {
+      const x = x0 + r() * half;
+      const dark = r() > 0.35;
+      g.strokeStyle = dark ? `rgba(120,78,38,${0.06 + r() * 0.12})` : `rgba(255,230,190,${0.05 + r() * 0.08})`;
+      g.lineWidth = 0.6 + r() * 2.2;
+      const wob = (r() - 0.5) * 18;
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.bezierCurveTo(x + wob, S * 0.33, x - wob, S * 0.66, x, S);
+      g.stroke();
+    }
+    // a couple of knots / patches per sheet
+    for (let k = 0; k < 2; k++) {
+      const kx = x0 + 20 + r() * (half - 40);
+      const ky = r() * S;
+      const grd = g.createRadialGradient(kx, ky, 0, kx, ky, 10 + r() * 8);
+      grd.addColorStop(0, 'rgba(110,70,35,0.45)');
+      grd.addColorStop(1, 'rgba(110,70,35,0)');
+      g.fillStyle = grd;
+      g.fillRect(kx - 20, ky - 20, 40, 40);
+    }
+  }
+  // wheel wear: a darker, smoother lane down the middle of each sheet
+  for (let col = 0; col < 2; col++) {
+    const cx = col * half + half / 2;
+    const grd = g.createLinearGradient(cx - half * 0.45, 0, cx + half * 0.45, 0);
+    grd.addColorStop(0, 'rgba(70,45,25,0)');
+    grd.addColorStop(0.5, 'rgba(70,45,25,0.12)');
+    grd.addColorStop(1, 'rgba(70,45,25,0)');
+    g.fillStyle = grd;
+    g.fillRect(cx - half * 0.45, 0, half * 0.9, S);
+  }
+  blotches(g, S, S, 14, 'rgba(60,40,20,0.06)', 70, 82);
+  // seams: between the two sheets, and staggered butt joints
+  g.fillStyle = 'rgba(60,38,20,0.7)';
+  g.fillRect(0, 0, 3, S);
+  g.fillRect(half - 1, 0, 3, S);
+  g.fillRect(0, 0, half, 3);
+  g.fillRect(half, half - 1, half, 3);
+  g.fillStyle = 'rgba(255,235,200,0.25)';
+  g.fillRect(3, 0, 1, S);
+  g.fillRect(half + 2, 0, 1, S);
+  // screws along every seam
+  g.fillStyle = 'rgba(70,66,60,0.8)';
+  const step = S / 16;
+  for (let y = step / 2; y < S; y += step) {
+    for (const x of [8, half - 9, half + 7, S - 10]) g.fillRect(x, y, 3, 3);
+  }
+  for (let x = step / 2; x < S; x += step) {
+    if (x < half) g.fillRect(x, 8, 3, 3), g.fillRect(x, S - 10, 3, 3);
+    else g.fillRect(x, half - 10, 3, 3), g.fillRect(x, half + 7, 3, 3);
+  }
+  return tex(c);
+}
+
 /** Granite plaza pavers. 1 tile = 3m. */
 export function paverTexture() {
   const S = 512;
